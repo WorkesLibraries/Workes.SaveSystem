@@ -15,12 +15,18 @@ namespace Workes.SaveSystem
         private readonly string _saveRootPath;
         private readonly bool _enableBackupSystem;
         private readonly int _maxBackupCount;
+        private readonly SaveSystemDiagnostics _diagnostics;
 
-        public BackupManager(string saveRootPath, bool enableBackupSystem, int maxBackupCount)
+        public BackupManager(
+            string saveRootPath,
+            bool enableBackupSystem,
+            int maxBackupCount,
+            SaveSystemDiagnostics diagnostics)
         {
             _saveRootPath = saveRootPath;
             _enableBackupSystem = enableBackupSystem;
             _maxBackupCount = maxBackupCount;
+            _diagnostics = diagnostics;
         }
 
         /// <summary>
@@ -144,7 +150,7 @@ namespace Workes.SaveSystem
                 var newPath = GetBackupFolderPath(saveName, $"_{newIdx:D4}");
                 if (Directory.Exists(newPath))
                 {
-                    SaveSystemDiagnostics.LogWarning($"Backup normalization skipped: directory {newPath} already exists. This may indicate backup folder tampering.");
+                    _diagnostics.LogWarning($"Backup normalization skipped: directory {newPath} already exists. This may indicate backup folder tampering.");
                     continue;
                 }
                 

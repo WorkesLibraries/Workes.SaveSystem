@@ -90,15 +90,12 @@ Use `string` identities for simple slot names unless the application needs a cus
 
 ```csharp
 var manager = new SaveManager<string>(
-    new SaveSystemOptions<string>(
+    SaveSystemOptions.Create(
         saveRootPath: "Saves",
-        serializer: new JsonSaveSerializer(),
-        tempFolderName: SaveSystemOptions<string>.DefaultTempFolderName(),
-        saveNameResolver: identity => identity,
-        fileNameResolver: SaveSystemOptions<string>.DefaultFileNameResolver));
+        serializer: new JsonSaveSerializer()));
 ```
 
-`CreateDefault(ISaveSerializer)` is a convenience factory for plain .NET applications and writes under the current user's application data folder. Engine integrations should prefer `CreateDefault(ISaveSerializer, string)` or the options constructor so the engine owns the persistent data path.
+`CreateDefault(ISaveSerializer)` is a convenience factory for plain .NET applications and writes under the current user's application data folder. Engine integrations should prefer `CreateDefault(ISaveSerializer, string)`, `SaveSystemOptions.Create(...)`, or the options constructor so the engine owns the persistent data path.
 
 After registering providers, call `ValidateRegistrations()` before disk save/load operations. Registration is intentionally lightweight; validation captures provider state, checks serializer compatibility, validates migration policy, and verifies file-name behavior at the setup point you choose.
 
@@ -122,6 +119,15 @@ Providers can be removed with `UnregisterProvider(provider)` when you still own 
 
 When loading from disk, registered persisted providers are strict by default: if a provider is registered and its save file is missing from the save folder or backup folder, load throws and providers are not restored. Unknown extra files are ignored. For deliberate partial-load scenarios, configure `missingProviderFileBehavior: MissingProviderFileBehavior.Skip`; missing providers are skipped and keep their current runtime state.
 
+Diagnostics are silent by default. To receive warning messages for recoverable issues such as disabled backup loads, backup normalization conflicts, or migration paths that cannot be applied, pass a warning sink through options:
+
+```csharp
+var options = SaveSystemOptions.Create(
+    saveRootPath: "Saves",
+    serializer: new JsonSaveSerializer(),
+    warningSink: message => logger.Warn(message));
+```
+
 `RestoreSnapshot(...)` validates a snapshot before mutating providers. Validation rejects duplicate provider keys, unknown provider keys, schema mismatches, and persisted-provider state that does not match the registered schematic. Registered providers that are absent from the snapshot are skipped. If validation passes but a provider throws from `RestoreState(...)`, earlier providers may already have been restored.
 
 ## Backups
@@ -129,13 +135,9 @@ When loading from disk, registered persisted providers are strict by default: if
 Backups are configured through `SaveSystemOptions<TIdentity>`.
 
 ```csharp
-var options = new SaveSystemOptions<string>(
+var options = SaveSystemOptions.CreateWithBackups(
     saveRootPath: "Saves",
     serializer: new JsonSaveSerializer(),
-    tempFolderName: SaveSystemOptions<string>.DefaultTempFolderName(),
-    saveNameResolver: identity => identity,
-    fileNameResolver: SaveSystemOptions<string>.DefaultFileNameResolver,
-    enableBackupSystem: true,
     backupSystemMaxBackupCount: 3);
 
 var manager = new SaveManager<string>(options);
@@ -178,12 +180,33 @@ public sealed class PlayerMigrationSource : ISaveMigrationSource
     public IReadOnlyList<SaveMigrationStep> Migrations { get; } =
         new[]
         {
-            new SaveMigrationStep(1, (data, factory) =>
-            {
-                data.Set("Level", factory.CreateInt(1));
-            })
+            SaveMigrationStep.AddIntDefault(1, "Level", 1)
         };
 }
+```
+
+When one schema-version step needs several simple edits, compose them into one step:
+
+```csharp
+public IReadOnlyList<SaveMigrationStep> Migrations { get; } =
+    new[]
+    {
+        SaveMigrationStep.From(
+            1,
+            SaveMigrationStep.Rename("XP", "Experience"),
+            SaveMigrationStep.AddIntDefault("Level", 1),
+            SaveMigrationStep.Remove("LegacyName"))
+    };
+```
+
+For advanced changes, use the full data-node action:
+
+```csharp
+new SaveMigrationStep(2, (data, factory) =>
+{
+    var inventory = data.Get("Inventory");
+    inventory.Add(factory.CreateString("starter-sword"));
+});
 ```
 
 Downgrades are not supported. A save written with a newer schema version than the current provider expects fails to load.
@@ -224,6 +247,8 @@ Migration rules:
 - every version gap must have exactly one step;
 - duplicate `FromVersion` steps are rejected during registration validation;
 - migration steps mutate the provider payload's `Data` node, not the full envelope;
+- simple helper methods such as `AddIntDefault`, `Rename`, `Move`, `Remove`, and `SetString` cover common top-level field edits;
+- use `SaveMigrationStep.From(...)` to compose several helper actions into one schema-version step;
 - after successful migration, the manager updates the envelope schema version before deserializing;
 - downgrades are rejected.
 
@@ -256,7 +281,8 @@ Data-node implementations should:
 - preserve object keys and array order;
 - fail clearly when callers use object operations on arrays or primitive operations on objects;
 - keep mutations local to the represented serialized tree;
-- support the primitive types exposed by `ISaveDataNodeFactory`.
+- support the primitive and null node types exposed by `ISaveDataNodeFactory`;
+- reject attempts to combine nodes created by another serializer's data-node implementation.
 
 For the built-in JSON serializer, data nodes wrap Newtonsoft `JToken` values.
 

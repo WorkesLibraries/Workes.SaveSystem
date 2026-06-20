@@ -48,6 +48,7 @@ namespace Workes.SaveSystem
         private readonly SaveSystemOptions<TIdentity> _options;
         private readonly BackupManager _backupManager;
         private readonly MigrationEngine _migrationEngine;
+        private readonly SaveSystemDiagnostics _diagnostics;
         private bool _registrationsValidated;
 
         /// <summary>
@@ -61,12 +62,14 @@ namespace Workes.SaveSystem
                 throw new ArgumentNullException(nameof(options));
 
             _options = options;
+            _diagnostics = new SaveSystemDiagnostics(options.WarningSink);
             _backupManager = new BackupManager(
                 options.SaveRootPath,
                 options.EnableBackupSystem,
-                options.BackupSystemMaxBackupCount
+                options.BackupSystemMaxBackupCount,
+                _diagnostics
             );
-            _migrationEngine = new MigrationEngine(options.Serializer);
+            _migrationEngine = new MigrationEngine(options.Serializer, _diagnostics);
         }
 
         /// <summary>
@@ -95,13 +98,9 @@ namespace Workes.SaveSystem
         public static SaveManager<string> CreateDefault(ISaveSerializer serializer, string saveRootPath)
         {
             return new SaveManager<string>(
-                new SaveSystemOptions<string>(
+                SaveSystemOptions.Create(
                     saveRootPath: saveRootPath,
-                    serializer: serializer,
-                    tempFolderName: SaveSystemOptions<string>.DefaultTempFolderName(),
-                    saveNameResolver: id => id,
-                    fileNameResolver: SaveSystemOptions<string>.DefaultFileNameResolver
-                )
+                    serializer: serializer)
             );
         }
 
@@ -639,7 +638,7 @@ namespace Workes.SaveSystem
 
             if (!_options.EnableBackupSystem)
             {
-                SaveSystemDiagnostics.LogWarning(
+                _diagnostics.LogWarning(
                     "Cannot load backup slot: Backup system is disabled. Enable backups in SaveSystemOptions to use backup slots."
                 );
                 return false;

@@ -1,17 +1,17 @@
-using System;
-
 namespace Workes.SaveSystem
 {
-    internal static class SaveSystemDiagnostics
+    internal sealed class SaveSystemDiagnostics
     {
-        public static void LogWarning(string message)
+        private readonly System.Action<string>? _warningSink;
+
+        public SaveSystemDiagnostics(System.Action<string>? warningSink)
         {
-            Console.Error.WriteLine("[Workes.SaveSystem] Warning: " + message);
+            _warningSink = warningSink;
         }
 
-        public static void LogError(string message)
+        public void LogWarning(string message)
         {
-            Console.Error.WriteLine("[Workes.SaveSystem] Error: " + message);
+            _warningSink?.Invoke(message);
         }
     }
 }

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using Workes.SaveSystem;
 
@@ -90,6 +91,54 @@ public sealed class EngineNeutralDefaultsTests
         Assert.That(provider.Current.Name, Is.EqualTo("Saved"));
         Assert.That(provider.Current.Level, Is.EqualTo(4));
         Assert.That(File.Exists(Path.Combine(_tempRoot, "profile-a-slot-1", "player.json")), Is.True);
+    }
+
+    [Test]
+    public void SaveSystemOptionsCreate_ForStringIdentityUsesDefaultNaming()
+    {
+        var warnings = new List<string>();
+        Action<string> warningSink = warnings.Add;
+        var options = SaveSystemOptions.Create(
+            saveRootPath: _tempRoot,
+            serializer: new JsonSaveSerializer(),
+            warningSink: warningSink);
+
+        Assert.That(options.SaveRootPath, Is.EqualTo(_tempRoot));
+        Assert.That(options.SaveNameResolver("slot"), Is.EqualTo("slot"));
+        Assert.That(options.TempFolderName, Is.EqualTo("_tmp"));
+        Assert.That(options.FileNameResolver(new SaveFileContext("player", 1, typeof(JsonSaveSerializer))), Is.EqualTo("player"));
+        Assert.That(options.MissingProviderFileBehavior, Is.EqualTo(MissingProviderFileBehavior.Throw));
+        Assert.That(options.WarningSink, Is.SameAs(warningSink));
+        Assert.That(options.EnableBackupSystem, Is.False);
+    }
+
+    [Test]
+    public void SaveSystemOptionsCreate_ForCustomIdentityUsesProvidedSaveNameResolver()
+    {
+        var options = SaveSystemOptions.Create<ProfileSlotIdentity>(
+            saveRootPath: _tempRoot,
+            serializer: new JsonSaveSerializer(),
+            saveNameResolver: identity => identity.ProfileId + "-" + identity.SlotId);
+
+        var saveName = options.SaveNameResolver(new ProfileSlotIdentity("profile-a", "slot-1"));
+
+        Assert.That(saveName, Is.EqualTo("profile-a-slot-1"));
+        Assert.That(options.TempFolderName, Is.EqualTo("_tmp"));
+        Assert.That(options.EnableBackupSystem, Is.False);
+    }
+
+    [Test]
+    public void SaveSystemOptionsCreateWithBackups_EnablesBackups()
+    {
+        var options = SaveSystemOptions.CreateWithBackups(
+            saveRootPath: _tempRoot,
+            serializer: new JsonSaveSerializer(),
+            backupSystemMaxBackupCount: 3,
+            missingProviderFileBehavior: MissingProviderFileBehavior.Skip);
+
+        Assert.That(options.EnableBackupSystem, Is.True);
+        Assert.That(options.BackupSystemMaxBackupCount, Is.EqualTo(3));
+        Assert.That(options.MissingProviderFileBehavior, Is.EqualTo(MissingProviderFileBehavior.Skip));
     }
 
     [Test]

@@ -11,10 +11,12 @@ namespace Workes.SaveSystem
     internal sealed class MigrationEngine
     {
         private readonly ISaveSerializer _serializer;
+        private readonly SaveSystemDiagnostics _diagnostics;
 
-        public MigrationEngine(ISaveSerializer serializer)
+        public MigrationEngine(ISaveSerializer serializer, SaveSystemDiagnostics diagnostics)
         {
             _serializer = serializer;
+            _diagnostics = diagnostics;
         }
 
         /// <summary>
@@ -66,7 +68,7 @@ namespace Workes.SaveSystem
             if (savedSchemaVersion > currentSchemaVersion)
             {
                 // Downgrades are not supported - let deserialization fail naturally
-                SaveSystemDiagnostics.LogWarning(
+                _diagnostics.LogWarning(
                     $"Cannot migrate save data for provider '{saveKey}': saved version (v{savedSchemaVersion}) is newer than current version (v{currentSchemaVersion}). " +
                     "Downgrades are not supported. Deserialization will fail."
                 );
@@ -77,7 +79,7 @@ namespace Workes.SaveSystem
             if (migrations == null || migrations.Count == 0)
             {
                 // No migration steps available - let deserialization fail naturally
-                SaveSystemDiagnostics.LogWarning(
+                _diagnostics.LogWarning(
                     $"Cannot migrate save data for provider '{saveKey}': no migration steps available to migrate from v{savedSchemaVersion} to v{currentSchemaVersion}. " +
                     "Deserialization will fail."
                 );
@@ -93,7 +95,7 @@ namespace Workes.SaveSystem
                 if (!migrationMap.ContainsKey(version))
                 {
                     // Missing migration step - no clean path exists, let deserialization fail naturally
-                    SaveSystemDiagnostics.LogWarning(
+                    _diagnostics.LogWarning(
                         $"Cannot migrate save data for provider '{saveKey}': missing migration step from v{version} to v{version + 1}. " +
                         $"Cannot migrate from v{savedSchemaVersion} to v{currentSchemaVersion}. Deserialization will fail."
                     );
@@ -106,7 +108,7 @@ namespace Workes.SaveSystem
             if (migrationSerializer == null)
             {
                 // This should have been caught during registration, but handle gracefully
-                SaveSystemDiagnostics.LogWarning(
+                _diagnostics.LogWarning(
                     $"Cannot migrate save data for provider '{saveKey}': serializer ({_serializer.GetType().Name}) does not implement ISaveMigrationCapableSerializer. " +
                     "This should have been caught during provider registration. Deserialization will fail."
                 );
@@ -122,7 +124,7 @@ namespace Workes.SaveSystem
             catch (Exception ex)
             {
                 // Failed to parse data - let deserialization fail naturally
-                SaveSystemDiagnostics.LogWarning(
+                _diagnostics.LogWarning(
                     $"Failed to parse data for migration of provider '{saveKey}': {ex.Message}. " +
                     "Deserialization will proceed without migration."
                 );
@@ -132,7 +134,7 @@ namespace Workes.SaveSystem
             // Verify the envelope structure
             if (!envelopeNode.Has("Data"))
             {
-                SaveSystemDiagnostics.LogWarning($"Cannot migrate save data for provider '{saveKey}': envelope does not contain 'Data' field. Deserialization for this provider will almost certainly fail.");
+                _diagnostics.LogWarning($"Cannot migrate save data for provider '{saveKey}': envelope does not contain 'Data' field. Deserialization for this provider will almost certainly fail.");
                 return false;
             }
 
@@ -152,7 +154,7 @@ namespace Workes.SaveSystem
                 catch (Exception ex)
                 {
                     // Migration step failed - let deserialization fail naturally
-                    SaveSystemDiagnostics.LogWarning(
+                    _diagnostics.LogWarning(
                         $"Migration step failed for provider '{saveKey}' when migrating from v{version} to v{version + 1}: {ex.Message}. " +
                         "Deserialization will proceed without migration."
                     );
@@ -179,7 +181,7 @@ namespace Workes.SaveSystem
             catch (Exception ex)
             {
                 // Failed to serialize migrated data - let deserialization fail naturally
-                SaveSystemDiagnostics.LogWarning(
+                _diagnostics.LogWarning(
                     $"Failed to serialize migrated data for provider '{saveKey}': {ex.Message}. " +
                     "Deserialization will proceed without migration."
                 );

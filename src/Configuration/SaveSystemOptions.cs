@@ -4,6 +4,137 @@ using System.IO;
 namespace Workes.SaveSystem
 {
     /// <summary>
+    /// Provides convenience factories for common <see cref="SaveSystemOptions{TIdentity}"/> construction paths.
+    /// </summary>
+    public static class SaveSystemOptions
+    {
+        /// <summary>
+        /// Creates options for string save identities using default temp-folder and provider-file naming.
+        /// </summary>
+        /// <param name="saveRootPath">The root directory path where all saves are stored.</param>
+        /// <param name="serializer">The serializer used to convert provider states to/from file formats.</param>
+        /// <param name="tempFolderName">Optional temp folder suffix. If null, uses the default temp folder name.</param>
+        /// <param name="fileNameResolver">Optional provider file-name resolver. If null, uses the default file-name resolver.</param>
+        /// <param name="missingProviderFileBehavior">How loads behave when a registered persisted provider file is missing.</param>
+        /// <param name="warningSink">Optional callback that receives save-system warning messages.</param>
+        /// <returns>Options configured for string save identities.</returns>
+        public static SaveSystemOptions<string> Create(
+            string saveRootPath,
+            ISaveSerializer serializer,
+            string? tempFolderName = null,
+            Func<SaveFileContext, string>? fileNameResolver = null,
+            MissingProviderFileBehavior missingProviderFileBehavior = MissingProviderFileBehavior.Throw,
+            Action<string>? warningSink = null)
+        {
+            return Create<string>(
+                saveRootPath,
+                serializer,
+                saveNameResolver: identity => identity,
+                tempFolderName: tempFolderName,
+                fileNameResolver: fileNameResolver,
+                missingProviderFileBehavior: missingProviderFileBehavior,
+                warningSink: warningSink);
+        }
+
+        /// <summary>
+        /// Creates options for custom save identities using default temp-folder and provider-file naming.
+        /// </summary>
+        /// <typeparam name="TIdentity">The type used to identify saves.</typeparam>
+        /// <param name="saveRootPath">The root directory path where all saves are stored.</param>
+        /// <param name="serializer">The serializer used to convert provider states to/from file formats.</param>
+        /// <param name="saveNameResolver">The function that resolves an identity to a save folder name.</param>
+        /// <param name="tempFolderName">Optional temp folder suffix. If null, uses the default temp folder name.</param>
+        /// <param name="fileNameResolver">Optional provider file-name resolver. If null, uses the default file-name resolver.</param>
+        /// <param name="missingProviderFileBehavior">How loads behave when a registered persisted provider file is missing.</param>
+        /// <param name="warningSink">Optional callback that receives save-system warning messages.</param>
+        /// <returns>Options configured for <typeparamref name="TIdentity"/> save identities.</returns>
+        public static SaveSystemOptions<TIdentity> Create<TIdentity>(
+            string saveRootPath,
+            ISaveSerializer serializer,
+            Func<TIdentity, string> saveNameResolver,
+            string? tempFolderName = null,
+            Func<SaveFileContext, string>? fileNameResolver = null,
+            MissingProviderFileBehavior missingProviderFileBehavior = MissingProviderFileBehavior.Throw,
+            Action<string>? warningSink = null)
+        {
+            return new SaveSystemOptions<TIdentity>(
+                saveRootPath: saveRootPath,
+                serializer: serializer,
+                tempFolderName: tempFolderName ?? SaveSystemOptions<TIdentity>.DefaultTempFolderName(),
+                saveNameResolver: saveNameResolver,
+                fileNameResolver: fileNameResolver,
+                missingProviderFileBehavior: missingProviderFileBehavior,
+                warningSink: warningSink);
+        }
+
+        /// <summary>
+        /// Creates options for string save identities with backups enabled.
+        /// </summary>
+        /// <param name="saveRootPath">The root directory path where all saves are stored.</param>
+        /// <param name="serializer">The serializer used to convert provider states to/from file formats.</param>
+        /// <param name="backupSystemMaxBackupCount">The maximum number of backups to keep. Must be greater than 0.</param>
+        /// <param name="tempFolderName">Optional temp folder suffix. If null, uses the default temp folder name.</param>
+        /// <param name="fileNameResolver">Optional provider file-name resolver. If null, uses the default file-name resolver.</param>
+        /// <param name="missingProviderFileBehavior">How loads behave when a registered persisted provider file is missing.</param>
+        /// <param name="warningSink">Optional callback that receives save-system warning messages.</param>
+        /// <returns>Options configured for string save identities with backups enabled.</returns>
+        public static SaveSystemOptions<string> CreateWithBackups(
+            string saveRootPath,
+            ISaveSerializer serializer,
+            int backupSystemMaxBackupCount,
+            string? tempFolderName = null,
+            Func<SaveFileContext, string>? fileNameResolver = null,
+            MissingProviderFileBehavior missingProviderFileBehavior = MissingProviderFileBehavior.Throw,
+            Action<string>? warningSink = null)
+        {
+            return CreateWithBackups<string>(
+                saveRootPath,
+                serializer,
+                saveNameResolver: identity => identity,
+                backupSystemMaxBackupCount: backupSystemMaxBackupCount,
+                tempFolderName: tempFolderName,
+                fileNameResolver: fileNameResolver,
+                missingProviderFileBehavior: missingProviderFileBehavior,
+                warningSink: warningSink);
+        }
+
+        /// <summary>
+        /// Creates options for custom save identities with backups enabled.
+        /// </summary>
+        /// <typeparam name="TIdentity">The type used to identify saves.</typeparam>
+        /// <param name="saveRootPath">The root directory path where all saves are stored.</param>
+        /// <param name="serializer">The serializer used to convert provider states to/from file formats.</param>
+        /// <param name="saveNameResolver">The function that resolves an identity to a save folder name.</param>
+        /// <param name="backupSystemMaxBackupCount">The maximum number of backups to keep. Must be greater than 0.</param>
+        /// <param name="tempFolderName">Optional temp folder suffix. If null, uses the default temp folder name.</param>
+        /// <param name="fileNameResolver">Optional provider file-name resolver. If null, uses the default file-name resolver.</param>
+        /// <param name="missingProviderFileBehavior">How loads behave when a registered persisted provider file is missing.</param>
+        /// <param name="warningSink">Optional callback that receives save-system warning messages.</param>
+        /// <returns>Options configured for <typeparamref name="TIdentity"/> save identities with backups enabled.</returns>
+        public static SaveSystemOptions<TIdentity> CreateWithBackups<TIdentity>(
+            string saveRootPath,
+            ISaveSerializer serializer,
+            Func<TIdentity, string> saveNameResolver,
+            int backupSystemMaxBackupCount,
+            string? tempFolderName = null,
+            Func<SaveFileContext, string>? fileNameResolver = null,
+            MissingProviderFileBehavior missingProviderFileBehavior = MissingProviderFileBehavior.Throw,
+            Action<string>? warningSink = null)
+        {
+            return new SaveSystemOptions<TIdentity>(
+                saveRootPath: saveRootPath,
+                serializer: serializer,
+                tempFolderName: tempFolderName ?? SaveSystemOptions<TIdentity>.DefaultTempFolderName(),
+                saveNameResolver: saveNameResolver,
+                fileNameResolver: fileNameResolver,
+                enableBackupSystem: true,
+                backupSystemMaxBackupCount: backupSystemMaxBackupCount,
+                missingProviderFileBehavior: missingProviderFileBehavior,
+                warningSink: warningSink);
+        }
+    }
+
+    /// <summary>
     /// Configuration options for a <see cref="SaveManager{TIdentity}"/> instance.
     /// </summary>
     /// <typeparam name="TIdentity">The type used to identify saves.</typeparam>
@@ -57,6 +188,11 @@ namespace Workes.SaveSystem
         public MissingProviderFileBehavior MissingProviderFileBehavior { get; }
 
         /// <summary>
+        /// Gets the optional callback that receives save-system warning messages.
+        /// </summary>
+        public Action<string>? WarningSink { get; }
+
+        /// <summary>
         /// Initializes a new instance of the <see cref="SaveSystemOptions{TIdentity}"/> class.
         /// </summary>
         /// <param name="saveRootPath">The root directory path where all saves are stored.</param>
@@ -67,6 +203,7 @@ namespace Workes.SaveSystem
         /// <param name="enableBackupSystem">Whether to enable the backup system. Defaults to false.</param>
         /// <param name="backupSystemMaxBackupCount">The maximum number of backups to keep. Must be greater than 0 if backups are enabled. Defaults to 0.</param>
         /// <param name="missingProviderFileBehavior">How loads behave when a registered persisted provider file is missing. Defaults to <see cref="MissingProviderFileBehavior.Throw"/>.</param>
+        /// <param name="warningSink">Optional callback that receives save-system warning messages. Defaults to null.</param>
         /// <exception cref="ArgumentException">Thrown when path values are invalid, or when backups are enabled but max backup count is 0 or less.</exception>
         /// <exception cref="ArgumentNullException">Thrown when serializer or resolver delegates are null.</exception>
         public SaveSystemOptions(
@@ -77,7 +214,8 @@ namespace Workes.SaveSystem
             Func<SaveFileContext, string>? fileNameResolver,
             bool enableBackupSystem = false,
             int backupSystemMaxBackupCount = 0,
-            MissingProviderFileBehavior missingProviderFileBehavior = MissingProviderFileBehavior.Throw)
+            MissingProviderFileBehavior missingProviderFileBehavior = MissingProviderFileBehavior.Throw,
+            Action<string>? warningSink = null)
         {
             if (string.IsNullOrWhiteSpace(saveRootPath))
                 throw new ArgumentException("Save root path cannot be null, empty, or whitespace.", nameof(saveRootPath));
@@ -98,6 +236,7 @@ namespace Workes.SaveSystem
             EnableBackupSystem = enableBackupSystem;
             BackupSystemMaxBackupCount = backupSystemMaxBackupCount;
             MissingProviderFileBehavior = missingProviderFileBehavior;
+            WarningSink = warningSink;
             if (enableBackupSystem && backupSystemMaxBackupCount <= 0)
                 throw new ArgumentException("If the backup system is enabled, the max backup count must be greater than 0.");
         }

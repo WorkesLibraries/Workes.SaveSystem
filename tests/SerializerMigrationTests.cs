@@ -94,6 +94,37 @@ public sealed class SerializerMigrationTests
     }
 
     [Test]
+    public void LoadFromDisk_AppliesSimpleMigrationHelpers()
+    {
+        var oldManager = new SaveManager<string>(CreateOptions());
+        var oldProvider = new V1Provider(new V1State { Name = "Scout" });
+        oldManager.RegisterProvider(oldProvider);
+        oldManager.ValidateRegistrations();
+        oldManager.SaveToDisk("slot");
+
+        var newManager = new SaveManager<string>(CreateOptions());
+        var newProvider = new MigratingProvider(
+            schemaVersion: 2,
+            current: new V2State { Name = "Unset", Level = 0 },
+            migrations: new[]
+            {
+                SaveMigrationStep.From(
+                    1,
+                    SaveMigrationStep.Rename("Name", "DisplayName"),
+                    SaveMigrationStep.SetString("Name", "Scout"),
+                    SaveMigrationStep.AddIntDefault("Level", 12))
+            });
+        newManager.RegisterProvider(newProvider);
+        newManager.ValidateRegistrations();
+
+        var loaded = newManager.LoadFromDisk("slot");
+
+        Assert.That(loaded, Is.True);
+        Assert.That(newProvider.Current.Name, Is.EqualTo("Scout"));
+        Assert.That(newProvider.Current.Level, Is.EqualTo(12));
+    }
+
+    [Test]
     public void LoadFromDisk_ThrowsWhenMigrationPathIsMissing()
     {
         var oldManager = new SaveManager<string>(CreateOptions());
