@@ -8,7 +8,6 @@ This file is the durable planning tracker for the save system work. Keep it upda
 2. Add recovery tests for interrupted saves written with older provider schema versions after the application updates, so recovery and migration behavior stay compatible.
 3. Update recovery to validate temp and old recovery candidates, prefer valid temp, fall back to valid `_toDelete`, warn when falling back, and preserve artifacts if neither candidate is valid.
 4. Update recovery validation to use the normal load-compatible path, including schema-version extraction and migrations, so interrupted saves from older provider schema versions can recover after application updates.
-5. Simplify `ISaveMigrationCapableSerializer` to option B: remove `ISaveDataNodeFactory` inheritance and expose node creation only through `NodeFactory`.
 
 ## Later
 
@@ -435,6 +434,15 @@ These points are completed for the current package migration.
 - Updated README provider setup guidance with try-registration usage and rollback semantics.
 - Added tests for successful persisted try-registration, failed persisted try-registration rollback, previous validation-state preservation, and successful memory-provider try-registration.
 - `dotnet test Workes.SaveSystem.sln` passes with 147 tests.
+
+### 47. Simplified Migration-Capable Serializer Factory Ownership
+
+- Removed `ISaveDataNodeFactory` inheritance from `ISaveMigrationCapableSerializer`.
+- Kept migration node creation available through the explicit `ISaveMigrationCapableSerializer.NodeFactory` property.
+- Removed duplicate public node-factory pass-through methods from the built-in JSON and binary serializers.
+- Updated migration engine internals, README guidance, and XML documentation to use the serializer-owned node factory.
+- Added public-shape coverage ensuring migration-capable serializers expose node creation through `NodeFactory` only.
+- `dotnet test Workes.SaveSystem.sln` passes with 148 tests.
 
 ## Maintenance Rules
 

@@ -141,9 +141,8 @@ namespace Workes.SaveSystem
             // Extract the Data field from the envelope - this is what we migrate
             ISaveDataNode dataNode = envelopeNode.Get("Data");
 
-            // Apply migrations sequentially to the Data field only
-            // The factory is available from the migration-capable serializer
-            var factory = migrationSerializer as ISaveDataNodeFactory;
+            // Apply migrations sequentially to the Data field only.
+            var factory = migrationSerializer.NodeFactory;
             for (int version = savedSchemaVersion; version < currentSchemaVersion; version++)
             {
                 var migrationStep = migrationMap[version];

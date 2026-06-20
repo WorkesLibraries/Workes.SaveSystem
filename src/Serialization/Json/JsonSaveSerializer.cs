@@ -119,25 +119,5 @@ namespace Workes.SaveSystem
             return jsonNode._token.ToString(Newtonsoft.Json.Formatting.Indented);
         }
 
-        /// <inheritdoc />
-        public ISaveDataNode CreateObject() => NodeFactory.CreateObject();
-
-        /// <inheritdoc />
-        public ISaveDataNode CreateArray() => NodeFactory.CreateArray();
-
-        /// <inheritdoc />
-        public ISaveDataNode CreateInt(int value) => NodeFactory.CreateInt(value);
-
-        /// <inheritdoc />
-        public ISaveDataNode CreateFloat(float value) => NodeFactory.CreateFloat(value);
-
-        /// <inheritdoc />
-        public ISaveDataNode CreateString(string value) => NodeFactory.CreateString(value);
-
-        /// <inheritdoc />
-        public ISaveDataNode CreateBool(bool value) => NodeFactory.CreateBool(value);
-
-        /// <inheritdoc />
-        public ISaveDataNode CreateNull() => NodeFactory.CreateNull();
     }
 }

@@ -111,27 +111,6 @@ namespace Workes.SaveSystem
             return SerializeTokenToBase64(jsonNode._token);
         }
 
-        /// <inheritdoc />
-        public ISaveDataNode CreateObject() => NodeFactory.CreateObject();
-
-        /// <inheritdoc />
-        public ISaveDataNode CreateArray() => NodeFactory.CreateArray();
-
-        /// <inheritdoc />
-        public ISaveDataNode CreateInt(int value) => NodeFactory.CreateInt(value);
-
-        /// <inheritdoc />
-        public ISaveDataNode CreateFloat(float value) => NodeFactory.CreateFloat(value);
-
-        /// <inheritdoc />
-        public ISaveDataNode CreateString(string value) => NodeFactory.CreateString(value);
-
-        /// <inheritdoc />
-        public ISaveDataNode CreateBool(bool value) => NodeFactory.CreateBool(value);
-
-        /// <inheritdoc />
-        public ISaveDataNode CreateNull() => NodeFactory.CreateNull();
-
         internal static string SerializePayloadToBase64(object payload)
         {
             if (payload == null)

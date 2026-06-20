@@ -406,9 +406,9 @@ A custom serializer must provide these pieces as one coherent format:
 
 Schematic creation should be lightweight where possible. Provider state compatibility is validated through real provider state during `ValidateRegistrations()` and through deserialization during load.
 
-If providers using the serializer implement `ISaveMigratable`, the serializer must also implement `ISaveMigrationCapableSerializer`. That means it must parse serialized payloads into editable `ISaveDataNode` trees, serialize edited node trees back to the payload format, and create new object, array, and primitive nodes for migration steps.
+If providers using the serializer implement `ISaveMigratable`, the serializer must also implement `ISaveMigrationCapableSerializer`. That means it must parse serialized payloads into editable `ISaveDataNode` trees, serialize edited node trees back to the payload format, and expose a matching `NodeFactory` that creates new object, array, and primitive nodes for migration steps.
 
-The migration-capable serializer and its data-node implementation are coupled. Do not mix data nodes from different serializer implementations.
+The migration-capable serializer, its `NodeFactory`, and its data-node implementation are coupled. Do not mix data nodes from different serializer implementations.
 
 ### Data Node Contracts
 

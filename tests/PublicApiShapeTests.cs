@@ -65,4 +65,18 @@ public sealed class PublicApiShapeTests
         Assert.That(unexpectedTypes, Is.Empty);
     }
 
+    [Test]
+    public void MigrationCapableSerializers_ExposeNodeCreationThroughNodeFactoryOnly()
+    {
+        var jsonSerializer = new JsonSaveSerializer();
+        var binarySerializer = new BinarySaveSerializer();
+
+        Assert.That(jsonSerializer, Is.InstanceOf<ISaveMigrationCapableSerializer>());
+        Assert.That(binarySerializer, Is.InstanceOf<ISaveMigrationCapableSerializer>());
+        Assert.That(jsonSerializer, Is.Not.InstanceOf<ISaveDataNodeFactory>());
+        Assert.That(binarySerializer, Is.Not.InstanceOf<ISaveDataNodeFactory>());
+        Assert.That(((ISaveMigrationCapableSerializer)jsonSerializer).NodeFactory, Is.InstanceOf<ISaveDataNodeFactory>());
+        Assert.That(((ISaveMigrationCapableSerializer)binarySerializer).NodeFactory, Is.InstanceOf<ISaveDataNodeFactory>());
+    }
+
 }
