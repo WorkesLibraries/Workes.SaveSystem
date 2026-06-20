@@ -111,7 +111,7 @@ var manager = new SaveManager<string>(
 
 `BinarySaveSerializer` writes `.bin` provider files. The current serializer contract stores provider payloads as strings, so the binary token payload is Base64-encoded on disk rather than written as raw bytes.
 
-After registering providers, call `ValidateRegistrations()` before disk save/load operations. Registration is intentionally lightweight; validation captures provider state, checks serializer compatibility, validates migration policy, and verifies file-name behavior at the setup point you choose.
+After registering providers, call `ValidateRegistrations()` before disk save/load operations. Registration is intentionally lightweight; validation captures provider state, checks serializer compatibility, validates migration policy, verifies file-name behavior, and rejects provider file-name collisions at the setup point you choose.
 
 Use `ListSaveSlots()` to populate save/load menus or tooling with the saves currently present under the configured save root.
 
@@ -226,6 +226,10 @@ This keeps provider ownership explicit: settings can be saved globally while gam
 Each `ISaveProvider` owns one stable save key and one schema version.
 
 Save keys are persistent identity. Changing a provider key changes the filename and breaks loading of existing provider data unless the application handles that compatibility.
+
+`SaveKey` must remain stable after provider registration. `SchemaVersion` must remain stable after registration validation. The manager checks these values before disk save/load operations and throws a clear error if a provider changes its persistence contract after setup. If you intentionally change a provider schema during setup, call `ValidateRegistrations()` again before saving or loading.
+
+Custom `FileNameResolver` values must also resolve every persisted provider to a unique file name. The default resolver uses `SaveKey`, so uniqueness follows from unique provider keys. A custom resolver that maps multiple providers to the same file is rejected during registration validation.
 
 Provider state must be compatible with the serializer and with the provider's `ISaveProvider<TState>` state type.
 The built-in JSON serializer does not require a public parameterless constructor during registration; constructor-based DTOs are supported when Newtonsoft.Json can serialize and deserialize the real captured state.
@@ -343,8 +347,8 @@ Implement `ISaveProvider<TState>` for each subsystem that owns saveable state.
 
 | Member | Contract |
 |---|---|
-| `SaveKey` | Stable provider identity. It must be unique within a manager and should not change after saves exist. |
-| `SchemaVersion` | Stable integer version for the provider state shape. Increase it when older payloads need migration. |
+| `SaveKey` | Stable provider identity. It must be unique within a manager and must not change after provider registration. |
+| `SchemaVersion` | Stable integer version for the provider state shape. Increase it when older payloads need migration. It must not change after registration validation. |
 | `LoadPriority` | Lower values restore first. Use it when one provider must exist before another restores. |
 | `CaptureState()` | Return a serializer-compatible state object of type `TState`. The manager calls lifecycle `OnBeforeSave()` before capture. |
 | `RestoreState(TState)` | Accept the object shape produced by the registered schematic. |

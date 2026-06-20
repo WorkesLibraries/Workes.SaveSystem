@@ -2,16 +2,23 @@
 
 This file is the durable planning tracker for the save system work. Keep it updated after each slice so planning state does not live only in chat history.
 
-## Current Goal
+## To-do
 
-Move the legacy `com.workes.savesystem` Unity-style package into the new `Workes.SaveSystem` .NET package structure, then polish the API, implementation, docs, and tests into a reusable package that follows the root `design_principles.md`.
+1. Fix `BinarySaveSerializer` XML documentation that still describes the implementation as BSON-backed even though the current serializer uses a package-owned binary token codec encoded as Base64.
+2. Add recovery tests for corrupt temp folders when `_toDelete` is also present, so recovery does not delete the last valid save during interrupted swaps.
+3. Add recovery tests for interrupted saves written with older provider schema versions after the application updates, so recovery and migration behavior stay compatible.
+4. Add try-load backup tests for disabled backups combined with invalid identity and unvalidated registrations, once the desired ordering is decided.
+5. Document whether provider `CaptureState()` is allowed to return null; if null state remains unsupported, make that explicit in XML docs and README provider contracts.
+6. Add `TryRegisterProvider(...)` and `TryRegisterMemoryProvider(...)` convenience APIs that tentatively register a provider, run registration validation immediately, and leave the manager unchanged when validation fails.
+7. Update recovery to validate temp and old recovery candidates, prefer valid temp, fall back to valid `_toDelete`, warn when falling back, and preserve artifacts if neither candidate is valid.
+8. Update recovery validation to use the normal load-compatible path, including schema-version extraction and migrations, so interrupted saves from older provider schema versions can recover after application updates.
+9. Keep `TryLoadBackupSlotFromDisk(...)` option A behavior: when backups are disabled, return `BackupSystemDisabled` before validating identity, slot number, or registrations.
+10. Keep null provider state unsupported for the first version and document that `CaptureState()` must return a non-null state object.
+11. Simplify `ISaveMigrationCapableSerializer` to option B: remove `ISaveDataNodeFactory` inheritance and expose node creation only through `NodeFactory`.
 
-## Workspace Boundaries
+## Later
 
-- Make changes only inside `Workes.SaveSystem` unless the user explicitly changes this rule.
-- Reading `design_principles.md` and other packages is allowed for context and style reference.
-- Other packages are read-only inspiration and must not be edited as part of this work.
-- The old `com.workes.savesystem` folder was only a temporary copy-paste source and has already been deleted by the user; no archive/removal work is needed.
+There are no remaining deferred implementation points in this tracker.
 
 ## Completed
 
@@ -186,13 +193,238 @@ These points are completed for the current package migration.
 - Closed the last tracked test-suite to-do for example-aligned coverage.
 - `dotnet test Workes.SaveSystem.sln` passes with 47 tests.
 
+### 22. Removed Save Identity Marker Constraint
+
+- Removed the `ISaveIdentity` marker interface and the generic constraints from `SaveManager<TIdentity>` and `SaveSystemOptions<TIdentity>`.
+- Removed `StringSaveIdentity` because plain `string` identities supersede the simple validated convenience value.
+- Added coverage for plain `string` identities and custom value identities resolved through `SaveNameResolver`.
+- Normalized null identity handling so save, load, backup-load, and recovery operations throw `ArgumentNullException` before invoking the resolver.
+- Updated README examples that referenced the removed identity type.
+- `dotnet test Workes.SaveSystem.sln` passes with 52 tests.
+
+### 23. Added Explicit Registration Validation Gate
+
+- Removed eager provider capture/serialize validation from `RegisterProvider<TState>()` so registration stays lightweight.
+- Added `SaveManager<TIdentity>.ValidateRegistrations()` to validate persisted provider state capture, serializer compatibility, file-name resolution, file extension validity, and migration policy.
+- Required successful registration validation before `SaveToDisk`, `LoadFromDisk`, and `LoadBackupSlotFromDisk`.
+- Reset validation state when providers are registered or unregistered.
+- Added focused tests for lightweight registration, disk-operation gating, validation-time capture, and validation-time capture failure.
+- Updated existing tests to validate registrations during setup where disk save/load behavior is under test.
+- Updated README and XML documentation so examples and public method docs explain the validation step.
+- `dotnet test Workes.SaveSystem.sln` passes with 58 tests.
+
+### 24. Loosened JSON Schematic Construction
+
+- Removed the `Activator.CreateInstance<T>()` compatibility probe from `JsonSaveSchematic<T>` so schematic creation no longer requires public parameterless constructors.
+- Kept real compatibility validation at `ValidateRegistrations()` and load time, using actual provider state and saved data.
+- Added coverage for constructor-based Newtonsoft-compatible state DTOs without parameterless constructors.
+- Added coverage that validation still rejects state that cannot serialize.
+- Updated README and XML documentation to explain that the built-in JSON serializer supports Newtonsoft-compatible constructor-based DTOs when real state can serialize and deserialize.
+- `dotnet test Workes.SaveSystem.sln` passes with 60 tests.
+
+### 25. Added Snapshot Restore Validation
+
+- Added `SaveManager<TIdentity>.ValidateSnapshotForRestore()` and call it before `RestoreSnapshot(...)` mutates providers.
+- `RestoreSnapshot(null)` now throws `ArgumentNullException`.
+- Snapshot restore validation rejects duplicate provider keys, unknown provider keys, schema mismatches, and persisted-provider state incompatible with the registered schematic.
+- Registered providers absent from the snapshot remain allowed and are skipped during restore.
+- Documented that restore validation is pre-mutation, but provider-thrown restore failures after validation can still leave earlier providers restored.
+- Added tests proving validation failures do not mutate providers or run lifecycle callbacks.
+- Updated README and XML documentation for restore semantics.
+- `dotnet test Workes.SaveSystem.sln` passes with 66 tests.
+
+### 26. Reworked Provider Unregistration Semantics
+
+- Changed `UnregisterProvider(ISaveProvider)` to remove only the exact registered provider instance and return whether removal happened.
+- Added `UnregisterProvider(string saveKey)` for explicit key-based removal.
+- Reset registration validation only when a provider is actually removed.
+- Documented instance-based and key-based unregistration behavior in README and XML documentation.
+- Added tests for exact-instance removal, same-key different-instance safety, key-based removal, invalid removal keys, and validation invalidation after removal.
+- `dotnet test Workes.SaveSystem.sln` passes with 70 tests.
+
+### 27. Moved Fully To Typed Providers
+
+- Split provider contracts into a metadata-only `ISaveProvider` base and a state-owning `ISaveProvider<TState>` interface.
+- Changed persisted registration to `RegisterProvider(ISaveProvider<TState> provider)`, with type inference from the provider instead of repeated state type arguments at call sites.
+- Added `RegisterMemoryProvider(ISaveProvider<TState> provider)` for explicit snapshot-only providers that should not write provider files to disk.
+- Updated manager internals to store typed capture/restore delegates while keeping snapshots and serializers non-generic.
+- Added state-type validation before snapshot restore, including memory-only providers that do not have schematics.
+- Updated README examples, extension-contract docs, and tests to use typed providers.
+- `dotnet test Workes.SaveSystem.sln` passes with 71 tests.
+
+### 28. Decided Provider File Missing Behavior On Load
+
+- Added `MissingProviderFileBehavior` with strict `Throw` behavior as the default and explicit `Skip` behavior for deliberate partial-load scenarios.
+- Added `SaveSystemOptions<TIdentity>.MissingProviderFileBehavior`.
+- Changed disk and backup loads so registered persisted providers require matching provider files by default.
+- Kept memory-only providers exempt from file loading and kept unknown extra provider files ignored.
+- Documented strict missing-file behavior and the skip opt-in in README and XML documentation.
+- Added tests for missing provider files, skip-mode partial loads, unknown extra files, partial save folders, and backup-slot missing files.
+- `dotnet test Workes.SaveSystem.sln` passes with 76 tests.
+
+### 29. Improved Options Construction Ergonomics
+
+- Added a non-generic `SaveSystemOptions` factory class for common option construction.
+- Added `SaveSystemOptions.Create(...)` for string save identities with default temp-folder and provider-file naming.
+- Added `SaveSystemOptions.Create<TIdentity>(...)` for custom identities while keeping save-root ownership explicit.
+- Added `SaveSystemOptions.CreateWithBackups(...)` overloads for named backup-enabled construction.
+- Updated `SaveManager.CreateDefault(...)` to use the options factory internally.
+- Updated README examples and README-aligned tests to use the simpler construction path.
+- Added tests for string identity defaults, custom identity resolvers, backup-enabled factories, and missing-provider-file policy passthrough.
+- `dotnet test Workes.SaveSystem.sln` passes with 79 tests.
+
+### 30. Re-evaluated Migration Data-Node Public Surface
+
+- Kept `ISaveDataNode` and `ISaveDataNodeFactory` as the advanced migration extension surface.
+- Added `ISaveDataNodeFactory.CreateNull()` so `SaveDataNodeType.Null` is constructible and the null node contract is complete.
+- Updated JSON data nodes to report null values as `SaveDataNodeType.Null`.
+- Tightened JSON data-node object and array operations so wrong-shape operations fail with clear `InvalidOperationException`s.
+- Added same-implementation validation so JSON data nodes reject nodes created by other data-node implementations.
+- Documented null-node support and the same serializer/factory ownership rule.
+- Added extension-contract tests for object operations, array operations, null nodes, wrong-shape operations, and foreign-node rejection.
+- `dotnet test Workes.SaveSystem.sln` passes with 84 tests.
+
+### 31. Added Simple Migration Helper APIs
+
+- Added `SaveMigrationStep.From(...)` to compose several migration actions into one schema-version step.
+- Added helper actions for top-level field defaults, primitive setting, null setting, removal, renaming, and moving.
+- Kept one-operation convenience methods such as `SaveMigrationStep.AddIntDefault(fromVersion, key, value)` for simple one-edit migrations.
+- Preserved the existing `SaveMigrationStep` constructor so advanced migrations can still manipulate `ISaveDataNode` directly.
+- Added README examples for simple helper usage and advanced data-node usage.
+- Added tests for helper composition, default handling, primitive setting, removal, rename overwrite behavior, validation, and real disk-load migration.
+- `dotnet test Workes.SaveSystem.sln` passes with 92 tests.
+
+### 32. Added Options-Based Diagnostics Callback
+
+- Replaced static console warning output with manager-owned diagnostics configured through options.
+- Added `SaveSystemOptions<TIdentity>.WarningSink` and factory parameters for opt-in warning callbacks.
+- Routed disabled backup-load warnings, backup normalization warnings, and migration warnings through the warning sink.
+- Kept diagnostics silent by default.
+- Documented warning-sink usage in README.
+- Added tests for default silence, disabled-backup warning callbacks, migration warning callbacks, and options factory passthrough.
+- `dotnet test Workes.SaveSystem.sln` passes with 95 tests.
+
+### 33. Added Save Slot Listing
+
+- Added `SaveManager<TIdentity>.ListSaveSlots()` to list available main save slots from the configured save root.
+- Returned resolved save folder names as strings because custom `TIdentity` values may not be reconstructable from folder names.
+- Ignored backup folders, temp folders, to-delete folders, and folders without save metadata so menus do not show save-system artifacts.
+- Sorted listed slots with ordinal string ordering for deterministic UI and test behavior.
+- Documented the listing API and identity tradeoff in README and XML documentation.
+- Added tests for missing save roots, sorted listing, artifact filtering, and custom identity resolvers.
+- `dotnet test Workes.SaveSystem.sln` passes with 99 tests.
+
+### 34. Added Save And Backup Deletion
+
+- Added `SaveManager<TIdentity>.DeleteSave(...)` for main save deletion without requiring provider registration validation.
+- Added `SaveManager<TIdentity>.DeleteBackupSlot(...)` for deleting individual numbered backup slots.
+- Made main save deletion clean related temp and to-delete artifacts while intentionally leaving backups for explicit backup deletion.
+- Allowed backup deletion even when backup creation is currently disabled so cleanup tooling can remove old folders.
+- Documented save and backup deletion behavior in README and XML documentation.
+- Added tests for main-save deletion, backup retention, missing saves, recovery-artifact cleanup, backup-slot deletion, disabled-backup cleanup, and invalid backup slot numbers.
+- `dotnet test Workes.SaveSystem.sln` passes with 105 tests.
+
+### 35. Added Save And Backup Existence Checks
+
+- Added `SaveManager<TIdentity>.SaveExists(...)` for lightweight main-save checks.
+- Added `SaveManager<TIdentity>.BackupSlotExists(...)` for lightweight numbered backup checks.
+- Chose raw, non-mutating disk inspection: existence checks do not recover temp folders, load provider data, or require registration validation.
+- Required save metadata for both save and backup existence so metadata-less directories do not look like valid saves.
+- Allowed backup existence checks even when backup creation is currently disabled.
+- Documented existence-check behavior in README and XML documentation.
+- Added tests for valid saves, missing and metadata-less saves, temp-folder non-recovery, unvalidated managers, valid backups, missing and metadata-less backups, disabled-backup checks, and invalid backup slot numbers.
+- `dotnet test Workes.SaveSystem.sln` passes with 113 tests.
+
+### 36. Added Read-Only Save Metadata API
+
+- Added public `SaveMetadataInfo` as a read-only projection of save-system-owned metadata.
+- Added `SaveManager<TIdentity>.ReadSaveMetadata(...)` for main save metadata reads.
+- Added `SaveManager<TIdentity>.ReadBackupSlotMetadata(...)` for numbered backup metadata reads.
+- Added core metadata timestamps: `CreatedAtUtc` and `LastWrittenAtUtc`, while preserving the stable `SaveId` across overwrites.
+- Chose read-only core metadata for this slice and documented that application-owned display metadata should remain in providers for now.
+- Metadata read APIs return null for missing metadata and throw when a present metadata file is invalid.
+- Documented metadata reads and the core/application metadata boundary in README and XML documentation.
+- Added tests for save metadata reads, stable save ids, timestamp updates, missing metadata, invalid metadata, backup metadata reads, missing backup metadata, and invalid backup slot numbers.
+- `dotnet test Workes.SaveSystem.sln` passes with 120 tests.
+
+### 37. Added Try-Load Result APIs
+
+- Added public `SaveLoadStatus` for structured load outcomes.
+- Added public `SaveLoadResult` with success state, status, message, and captured exception details.
+- Added `SaveManager<TIdentity>.TryLoadFromDisk(...)` for non-throwing main save loads.
+- Added `SaveManager<TIdentity>.TryLoadBackupSlotFromDisk(...)` for non-throwing backup slot loads.
+- Kept the existing strict `LoadFromDisk(...)` and `LoadBackupSlotFromDisk(...)` paths as the source of truth.
+- Reported missing saves, disabled backups, invalid requests, unvalidated registrations, missing provider files, migration failures, recovery failures, corrupt data, and fallback load failures through result statuses.
+- Documented try-load usage in README and XML documentation.
+- Added tests for successful try-loads, missing saves, unvalidated registrations, missing provider files, corrupt data, migration failures, disabled backups, and missing backups.
+- `dotnet test Workes.SaveSystem.sln` passes with 128 tests.
+
+### 38. Added Default Binary Serializer
+
+- Added `BinarySaveSerializer` as a built-in serializer that writes `.bin` provider files.
+- Added `BinarySaveSchematic<T>` to wrap provider state in the same versioned payload shape as the JSON serializer.
+- Implemented a package-owned binary token codec over the existing migration data-node model instead of using unsafe `BinaryFormatter` or adding another dependency.
+- Kept migration support by implementing `ISaveMigrationCapableSerializer` and reusing the JSON data-node factory internally.
+- Documented that the current serializer contract stores provider payloads as strings, so binary payloads are Base64-encoded on disk rather than written as raw bytes.
+- Added tests for binary payload shape, schema-version extraction, manager save/load, migration helper support, and invalid binary payload rejection.
+- `dotnet test Workes.SaveSystem.sln` passes with 132 tests.
+
+### 39. Decided System.Text.Json Core Strategy
+
+- Verified that `System.Text.Json` is not available to the current `netstandard2.1` source project without adding an additional package reference.
+- Decided not to add a parallel `System.Text.Json` serializer to the core first version because it would not make the package dependency-free while Newtonsoft remains required for migration data nodes, the current JSON serializer, the binary serializer token model, and metadata persistence.
+- Decided not to replace Newtonsoft in this slice because that would require a coordinated migration-node, serializer, metadata, and compatibility rewrite rather than a simple serializer swap.
+- Documented that a future `System.Text.Json` adapter remains possible when a clear consumer need appears and compatibility limits are acceptable.
+- Updated README dependency notes and suggested next steps with the decision.
+- `dotnet test Workes.SaveSystem.sln` passes with 132 tests.
+
+### 40. Documented Scope And Provider-Set Composition
+
+- Decided not to add provider-group APIs for the first reusable version.
+- Confirmed scope can be modeled with custom save identities and `SavePathResolver` when the same provider set is saved per profile, character, world, or slot.
+- Initially documented flat resolved save names, then superseded that with relative save path support in the following slice.
+- Documented separate managers as the recommended pattern when different provider sets have different lifecycles, such as global settings versus per-profile gameplay.
+- Left true provider groups as a possible future feature only if repeated partial-save domain needs justify the added complexity.
+- `dotnet test Workes.SaveSystem.sln` passes with 132 tests.
+
+### 41. Added Relative Save Path Support
+
+- Renamed the public resolver concept from `SaveNameResolver`/`saveNameResolver` to `SavePathResolver`/`savePathResolver`.
+- Allowed save identities to resolve to safe relative paths under the manager's save root.
+- Rejected absolute paths, empty path segments, `.` and `..` segments, invalid segment characters, reserved `_backup` segments, and path segments that collide with temp/to-delete artifact suffixes.
+- Updated atomic save, recovery, deletion, existence checks, metadata reads, and provider file loading to operate on full relative save paths.
+- Updated backup storage and rotation so backups mirror relative save paths under `_backup`, such as `_backup/profile-a/slot-1_0001`.
+- Changed `ListSaveSlots()` to search recursively and return normalized relative save paths with `/` separators.
+- Updated README and XML documentation to describe save path behavior and scope composition through relative paths.
+- Added tests for safe nested save paths, rejected traversal, recursive slot listing, artifact filtering in nested paths, and nested backup load/rotation.
+- `dotnet test Workes.SaveSystem.sln` passes with 135 tests.
+
+### 42. Added NuGet Package Metadata
+
+- Added package id, version, authors, company, product, description, package tags, project URL, repository URL/type, and package README metadata to the source project.
+- Packed the root README into the NuGet package as `README.md`.
+- Updated README installation guidance to note that package metadata and README packaging are configured, while publishing still waits on final release/versioning and licensing decisions.
+- Did not add a license expression or license file because no package license has been chosen in this workspace.
+- Verified `dotnet test Workes.SaveSystem.sln` passes with 135 tests.
+- Verified `dotnet pack src\Workes.SaveSystem.csproj` succeeds.
+
+### 43. Tightened Provider Registration Contract Validation
+
+- Rejected duplicate resolved provider file names during `ValidateRegistrations()` so custom `FileNameResolver` collisions cannot overwrite provider files.
+- Documented `SaveKey` as stable after provider registration and `SchemaVersion` as stable after registration validation.
+- Added runtime checks before disk save/load operations so provider `SaveKey` or `SchemaVersion` drift fails with a clear error instead of producing missing or mismatched provider files.
+- Updated README and XML documentation for provider identity/version stability and custom file-name resolver uniqueness.
+- Added tests for duplicate resolved file names, changed provider keys after registration, changed provider keys after validation, changed schema versions after validation, and memory-provider schema drift.
+- `dotnet test Workes.SaveSystem.sln` passes with 140 tests.
+
 ## Maintenance Rules
 
 1. Update This File After Every Completed Slice
 2. Move Completed Implementation Points To `Completed`
-3. Keep README/Style Work In `Documentation To-do`
+3. Include fitting README/XML documentation updates in the same slice as the behavior or API change
 4. Keep Deferred Implementation Ideas In `To-do`
 5. Prefer Updating This File Instead Of Restating The Entire Point List In Chat
 6. Normalize numbering when moving / adding / removing elements from any of the lists
 7. Ensure numbering for all elements on the list
 8. Build and run tests before marking an implementation slice complete
+9. Include before/after or new-usage examples in the final slice summary so API ergonomics are visible

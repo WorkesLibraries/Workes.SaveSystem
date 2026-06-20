@@ -118,9 +118,84 @@ public sealed class RegistrationValidationTests
         Assert.That(ex!.Message, Does.Contain("incompatible state"));
     }
 
+    [Test]
+    public void ValidateRegistrations_RejectsDuplicateResolvedProviderFileNames()
+    {
+        var manager = CreateManager(fileNameResolver: _ => "shared");
+        manager.RegisterProvider(new MutableProvider("player", schemaVersion: 1));
+        manager.RegisterProvider(new MutableProvider("inventory", schemaVersion: 1));
+
+        var ex = Assert.Throws<InvalidOperationException>(() => manager.ValidateRegistrations());
+
+        Assert.That(ex!.Message, Does.Contain("both resolve"));
+        Assert.That(ex.Message, Does.Contain("shared.json"));
+    }
+
+    [Test]
+    public void ValidateRegistrations_RejectsProviderSaveKeyChangedAfterRegistration()
+    {
+        var manager = CreateManager();
+        var provider = new MutableProvider("player", schemaVersion: 1);
+        manager.RegisterProvider(provider);
+        provider.SaveKey = "hero";
+
+        var ex = Assert.Throws<InvalidOperationException>(() => manager.ValidateRegistrations());
+
+        Assert.That(ex!.Message, Does.Contain("changed its SaveKey"));
+    }
+
+    [Test]
+    public void SaveToDisk_RejectsProviderSaveKeyChangedAfterValidation()
+    {
+        var manager = CreateManager();
+        var provider = new MutableProvider("player", schemaVersion: 1);
+        manager.RegisterProvider(provider);
+        manager.ValidateRegistrations();
+        provider.SaveKey = "hero";
+
+        var ex = Assert.Throws<InvalidOperationException>(() => manager.SaveToDisk("slot"));
+
+        Assert.That(ex!.Message, Does.Contain("changed its SaveKey"));
+    }
+
+    [Test]
+    public void LoadFromDisk_RejectsProviderSchemaVersionChangedAfterValidation()
+    {
+        var writer = CreateManager();
+        var writerProvider = new MutableProvider("player", schemaVersion: 1);
+        writer.RegisterProvider(writerProvider);
+        writer.ValidateRegistrations();
+        writer.SaveToDisk("slot");
+
+        var reader = CreateManager();
+        var readerProvider = new MutableProvider("player", schemaVersion: 1);
+        reader.RegisterProvider(readerProvider);
+        reader.ValidateRegistrations();
+        readerProvider.SchemaVersion = 2;
+
+        var ex = Assert.Throws<InvalidOperationException>(() => reader.LoadFromDisk("slot"));
+
+        Assert.That(ex!.Message, Does.Contain("changed its SchemaVersion"));
+    }
+
+    [Test]
+    public void SaveToDisk_RejectsMemoryProviderSchemaVersionChangedAfterValidation()
+    {
+        var manager = CreateManager();
+        var provider = new MutableProvider("cache", schemaVersion: 1);
+        manager.RegisterMemoryProvider(provider);
+        manager.ValidateRegistrations();
+        provider.SchemaVersion = 2;
+
+        var ex = Assert.Throws<InvalidOperationException>(() => manager.SaveToDisk("slot"));
+
+        Assert.That(ex!.Message, Does.Contain("changed its SchemaVersion"));
+    }
+
     private SaveManager<string> CreateManager(
         bool enableBackupSystem = false,
-        int backupSystemMaxBackupCount = 0)
+        int backupSystemMaxBackupCount = 0,
+        Func<SaveFileContext, string>? fileNameResolver = null)
     {
         return new SaveManager<string>(
             new SaveSystemOptions<string>(
@@ -128,7 +203,7 @@ public sealed class RegistrationValidationTests
                 serializer: new JsonSaveSerializer(),
                 tempFolderName: SaveSystemOptions<string>.DefaultTempFolderName(),
                 savePathResolver: identity => identity,
-                fileNameResolver: SaveSystemOptions<string>.DefaultFileNameResolver,
+                fileNameResolver: fileNameResolver ?? SaveSystemOptions<string>.DefaultFileNameResolver,
                 enableBackupSystem: enableBackupSystem,
                 backupSystemMaxBackupCount: backupSystemMaxBackupCount));
     }
@@ -223,6 +298,33 @@ public sealed class RegistrationValidationTests
 
         public void RestoreState(UnserializableState state)
         {
+        }
+    }
+
+    private sealed class MutableProvider : ISaveProvider<TestState>
+    {
+        public MutableProvider(string saveKey, int schemaVersion)
+        {
+            SaveKey = saveKey;
+            SchemaVersion = schemaVersion;
+        }
+
+        public string SaveKey { get; set; }
+
+        public int SchemaVersion { get; set; }
+
+        public int LoadPriority => 0;
+
+        public TestState Current { get; set; } = new TestState { Value = 1 };
+
+        public TestState CaptureState()
+        {
+            return Current;
+        }
+
+        public void RestoreState(TestState state)
+        {
+            Current = state;
         }
     }
 }

@@ -16,6 +16,8 @@ namespace Workes.SaveSystem
         private sealed class ProviderEntry
         {
             public ISaveProvider Provider = null!;
+            public string RegisteredSaveKey = string.Empty;
+            public int? ValidatedSchemaVersion;
             public ISaveSchematic? Schematic;
             public Type StateType = null!;
             public Func<object> CaptureState = null!;
@@ -132,6 +134,7 @@ namespace Workes.SaveSystem
             _providers.Add(provider.SaveKey, new ProviderEntry
             {
                 Provider = provider,
+                RegisteredSaveKey = provider.SaveKey,
                 Schematic = schematic,
                 StateType = typeof(TState),
                 CaptureState = () => provider.CaptureState()!,
@@ -162,6 +165,7 @@ namespace Workes.SaveSystem
             _providers.Add(provider.SaveKey, new ProviderEntry
             {
                 Provider = provider,
+                RegisteredSaveKey = provider.SaveKey,
                 Schematic = null,
                 StateType = typeof(TState),
                 CaptureState = () => provider.CaptureState()!,
@@ -239,28 +243,64 @@ namespace Workes.SaveSystem
         public void ValidateRegistrations()
         {
             ValidateFileExtension(_options.Serializer.FileExtension);
+            var resolvedFileNames = new Dictionary<string, string>(StringComparer.Ordinal);
 
             foreach (var providerEntry in _providers.Values)
             {
                 ValidateProvider(providerEntry.Provider);
+                ValidateRegisteredProviderIdentity(providerEntry);
 
                 var schematic = providerEntry.Schematic;
                 if (schematic == null)
+                {
+                    providerEntry.ValidatedSchemaVersion = providerEntry.Provider.SchemaVersion;
                     continue;
+                }
 
                 schematic.SchemaVersion = providerEntry.Provider.SchemaVersion;
+                providerEntry.ValidatedSchemaVersion = providerEntry.Provider.SchemaVersion;
 
                 var context = new SaveFileContext(
-                    providerEntry.Provider.SaveKey,
+                    providerEntry.RegisteredSaveKey,
                     providerEntry.Provider.SchemaVersion,
                     _options.Serializer.GetType());
-                ValidateFileName(_options.FileNameResolver(context));
+                var baseFileName = _options.FileNameResolver(context);
+                ValidateFileName(baseFileName);
+                ValidateUniqueProviderFileName(
+                    resolvedFileNames,
+                    providerEntry.RegisteredSaveKey,
+                    baseFileName + _options.Serializer.FileExtension);
 
                 ValidateProviderSerialization(providerEntry, schematic);
                 ValidateProviderMigration(providerEntry);
             }
 
             _registrationsValidated = true;
+        }
+
+        private static void ValidateRegisteredProviderIdentity(ProviderEntry providerEntry)
+        {
+            if (!string.Equals(providerEntry.Provider.SaveKey, providerEntry.RegisteredSaveKey, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    $"SaveProvider registered with key '{providerEntry.RegisteredSaveKey}' changed its SaveKey to '{providerEntry.Provider.SaveKey}'. " +
+                    "Provider SaveKey values are persistent identity and must remain stable after registration.");
+            }
+        }
+
+        private static void ValidateUniqueProviderFileName(
+            Dictionary<string, string> resolvedFileNames,
+            string saveKey,
+            string fileName)
+        {
+            if (resolvedFileNames.TryGetValue(fileName, out var existingSaveKey))
+            {
+                throw new InvalidOperationException(
+                    $"SaveProviders with keys '{existingSaveKey}' and '{saveKey}' both resolve to provider file '{fileName}'. " +
+                    "FileNameResolver must produce unique file names for all persisted providers.");
+            }
+
+            resolvedFileNames.Add(fileName, saveKey);
         }
 
         /// <summary>
@@ -418,6 +458,24 @@ namespace Workes.SaveSystem
             if (!_registrationsValidated)
                 throw new InvalidOperationException(
                     "Save registrations must be validated with ValidateRegistrations() before disk save/load operations.");
+
+            EnsureProviderContractsUnchanged();
+        }
+
+        private void EnsureProviderContractsUnchanged()
+        {
+            foreach (var providerEntry in _providers.Values)
+            {
+                ValidateRegisteredProviderIdentity(providerEntry);
+
+                if (providerEntry.ValidatedSchemaVersion.HasValue &&
+                    providerEntry.Provider.SchemaVersion != providerEntry.ValidatedSchemaVersion.Value)
+                {
+                    throw new InvalidOperationException(
+                        $"SaveProvider with key '{providerEntry.RegisteredSaveKey}' changed its SchemaVersion from {providerEntry.ValidatedSchemaVersion.Value} to {providerEntry.Provider.SchemaVersion} after registration validation. " +
+                        "Provider SchemaVersion values are part of the persisted save contract; call ValidateRegistrations() again after intentional provider setup changes.");
+                }
+            }
         }
 
         /// <summary>
@@ -436,8 +494,8 @@ namespace Workes.SaveSystem
                     lifecycle.OnBeforeSave();
 
                 snapshot.Add(
-                    provider.Provider.SaveKey,
-                    provider.Provider.SchemaVersion,
+                    provider.RegisteredSaveKey,
+                    provider.ValidatedSchemaVersion ?? provider.Provider.SchemaVersion,
                     provider.CaptureState(),
                     provider.Provider.LoadPriority
                 );
@@ -509,10 +567,11 @@ namespace Workes.SaveSystem
                         $"Snapshot contains entry for unregistered provider key '{entry.SaveKey}'.");
                 }
 
-                if (entry.SchemaVersion != providerEntry.Provider.SchemaVersion)
+                var expectedSchemaVersion = providerEntry.ValidatedSchemaVersion ?? providerEntry.Provider.SchemaVersion;
+                if (entry.SchemaVersion != expectedSchemaVersion)
                 {
                     throw new InvalidOperationException(
-                        $"Snapshot entry for provider '{entry.SaveKey}' has schema version {entry.SchemaVersion}, but the registered provider expects {providerEntry.Provider.SchemaVersion}.");
+                        $"Snapshot entry for provider '{entry.SaveKey}' has schema version {entry.SchemaVersion}, but the registered provider expects {expectedSchemaVersion}.");
                 }
 
                 ValidateSnapshotEntryState(entry, providerEntry);
@@ -587,7 +646,7 @@ namespace Workes.SaveSystem
                     continue;
 
                 var savedSchemaVersion = kvp.Value.SchemaVersion;
-                var currentSchemaVersion = providerEntry.Provider.SchemaVersion;
+                var currentSchemaVersion = providerEntry.ValidatedSchemaVersion ?? providerEntry.Provider.SchemaVersion;
                 var serializedData = kvp.Value.Data;
 
                 // Apply migrations if schema versions differ and provider opts into migration
@@ -948,8 +1007,8 @@ namespace Workes.SaveSystem
                 return null;
 
             var context = new SaveFileContext(
-                providerEntry.Provider.SaveKey,
-                providerEntry.Provider.SchemaVersion,
+                providerEntry.RegisteredSaveKey,
+                providerEntry.ValidatedSchemaVersion ?? providerEntry.Provider.SchemaVersion,
                 _options.Serializer.GetType()
             );
 

@@ -6,18 +6,25 @@ namespace Workes.SaveSystem
     /// <remarks>
     /// Implement <see cref="ISaveProvider{TState}"/> for providers that capture and restore state. <see cref="SaveKey"/>
     /// and <see cref="SchemaVersion"/> are persistence compatibility values. Keep them stable for existing saves,
-    /// and add migrations when the state shape changes.
+    /// and add migrations when the state shape changes. A provider's <see cref="SaveKey"/> must not change after
+    /// registration, and its <see cref="SchemaVersion"/> must not change after registration validation.
     /// </remarks>
     public interface ISaveProvider
     {
         /// <summary>
         /// Gets a unique key that identifies this provider. Must be unique across all registered providers.
         /// </summary>
+        /// <remarks>
+        /// This value is persistent identity and must remain stable after the provider is registered.
+        /// </remarks>
         string SaveKey { get; }
 
         /// <summary>
         /// Gets the schema version of this provider's state. Increment this when the state structure changes.
         /// </summary>
+        /// <remarks>
+        /// This value is part of the persisted save contract and must remain stable after registration validation.
+        /// </remarks>
         int SchemaVersion { get; }
 
         /// <summary>
