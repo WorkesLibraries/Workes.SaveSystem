@@ -51,7 +51,7 @@ public sealed class EngineNeutralDefaultsTests
                 saveRootPath: _tempRoot,
                 serializer: new JsonSaveSerializer(),
                 tempFolderName: SaveSystemOptions<string>.DefaultTempFolderName(),
-                saveNameResolver: identity => identity,
+                savePathResolver: identity => identity,
                 fileNameResolver: SaveSystemOptions<string>.DefaultFileNameResolver));
         var provider = new TestProvider("player", new TestState { Name = "Saved", Level = 4 });
         manager.RegisterProvider(provider);
@@ -76,7 +76,7 @@ public sealed class EngineNeutralDefaultsTests
                 saveRootPath: _tempRoot,
                 serializer: new JsonSaveSerializer(),
                 tempFolderName: SaveSystemOptions<ProfileSlotIdentity>.DefaultTempFolderName(),
-                saveNameResolver: identity => identity.ProfileId + "-" + identity.SlotId,
+                savePathResolver: identity => identity.ProfileId + "-" + identity.SlotId,
                 fileNameResolver: SaveSystemOptions<ProfileSlotIdentity>.DefaultFileNameResolver));
         var provider = new TestProvider("player", new TestState { Name = "Saved", Level = 4 });
         manager.RegisterProvider(provider);
@@ -104,7 +104,7 @@ public sealed class EngineNeutralDefaultsTests
             warningSink: warningSink);
 
         Assert.That(options.SaveRootPath, Is.EqualTo(_tempRoot));
-        Assert.That(options.SaveNameResolver("slot"), Is.EqualTo("slot"));
+        Assert.That(options.SavePathResolver("slot"), Is.EqualTo("slot"));
         Assert.That(options.TempFolderName, Is.EqualTo("_tmp"));
         Assert.That(options.FileNameResolver(new SaveFileContext("player", 1, typeof(JsonSaveSerializer))), Is.EqualTo("player"));
         Assert.That(options.MissingProviderFileBehavior, Is.EqualTo(MissingProviderFileBehavior.Throw));
@@ -113,14 +113,14 @@ public sealed class EngineNeutralDefaultsTests
     }
 
     [Test]
-    public void SaveSystemOptionsCreate_ForCustomIdentityUsesProvidedSaveNameResolver()
+    public void SaveSystemOptionsCreate_ForCustomIdentityUsesProvidedSavePathResolver()
     {
         var options = SaveSystemOptions.Create<ProfileSlotIdentity>(
             saveRootPath: _tempRoot,
             serializer: new JsonSaveSerializer(),
-            saveNameResolver: identity => identity.ProfileId + "-" + identity.SlotId);
+            savePathResolver: identity => identity.ProfileId + "-" + identity.SlotId);
 
-        var saveName = options.SaveNameResolver(new ProfileSlotIdentity("profile-a", "slot-1"));
+        var saveName = options.SavePathResolver(new ProfileSlotIdentity("profile-a", "slot-1"));
 
         Assert.That(saveName, Is.EqualTo("profile-a-slot-1"));
         Assert.That(options.TempFolderName, Is.EqualTo("_tmp"));
@@ -157,24 +157,24 @@ public sealed class EngineNeutralDefaultsTests
                 saveRootPath: _tempRoot,
                 serializer: null!,
                 tempFolderName: SaveSystemOptions<string>.DefaultTempFolderName(),
-                saveNameResolver: id => id,
+                savePathResolver: id => id,
                 fileNameResolver: SaveSystemOptions<string>.DefaultFileNameResolver));
 
         Assert.That(ex!.ParamName, Is.EqualTo("serializer"));
     }
 
     [Test]
-    public void SaveSystemOptions_RejectsNullSaveNameResolver()
+    public void SaveSystemOptions_RejectsNullSavePathResolver()
     {
         var ex = Assert.Throws<ArgumentNullException>(
             () => new SaveSystemOptions<string>(
                 saveRootPath: _tempRoot,
                 serializer: new JsonSaveSerializer(),
                 tempFolderName: SaveSystemOptions<string>.DefaultTempFolderName(),
-                saveNameResolver: null!,
+                savePathResolver: null!,
                 fileNameResolver: SaveSystemOptions<string>.DefaultFileNameResolver));
 
-        Assert.That(ex!.ParamName, Is.EqualTo("saveNameResolver"));
+        Assert.That(ex!.ParamName, Is.EqualTo("savePathResolver"));
     }
 
     [Test]
@@ -232,7 +232,7 @@ public sealed class EngineNeutralDefaultsTests
             saveRootPath: saveRootPath,
             serializer: new JsonSaveSerializer(),
             tempFolderName: SaveSystemOptions<string>.DefaultTempFolderName(),
-            saveNameResolver: id => id,
+            savePathResolver: id => id,
             fileNameResolver: null);
     }
 
@@ -245,7 +245,7 @@ public sealed class EngineNeutralDefaultsTests
                 saveRootPath: _tempRoot,
                 serializer: new JsonSaveSerializer(),
                 tempFolderName: SaveSystemOptions<string>.DefaultTempFolderName(),
-                saveNameResolver: id => id,
+                savePathResolver: id => id,
                 fileNameResolver: SaveSystemOptions<string>.DefaultFileNameResolver,
                 enableBackupSystem: enableBackupSystem,
                 backupSystemMaxBackupCount: backupSystemMaxBackupCount));

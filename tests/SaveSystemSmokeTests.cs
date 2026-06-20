@@ -34,7 +34,7 @@ public sealed class SaveSystemSmokeTests
         Assert.That(options.TempFolderName, Is.EqualTo("_tmp"));
         Assert.That(options.EnableBackupSystem, Is.False);
         Assert.That(options.BackupSystemMaxBackupCount, Is.Zero);
-        Assert.That(options.SaveNameResolver("slot"), Is.EqualTo("slot"));
+        Assert.That(options.SavePathResolver("slot"), Is.EqualTo("slot"));
         Assert.That(options.FileNameResolver(new SaveFileContext("player", 1, serializer.GetType())), Is.EqualTo("player"));
     }
 
@@ -95,7 +95,7 @@ public sealed class SaveSystemSmokeTests
             saveRootPath: _tempRoot,
             serializer: serializer,
             tempFolderName: SaveSystemOptions<string>.DefaultTempFolderName(),
-            saveNameResolver: identity => identity,
+            savePathResolver: identity => identity,
             fileNameResolver: SaveSystemOptions<string>.DefaultFileNameResolver);
     }
 

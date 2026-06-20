@@ -50,6 +50,23 @@ public sealed class SaveSlotListingTests
     }
 
     [Test]
+    public void ListSaveSlots_ReturnsNestedSavePaths()
+    {
+        var manager = CreateManager(_tempRoot);
+        var provider = new TestProvider(new TestState { Value = 1 });
+        manager.RegisterProvider(provider);
+        manager.ValidateRegistrations();
+
+        manager.SaveToDisk("profile-b/slot-1");
+        provider.Current = new TestState { Value = 2 };
+        manager.SaveToDisk("profile-a/slot-2");
+
+        var slots = manager.ListSaveSlots();
+
+        Assert.That(slots, Is.EqualTo(new[] { "profile-a/slot-2", "profile-b/slot-1" }));
+    }
+
+    [Test]
     public void ListSaveSlots_IgnoresArtifactsAndFoldersWithoutMetadata()
     {
         var manager = CreateManager(_tempRoot);
@@ -61,6 +78,8 @@ public sealed class SaveSlotListingTests
         CreateFolderWithMetadata("_backup");
         CreateFolderWithMetadata("slot_tmp");
         CreateFolderWithMetadata("slot_toDelete");
+        CreateFolderWithMetadata("profile-a/slot_tmp");
+        CreateFolderWithMetadata("profile-a/slot_toDelete");
         Directory.CreateDirectory(Path.Combine(_tempRoot, "metadata-less"));
 
         var slots = manager.ListSaveSlots();
@@ -75,7 +94,7 @@ public sealed class SaveSlotListingTests
             SaveSystemOptions.Create<ProfileSlotIdentity>(
                 saveRootPath: _tempRoot,
                 serializer: new JsonSaveSerializer(),
-                saveNameResolver: identity => $"{identity.ProfileId}-{identity.SlotId}"));
+                savePathResolver: identity => $"{identity.ProfileId}-{identity.SlotId}"));
         var provider = new TestProvider(new TestState { Value = 1 });
         manager.RegisterProvider(provider);
         manager.ValidateRegistrations();

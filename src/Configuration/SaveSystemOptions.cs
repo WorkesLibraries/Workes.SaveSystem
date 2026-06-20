@@ -29,7 +29,7 @@ namespace Workes.SaveSystem
             return Create<string>(
                 saveRootPath,
                 serializer,
-                saveNameResolver: identity => identity,
+                savePathResolver: identity => identity,
                 tempFolderName: tempFolderName,
                 fileNameResolver: fileNameResolver,
                 missingProviderFileBehavior: missingProviderFileBehavior,
@@ -42,7 +42,7 @@ namespace Workes.SaveSystem
         /// <typeparam name="TIdentity">The type used to identify saves.</typeparam>
         /// <param name="saveRootPath">The root directory path where all saves are stored.</param>
         /// <param name="serializer">The serializer used to convert provider states to/from file formats.</param>
-        /// <param name="saveNameResolver">The function that resolves an identity to a save folder name.</param>
+        /// <param name="savePathResolver">The function that resolves an identity to a safe relative save path.</param>
         /// <param name="tempFolderName">Optional temp folder suffix. If null, uses the default temp folder name.</param>
         /// <param name="fileNameResolver">Optional provider file-name resolver. If null, uses the default file-name resolver.</param>
         /// <param name="missingProviderFileBehavior">How loads behave when a registered persisted provider file is missing.</param>
@@ -51,7 +51,7 @@ namespace Workes.SaveSystem
         public static SaveSystemOptions<TIdentity> Create<TIdentity>(
             string saveRootPath,
             ISaveSerializer serializer,
-            Func<TIdentity, string> saveNameResolver,
+            Func<TIdentity, string> savePathResolver,
             string? tempFolderName = null,
             Func<SaveFileContext, string>? fileNameResolver = null,
             MissingProviderFileBehavior missingProviderFileBehavior = MissingProviderFileBehavior.Throw,
@@ -61,7 +61,7 @@ namespace Workes.SaveSystem
                 saveRootPath: saveRootPath,
                 serializer: serializer,
                 tempFolderName: tempFolderName ?? SaveSystemOptions<TIdentity>.DefaultTempFolderName(),
-                saveNameResolver: saveNameResolver,
+                savePathResolver: savePathResolver,
                 fileNameResolver: fileNameResolver,
                 missingProviderFileBehavior: missingProviderFileBehavior,
                 warningSink: warningSink);
@@ -90,7 +90,7 @@ namespace Workes.SaveSystem
             return CreateWithBackups<string>(
                 saveRootPath,
                 serializer,
-                saveNameResolver: identity => identity,
+                savePathResolver: identity => identity,
                 backupSystemMaxBackupCount: backupSystemMaxBackupCount,
                 tempFolderName: tempFolderName,
                 fileNameResolver: fileNameResolver,
@@ -104,7 +104,7 @@ namespace Workes.SaveSystem
         /// <typeparam name="TIdentity">The type used to identify saves.</typeparam>
         /// <param name="saveRootPath">The root directory path where all saves are stored.</param>
         /// <param name="serializer">The serializer used to convert provider states to/from file formats.</param>
-        /// <param name="saveNameResolver">The function that resolves an identity to a save folder name.</param>
+        /// <param name="savePathResolver">The function that resolves an identity to a safe relative save path.</param>
         /// <param name="backupSystemMaxBackupCount">The maximum number of backups to keep. Must be greater than 0.</param>
         /// <param name="tempFolderName">Optional temp folder suffix. If null, uses the default temp folder name.</param>
         /// <param name="fileNameResolver">Optional provider file-name resolver. If null, uses the default file-name resolver.</param>
@@ -114,7 +114,7 @@ namespace Workes.SaveSystem
         public static SaveSystemOptions<TIdentity> CreateWithBackups<TIdentity>(
             string saveRootPath,
             ISaveSerializer serializer,
-            Func<TIdentity, string> saveNameResolver,
+            Func<TIdentity, string> savePathResolver,
             int backupSystemMaxBackupCount,
             string? tempFolderName = null,
             Func<SaveFileContext, string>? fileNameResolver = null,
@@ -125,7 +125,7 @@ namespace Workes.SaveSystem
                 saveRootPath: saveRootPath,
                 serializer: serializer,
                 tempFolderName: tempFolderName ?? SaveSystemOptions<TIdentity>.DefaultTempFolderName(),
-                saveNameResolver: saveNameResolver,
+                savePathResolver: savePathResolver,
                 fileNameResolver: fileNameResolver,
                 enableBackupSystem: true,
                 backupSystemMaxBackupCount: backupSystemMaxBackupCount,
@@ -156,9 +156,9 @@ namespace Workes.SaveSystem
         public string TempFolderName { get; }
 
         /// <summary>
-        /// Gets the function that resolves an identity to a save folder name.
+        /// Gets the function that resolves an identity to a safe relative save path.
         /// </summary>
-        public Func<TIdentity, string> SaveNameResolver { get; }
+        public Func<TIdentity, string> SavePathResolver { get; }
 
         /// <summary>
         /// Gets the function that resolves a file context to a file name for provider save files.
@@ -198,7 +198,7 @@ namespace Workes.SaveSystem
         /// <param name="saveRootPath">The root directory path where all saves are stored.</param>
         /// <param name="serializer">The serializer used to convert provider states to/from file formats.</param>
         /// <param name="tempFolderName">The suffix used for temporary folders during atomic save operations.</param>
-        /// <param name="saveNameResolver">The function that resolves an identity to a save folder name.</param>
+        /// <param name="savePathResolver">The function that resolves an identity to a safe relative save path.</param>
         /// <param name="fileNameResolver">The function that resolves a file context to a file name. If null, uses <see cref="DefaultFileNameResolver"/>.</param>
         /// <param name="enableBackupSystem">Whether to enable the backup system. Defaults to false.</param>
         /// <param name="backupSystemMaxBackupCount">The maximum number of backups to keep. Must be greater than 0 if backups are enabled. Defaults to 0.</param>
@@ -210,7 +210,7 @@ namespace Workes.SaveSystem
             string saveRootPath,
             ISaveSerializer serializer,
             string tempFolderName,
-            Func<TIdentity, string> saveNameResolver,
+            Func<TIdentity, string> savePathResolver,
             Func<SaveFileContext, string>? fileNameResolver,
             bool enableBackupSystem = false,
             int backupSystemMaxBackupCount = 0,
@@ -223,14 +223,14 @@ namespace Workes.SaveSystem
             if (serializer == null)
                 throw new ArgumentNullException(nameof(serializer));
 
-            if (saveNameResolver == null)
-                throw new ArgumentNullException(nameof(saveNameResolver));
+            if (savePathResolver == null)
+                throw new ArgumentNullException(nameof(savePathResolver));
 
             ValidatePathSegment(tempFolderName, nameof(tempFolderName));
 
             SaveRootPath = saveRootPath;
             Serializer = serializer;
-            SaveNameResolver = saveNameResolver;
+            SavePathResolver = savePathResolver;
             TempFolderName = tempFolderName;
             FileNameResolver = fileNameResolver ?? DefaultFileNameResolver;
             EnableBackupSystem = enableBackupSystem;

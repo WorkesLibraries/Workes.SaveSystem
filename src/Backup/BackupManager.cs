@@ -30,11 +30,11 @@ namespace Workes.SaveSystem
         }
 
         /// <summary>
-        /// Gets the path to the backup folder for a specific save name and backup suffix.
+        /// Gets the path to the backup folder for a specific relative save path and backup suffix.
         /// </summary>
-        public string GetBackupFolderPath(string saveName, string backupSuffix)
+        public string GetBackupFolderPath(string savePath, string backupSuffix)
         {
-            return Path.Combine(_saveRootPath, BackupFolderName, saveName + backupSuffix);
+            return Path.Combine(_saveRootPath, BackupFolderName, savePath + backupSuffix);
         }
 
         /// <summary>
@@ -49,27 +49,27 @@ namespace Workes.SaveSystem
         /// Prepares existing backups for a new backup by rotating them forward.
         /// Returns the path to the backup that should be deleted if it exceeds max count, or null if none.
         /// </summary>
-        public string? PrepareExistingBackupsForNewBackup(string saveName)
+        public string? PrepareExistingBackupsForNewBackup(string savePath)
         {
-            CorrectBackupIndices(saveName);
+            CorrectBackupIndices(savePath);
 
-            Dictionary<int, string> backupIndicesAndDirectories = GetBackupIndicesAndDirectories(saveName);
+            Dictionary<int, string> backupIndicesAndDirectories = GetBackupIndicesAndDirectories(savePath);
 
             if (backupIndicesAndDirectories.Count == 0)
                 return null;
 
             int max = backupIndicesAndDirectories.Keys.Max();
             bool resultsInExcessiveBackup = backupIndicesAndDirectories.Count >= _maxBackupCount;
-            string? excessiveBackupDirectory = resultsInExcessiveBackup ? GetBackupFolderPath(saveName, $"_{max + 1:D4}") : null;
+            string? excessiveBackupDirectory = resultsInExcessiveBackup ? GetBackupFolderPath(savePath, $"_{max + 1:D4}") : null;
 
             for (int i = max; i >= 1; i--)
             {
-                if (!Directory.Exists(GetBackupFolderPath(saveName, $"_{i:D4}")))
+                if (!Directory.Exists(GetBackupFolderPath(savePath, $"_{i:D4}")))
                 {
                     continue;
                 }
-                string newPath = GetBackupFolderPath(saveName, $"_{i + 1:D4}");
-                Directory.Move(GetBackupFolderPath(saveName, $"_{i:D4}"), newPath);
+                string newPath = GetBackupFolderPath(savePath, $"_{i + 1:D4}");
+                Directory.Move(GetBackupFolderPath(savePath, $"_{i:D4}"), newPath);
             }
             return excessiveBackupDirectory;
         }
@@ -77,14 +77,15 @@ namespace Workes.SaveSystem
         /// <summary>
         /// Gets the path where the old save should be moved during atomic swap.
         /// </summary>
-        public string GetOldSaveDestinationPath(string saveName, string toDeletePath)
+        public string GetOldSaveDestinationPath(string savePath, string toDeletePath)
         {
             if (!_enableBackupSystem)
                 return toDeletePath;
 
-            var backupPath = GetBackupFolderPath(saveName, "_0001");
-            if (!Directory.Exists(GetBackupMainFolderPath()))
-                Directory.CreateDirectory(GetBackupMainFolderPath());
+            var backupPath = GetBackupFolderPath(savePath, "_0001");
+            var backupParentPath = Path.GetDirectoryName(backupPath);
+            if (!string.IsNullOrEmpty(backupParentPath) && !Directory.Exists(backupParentPath))
+                Directory.CreateDirectory(backupParentPath);
             return backupPath;
         }
 
@@ -106,13 +107,13 @@ namespace Workes.SaveSystem
         /// Deletes backups beyond MaxBackupCount (considered tampered). Fills gaps in the sequence
         /// (e.g. _0001, _0002, _0004 -> rename _0004 to _0003). Assumes higher index = newer save.
         /// </summary>
-        private void CorrectBackupIndices(string saveName)
+        private void CorrectBackupIndices(string savePath)
         {
-            var backupMainFolderPath = GetBackupMainFolderPath();
-            if (!Directory.Exists(backupMainFolderPath))
+            var backupParentPath = GetBackupParentFolderPath(savePath);
+            if (!Directory.Exists(backupParentPath))
                 return;
 
-            var backupDirNames = GetBackupDirectoriesForSave(saveName);
+            var backupDirNames = GetBackupDirectoriesForSave(savePath);
             var validIndices = new List<int>();
 
             foreach (var dirName in backupDirNames)
@@ -123,7 +124,7 @@ namespace Workes.SaveSystem
 
                 if (index > _maxBackupCount)
                 {
-                    var path = Path.Combine(backupMainFolderPath, dirName);
+                    var path = Path.Combine(backupParentPath, dirName);
                     if (Directory.Exists(path))
                         Directory.Delete(path, true);
                 }
@@ -146,8 +147,8 @@ namespace Workes.SaveSystem
 
             foreach (var (oldIdx, newIdx) in relocationPairs)
             {
-                var oldPath = GetBackupFolderPath(saveName, $"_{oldIdx:D4}");
-                var newPath = GetBackupFolderPath(saveName, $"_{newIdx:D4}");
+                var oldPath = GetBackupFolderPath(savePath, $"_{oldIdx:D4}");
+                var newPath = GetBackupFolderPath(savePath, $"_{newIdx:D4}");
                 if (Directory.Exists(newPath))
                 {
                     _diagnostics.LogWarning($"Backup normalization skipped: directory {newPath} already exists. This may indicate backup folder tampering.");
@@ -159,9 +160,9 @@ namespace Workes.SaveSystem
             }
         }
 
-        private Dictionary<int, string> GetBackupIndicesAndDirectories(string saveName)
+        private Dictionary<int, string> GetBackupIndicesAndDirectories(string savePath)
         {
-            List<string> backupsForSave = GetBackupDirectoriesForSave(saveName);
+            List<string> backupsForSave = GetBackupDirectoriesForSave(savePath);
 
             Dictionary<int, string> backupIndicesAndDirectories = new Dictionary<int, string>();
             foreach (var backupDirectory in backupsForSave)
@@ -174,22 +175,29 @@ namespace Workes.SaveSystem
             return backupIndicesAndDirectories;
         }
 
-        private List<string> GetBackupDirectoriesForSave(string saveName)
+        private List<string> GetBackupDirectoriesForSave(string savePath)
         {
-            var backupMainFolderPath = GetBackupMainFolderPath();
-            if (!Directory.Exists(backupMainFolderPath))
+            var backupParentPath = GetBackupParentFolderPath(savePath);
+            if (!Directory.Exists(backupParentPath))
                 return new List<string>();
                 
-            List<string> allBackupDirectoryNames = Directory.GetDirectories(backupMainFolderPath)
+            List<string> allBackupDirectoryNames = Directory.GetDirectories(backupParentPath)
                 .Select(Path.GetFileName)
                 .Where(name => name != null)
                 .Select(name => name!)
                 .ToList();
+            var saveName = Path.GetFileName(savePath);
             List<string> backupDirectoryNames = allBackupDirectoryNames
                 .Where(dirName => IsBackupDirectoryForSave(dirName, saveName))
                 .ToList();
 
             return backupDirectoryNames;
+        }
+
+        private string GetBackupParentFolderPath(string savePath)
+        {
+            var firstBackupPath = GetBackupFolderPath(savePath, "_0001");
+            return Path.GetDirectoryName(firstBackupPath) ?? GetBackupMainFolderPath();
         }
 
         private static bool IsBackupDirectoryForSave(string directoryName, string saveName)

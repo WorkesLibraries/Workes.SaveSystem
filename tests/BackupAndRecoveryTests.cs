@@ -58,6 +58,25 @@ public sealed class BackupAndRecoveryTests
     }
 
     [Test]
+    public void SaveToDisk_WithBackups_SupportsNestedSavePaths()
+    {
+        var manager = CreateManager(enableBackupSystem: true, backupSystemMaxBackupCount: 2);
+        var provider = new TestProvider(new TestState { Value = 0 });
+        manager.RegisterProvider(provider);
+
+        SaveValue(manager, provider, "profile-a/slot", 1);
+        SaveValue(manager, provider, "profile-a/slot", 2);
+        provider.Current = new TestState { Value = 99 };
+
+        var loaded = manager.LoadBackupSlotFromDisk("profile-a/slot", slotNumber: 1);
+
+        Assert.That(loaded, Is.True);
+        Assert.That(provider.Current.Value, Is.EqualTo(1));
+        Assert.That(ReadValueFromFolder(Path.Combine(_tempRoot, "profile-a", "slot")), Is.EqualTo(2));
+        Assert.That(Directory.Exists(Path.Combine(_tempRoot, "_backup", "profile-a", "slot_0001")), Is.True);
+    }
+
+    [Test]
     public void LoadBackupSlotFromDisk_ReturnsFalseWhenBackupsAreDisabled()
     {
         var manager = CreateManager();
@@ -245,7 +264,7 @@ public sealed class BackupAndRecoveryTests
                 saveRootPath: _tempRoot,
                 serializer: new JsonSaveSerializer(),
                 tempFolderName: SaveSystemOptions<string>.DefaultTempFolderName(),
-                saveNameResolver: identity => identity,
+                savePathResolver: identity => identity,
                 fileNameResolver: SaveSystemOptions<string>.DefaultFileNameResolver,
                 enableBackupSystem: enableBackupSystem,
                 backupSystemMaxBackupCount: backupSystemMaxBackupCount));

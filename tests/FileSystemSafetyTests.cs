@@ -23,15 +23,27 @@ public sealed class FileSystemSafetyTests
     }
 
     [Test]
-    public void SaveToDisk_RejectsInvalidResolvedSaveNames()
+    public void SaveToDisk_RejectsUnsafeResolvedSavePaths()
     {
         var manager = CreateManager(identity => identity);
         manager.RegisterProvider(new TestProvider("player", new TestState { Value = 1 }));
         manager.ValidateRegistrations();
 
-        var ex = Assert.Throws<InvalidOperationException>(() => manager.SaveToDisk("bad/name"));
+        var ex = Assert.Throws<InvalidOperationException>(() => manager.SaveToDisk("../outside"));
 
-        Assert.That(ex!.Message, Does.Contain("invalid path characters"));
+        Assert.That(ex!.Message, Does.Contain("'.' or '..'"));
+    }
+
+    [Test]
+    public void SaveToDisk_AllowsSafeRelativeSavePaths()
+    {
+        var manager = CreateManager(identity => identity);
+        manager.RegisterProvider(new TestProvider("player", new TestState { Value = 1 }));
+        manager.ValidateRegistrations();
+
+        manager.SaveToDisk("profile-a/slot-1");
+
+        Assert.That(File.Exists(Path.Combine(_tempRoot, "profile-a", "slot-1", "player.json")), Is.True);
     }
 
     [Test]
@@ -84,14 +96,14 @@ public sealed class FileSystemSafetyTests
     }
 
     private SaveManager<string> CreateManager(
-        Func<string, string>? saveNameResolver = null,
+        Func<string, string>? savePathResolver = null,
         Func<SaveFileContext, string>? fileNameResolver = null,
         bool enableBackupSystem = false,
         int backupSystemMaxBackupCount = 0)
     {
         return new SaveManager<string>(
             CreateOptions(
-                saveNameResolver: saveNameResolver,
+                savePathResolver: savePathResolver,
                 fileNameResolver: fileNameResolver,
                 enableBackupSystem: enableBackupSystem,
                 backupSystemMaxBackupCount: backupSystemMaxBackupCount));
@@ -99,7 +111,7 @@ public sealed class FileSystemSafetyTests
 
     private SaveSystemOptions<string> CreateOptions(
         string? tempFolderName = null,
-        Func<string, string>? saveNameResolver = null,
+        Func<string, string>? savePathResolver = null,
         Func<SaveFileContext, string>? fileNameResolver = null,
         bool enableBackupSystem = false,
         int backupSystemMaxBackupCount = 0)
@@ -108,7 +120,7 @@ public sealed class FileSystemSafetyTests
             saveRootPath: _tempRoot,
             serializer: new JsonSaveSerializer(),
             tempFolderName: tempFolderName ?? SaveSystemOptions<string>.DefaultTempFolderName(),
-            saveNameResolver: saveNameResolver ?? (identity => identity),
+            savePathResolver: savePathResolver ?? (identity => identity),
             fileNameResolver: fileNameResolver ?? SaveSystemOptions<string>.DefaultFileNameResolver,
             enableBackupSystem: enableBackupSystem,
             backupSystemMaxBackupCount: backupSystemMaxBackupCount);

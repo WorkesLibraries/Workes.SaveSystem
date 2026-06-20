@@ -119,7 +119,7 @@ Use `ListSaveSlots()` to populate save/load menus or tooling with the saves curr
 IReadOnlyList<string> slots = manager.ListSaveSlots();
 ```
 
-The returned values are resolved save folder names, not `TIdentity` values, because custom identity resolvers may not be reversible. The list is sorted with ordinal string ordering and ignores backup folders, temp folders, to-delete folders, and directories that do not contain save metadata.
+The returned values are resolved relative save paths, not `TIdentity` values, because custom identity resolvers may not be reversible. The list is sorted with ordinal string ordering, uses `/` separators, and ignores backup folders, temp folders, to-delete folders, and directories that do not contain save metadata.
 
 Use `DeleteSave(...)` and `DeleteBackupSlot(...)` for save-menu cleanup or debug tooling.
 
@@ -128,7 +128,7 @@ bool saveDeleted = manager.DeleteSave("slot-1");
 bool backupDeleted = manager.DeleteBackupSlot("slot-1", slotNumber: 1);
 ```
 
-`DeleteSave(...)` removes the main save and any temp or to-delete artifacts for the same resolved save name. It does not remove backups. `DeleteBackupSlot(...)` removes only the numbered backup folder and can be used even when backup creation is currently disabled.
+`DeleteSave(...)` removes the main save and any temp or to-delete artifacts for the same resolved save path. It does not remove backups. `DeleteBackupSlot(...)` removes only the numbered backup folder and can be used even when backup creation is currently disabled.
 
 Use `SaveExists(...)` and `BackupSlotExists(...)` for lightweight UI checks such as enabling load buttons or showing overwrite prompts.
 
@@ -194,12 +194,12 @@ var profileSaves = new SaveManager<ProfileSlotIdentity>(
     SaveSystemOptions.Create<ProfileSlotIdentity>(
         saveRootPath: "ProfileSaves",
         serializer: new JsonSaveSerializer(),
-        saveNameResolver: identity => $"{identity.ProfileId}_{identity.SlotId}"));
+        savePathResolver: identity => Path.Combine(identity.ProfileId, identity.SlotId)));
 
 profileSaves.SaveToDisk(new ProfileSlotIdentity("profile-a", "slot-1"));
 ```
 
-Resolved save names are folder names, not relative paths, so scope resolvers should produce valid single folder names. Use separate save roots when you want physical folder hierarchy.
+Resolved save paths are safe relative paths under the manager's save root. They may contain path separators for hierarchy, but they cannot be absolute paths, contain `.` or `..` segments, use empty segments, or collide with save-system artifact folders.
 
 Use separate managers when different provider sets have different lifecycles.
 
@@ -214,7 +214,7 @@ var gameplaySaves = new SaveManager<ProfileSlotIdentity>(
     SaveSystemOptions.Create<ProfileSlotIdentity>(
         saveRootPath: "GameplaySaves",
         serializer: new JsonSaveSerializer(),
-        saveNameResolver: identity => $"{identity.ProfileId}_{identity.SlotId}"));
+        savePathResolver: identity => Path.Combine(identity.ProfileId, identity.SlotId)));
 gameplaySaves.RegisterProvider(playerProvider);
 gameplaySaves.RegisterProvider(inventoryProvider);
 ```

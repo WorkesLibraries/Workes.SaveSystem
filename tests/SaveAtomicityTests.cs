@@ -80,7 +80,7 @@ public sealed class SaveAtomicityTests
                 saveRootPath: _tempRoot,
                 serializer: new JsonSaveSerializer(),
                 tempFolderName: SaveSystemOptions<string>.DefaultTempFolderName(),
-                saveNameResolver: identity => identity,
+                savePathResolver: identity => identity,
                 fileNameResolver: fileNameResolver ?? SaveSystemOptions<string>.DefaultFileNameResolver));
     }
 

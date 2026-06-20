@@ -232,7 +232,7 @@ public sealed class SerializerMigrationTests
             saveRootPath: _tempRoot,
             serializer: new JsonSaveSerializer(),
             tempFolderName: SaveSystemOptions<string>.DefaultTempFolderName(),
-            saveNameResolver: identity => identity,
+            savePathResolver: identity => identity,
             fileNameResolver: SaveSystemOptions<string>.DefaultFileNameResolver);
     }
 

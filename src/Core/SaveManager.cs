@@ -26,14 +26,14 @@ namespace Workes.SaveSystem
         private const string BackupFolderName = "_backup";
         private const string ToDeleteFolderName = "_toDelete";
 
-        private string GetMainFolderPath(string saveName) =>
-            Path.Combine(_options.SaveRootPath, saveName);
+        private string GetMainFolderPath(string savePath) =>
+            Path.Combine(_options.SaveRootPath, savePath);
 
-        private string GetTempFolderPath(string saveName, string tempFolderSuffix) =>
-            Path.Combine(_options.SaveRootPath, saveName + tempFolderSuffix);
+        private string GetTempFolderPath(string savePath, string tempFolderSuffix) =>
+            Path.Combine(_options.SaveRootPath, savePath + tempFolderSuffix);
 
-        private string GetToDeleteFolderPath(string saveName) =>
-            Path.Combine(_options.SaveRootPath, saveName + ToDeleteFolderName);
+        private string GetToDeleteFolderPath(string savePath) =>
+            Path.Combine(_options.SaveRootPath, savePath + ToDeleteFolderName);
 
         private string GetMetadataFilePath(string folderPath) =>
             Path.Combine(folderPath, SaveMetadataFileName);
@@ -264,24 +264,25 @@ namespace Workes.SaveSystem
         }
 
         /// <summary>
-        /// Lists the resolved save slot folder names currently available in the configured save root.
+        /// Lists the resolved relative save paths currently available in the configured save root.
         /// </summary>
         /// <remarks>
-        /// This method returns resolved folder names rather than <typeparamref name="TIdentity"/> values because
-        /// custom save-name resolvers are not guaranteed to be reversible. Backup folders, temp folders,
+        /// This method returns resolved relative paths rather than <typeparamref name="TIdentity"/> values because
+        /// custom save-path resolvers are not guaranteed to be reversible. Backup folders, temp folders,
         /// to-delete folders, and folders without save metadata are ignored.
         /// </remarks>
-        /// <returns>A deterministic, ordinally sorted list of resolved save slot folder names.</returns>
+        /// <returns>A deterministic, ordinally sorted list of resolved relative save paths using '/' separators.</returns>
         public IReadOnlyList<string> ListSaveSlots()
         {
             if (!Directory.Exists(_options.SaveRootPath))
                 return Array.Empty<string>();
 
-            return Directory.EnumerateDirectories(_options.SaveRootPath)
+            return Directory.EnumerateFiles(_options.SaveRootPath, SaveMetadataFileName, SearchOption.AllDirectories)
+                .Select(Path.GetDirectoryName)
+                .Where(path => !string.IsNullOrEmpty(path))
+                .Select(path => path!)
                 .Where(IsSaveSlotFolder)
-                .Select(Path.GetFileName)
-                .Where(name => !string.IsNullOrEmpty(name))
-                .Select(name => name!)
+                .Select(GetRelativeDisplayPath)
                 .OrderBy(name => name, StringComparer.Ordinal)
                 .ToArray();
         }
@@ -296,10 +297,10 @@ namespace Workes.SaveSystem
         /// <param name="identity">The identity that identifies which save slot to check.</param>
         /// <returns>True when a main save folder with save metadata exists; otherwise, false.</returns>
         /// <exception cref="ArgumentNullException">Thrown when <paramref name="identity"/> is null.</exception>
-        /// <exception cref="InvalidOperationException">Thrown when the resolved save name is invalid.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when the resolved save path is invalid.</exception>
         public bool SaveExists(TIdentity identity)
         {
-            var saveName = ResolveSaveName(identity);
+            var saveName = ResolveSavePath(identity);
             return HasSaveMetadata(GetMainFolderPath(saveName));
         }
 
@@ -316,10 +317,10 @@ namespace Workes.SaveSystem
         /// <returns>True when the backup folder with save metadata exists; otherwise, false.</returns>
         /// <exception cref="ArgumentNullException">Thrown when <paramref name="identity"/> is null.</exception>
         /// <exception cref="ArgumentException">Thrown when <paramref name="slotNumber"/> is less than 1.</exception>
-        /// <exception cref="InvalidOperationException">Thrown when the resolved save name is invalid.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when the resolved save path is invalid.</exception>
         public bool BackupSlotExists(TIdentity identity, int slotNumber)
         {
-            var saveName = ResolveSaveName(identity);
+            var saveName = ResolveSavePath(identity);
 
             if (slotNumber < 1)
                 throw new ArgumentException("Backup slot number must be at least 1.", nameof(slotNumber));
@@ -338,10 +339,10 @@ namespace Workes.SaveSystem
         /// <param name="identity">The identity that identifies which save slot metadata to read.</param>
         /// <returns>The save metadata, or null when the save folder or metadata file does not exist.</returns>
         /// <exception cref="ArgumentNullException">Thrown when <paramref name="identity"/> is null.</exception>
-        /// <exception cref="InvalidOperationException">Thrown when the resolved save name is invalid or the metadata file is invalid.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when the resolved save path is invalid or the metadata file is invalid.</exception>
         public SaveMetadataInfo? ReadSaveMetadata(TIdentity identity)
         {
-            var saveName = ResolveSaveName(identity);
+            var saveName = ResolveSavePath(identity);
             return ReadSaveMetadataInfo(GetMainFolderPath(saveName));
         }
 
@@ -358,10 +359,10 @@ namespace Workes.SaveSystem
         /// <returns>The backup metadata, or null when the backup folder or metadata file does not exist.</returns>
         /// <exception cref="ArgumentNullException">Thrown when <paramref name="identity"/> is null.</exception>
         /// <exception cref="ArgumentException">Thrown when <paramref name="slotNumber"/> is less than 1.</exception>
-        /// <exception cref="InvalidOperationException">Thrown when the resolved save name is invalid or the metadata file is invalid.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when the resolved save path is invalid or the metadata file is invalid.</exception>
         public SaveMetadataInfo? ReadBackupSlotMetadata(TIdentity identity, int slotNumber)
         {
-            var saveName = ResolveSaveName(identity);
+            var saveName = ResolveSavePath(identity);
 
             if (slotNumber < 1)
                 throw new ArgumentException("Backup slot number must be at least 1.", nameof(slotNumber));
@@ -629,13 +630,13 @@ namespace Workes.SaveSystem
         /// </summary>
         /// <param name="identity">The identity that identifies which save slot to write to.</param>
         /// <exception cref="ArgumentNullException">Thrown when <paramref name="identity"/> is null.</exception>
-        /// <exception cref="InvalidOperationException">Thrown when validation fails (invalid save name, missing files, deserialization errors, etc.).</exception>
+        /// <exception cref="InvalidOperationException">Thrown when validation fails (invalid save path, missing files, deserialization errors, etc.).</exception>
         /// <remarks>
         /// Call <see cref="ValidateRegistrations"/> successfully after provider registration and before calling this method.
         /// </remarks>
         public void SaveToDisk(TIdentity identity)
         {
-            var saveName = ResolveSaveName(identity);
+            var saveName = ResolveSavePath(identity);
             EnsureRegistrationsValidated();
             var folderPath = GetMainFolderPath(saveName);
             var tempPath = GetTempFolderPath(saveName, _options.TempFolderName);
@@ -692,7 +693,7 @@ namespace Workes.SaveSystem
                 throw;
             }
 
-            PerformAtomicSwap(folderPath);
+            PerformAtomicSwap(saveName);
         }
 
         /// <summary>
@@ -766,7 +767,7 @@ namespace Workes.SaveSystem
         /// </remarks>
         public bool LoadBackupSlotFromDisk(TIdentity identity, int slotNumber)
         {
-            var saveName = ResolveSaveName(identity);
+            var saveName = ResolveSavePath(identity);
             EnsureRegistrationsValidated();
 
             if (!_options.EnableBackupSystem)
@@ -828,17 +829,17 @@ namespace Workes.SaveSystem
         /// Deletes the main save folder for the specified identity from disk.
         /// </summary>
         /// <remarks>
-        /// This method also removes temp and to-delete folders for the same resolved save name so abandoned
+        /// This method also removes temp and to-delete folders for the same resolved save path so abandoned
         /// recovery artifacts do not remain visible to later operations. Backup folders are not deleted; use
         /// <see cref="DeleteBackupSlot"/> to remove individual backups.
         /// </remarks>
         /// <param name="identity">The identity that identifies which save slot to delete.</param>
         /// <returns>True if a main save or related recovery artifact was deleted; otherwise, false.</returns>
         /// <exception cref="ArgumentNullException">Thrown when <paramref name="identity"/> is null.</exception>
-        /// <exception cref="InvalidOperationException">Thrown when the resolved save name is invalid.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when the resolved save path is invalid.</exception>
         public bool DeleteSave(TIdentity identity)
         {
-            var saveName = ResolveSaveName(identity);
+            var saveName = ResolveSavePath(identity);
             var folderPath = GetMainFolderPath(saveName);
             var tempPath = GetTempFolderPath(saveName, _options.TempFolderName);
             var toDeletePath = GetToDeleteFolderPath(saveName);
@@ -866,10 +867,10 @@ namespace Workes.SaveSystem
         /// <returns>True if the backup slot was found and deleted; otherwise, false.</returns>
         /// <exception cref="ArgumentNullException">Thrown when <paramref name="identity"/> is null.</exception>
         /// <exception cref="ArgumentException">Thrown when <paramref name="slotNumber"/> is less than 1.</exception>
-        /// <exception cref="InvalidOperationException">Thrown when the resolved save name is invalid.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when the resolved save path is invalid.</exception>
         public bool DeleteBackupSlot(TIdentity identity, int slotNumber)
         {
-            var saveName = ResolveSaveName(identity);
+            var saveName = ResolveSavePath(identity);
 
             if (slotNumber < 1)
                 throw new ArgumentException("Backup slot number must be at least 1.", nameof(slotNumber));
@@ -889,7 +890,7 @@ namespace Workes.SaveSystem
         /// <exception cref="InvalidOperationException">Thrown when recovery fails due to data corruption or tampering.</exception>
         public void RecoverSave(TIdentity identity)
         {
-            var saveName = ResolveSaveName(identity);
+            var saveName = ResolveSavePath(identity);
             var folderPath = GetMainFolderPath(saveName);
             var tempPath = GetTempFolderPath(saveName, _options.TempFolderName);
             var toDeletePath = GetToDeleteFolderPath(saveName);
@@ -918,7 +919,7 @@ namespace Workes.SaveSystem
                 if (mainMeta != null && mainMeta.SaveId != tempMeta.SaveId)
                     throw new InvalidOperationException(
                         $"Recovery failed: SaveId mismatch between main and temp (possible tampering). Main: '{mainMeta.SaveId}', temp: '{tempMeta.SaveId}'.");
-                PerformAtomicSwap(folderPath);
+                PerformAtomicSwap(saveName);
             }
         }
 
@@ -979,31 +980,29 @@ namespace Workes.SaveSystem
 
         private string GetSaveFolderPath(TIdentity identity)
         {
-            return GetMainFolderPath(ResolveSaveName(identity));
+            return GetMainFolderPath(ResolveSavePath(identity));
         }
 
-        private string ResolveSaveName(TIdentity identity)
+        private string ResolveSavePath(TIdentity identity)
         {
             if (identity is null)
                 throw new ArgumentNullException(nameof(identity));
 
-            var saveName = _options.SaveNameResolver(identity);
-            ValidateSaveName(saveName);
-
-            return saveName;
+            var savePath = _options.SavePathResolver(identity);
+            return NormalizeSavePath(savePath);
         }
 
-        private void PerformAtomicSwap(string folderPath)
+        private void PerformAtomicSwap(string savePath)
         {
-            var saveName = Path.GetFileName(folderPath);
-            var tempPath = GetTempFolderPath(saveName, _options.TempFolderName);
-            var toDeletePath = GetToDeleteFolderPath(saveName);
+            var folderPath = GetMainFolderPath(savePath);
+            var tempPath = GetTempFolderPath(savePath, _options.TempFolderName);
+            var toDeletePath = GetToDeleteFolderPath(savePath);
 
             string? excessiveBackupPath = null;
             if (_options.EnableBackupSystem)
-                excessiveBackupPath = _backupManager.PrepareExistingBackupsForNewBackup(saveName);
+                excessiveBackupPath = _backupManager.PrepareExistingBackupsForNewBackup(savePath);
 
-            var oldSaveNewPath = _backupManager.GetOldSaveDestinationPath(saveName, toDeletePath);
+            var oldSaveNewPath = _backupManager.GetOldSaveDestinationPath(savePath, toDeletePath);
 
             if (Directory.Exists(folderPath))
             {
@@ -1176,20 +1175,29 @@ namespace Workes.SaveSystem
 
         private bool IsSaveSlotFolder(string folderPath)
         {
-            var folderName = Path.GetFileName(folderPath);
-            if (string.IsNullOrEmpty(folderName))
+            var relativePath = GetRelativeDisplayPath(folderPath);
+            if (string.IsNullOrEmpty(relativePath) || relativePath == ".")
                 return false;
 
-            if (string.Equals(folderName, BackupFolderName, StringComparison.Ordinal))
-                return false;
+            foreach (var segment in relativePath.Split('/'))
+            {
+                if (string.Equals(segment, BackupFolderName, StringComparison.Ordinal))
+                    return false;
 
-            if (folderName.EndsWith(_options.TempFolderName, StringComparison.Ordinal))
-                return false;
+                if (segment.EndsWith(_options.TempFolderName, StringComparison.Ordinal))
+                    return false;
 
-            if (folderName.EndsWith(ToDeleteFolderName, StringComparison.Ordinal))
-                return false;
+                if (segment.EndsWith(ToDeleteFolderName, StringComparison.Ordinal))
+                    return false;
+            }
 
             return HasSaveMetadata(folderPath);
+        }
+
+        private string GetRelativeDisplayPath(string folderPath)
+        {
+            var relativePath = Path.GetRelativePath(_options.SaveRootPath, folderPath);
+            return relativePath.Replace(Path.DirectorySeparatorChar, '/').Replace(Path.AltDirectorySeparatorChar, '/');
         }
 
         private bool HasSaveMetadata(string folderPath)
@@ -1248,23 +1256,58 @@ namespace Workes.SaveSystem
             ValidateTempSaveFolderSave(saveFolderPath, serializedEntries);
         }
 
-        private void ValidateSaveName(string saveName)
+        private string NormalizeSavePath(string savePath)
         {
-            if (string.IsNullOrWhiteSpace(saveName))
+            if (string.IsNullOrWhiteSpace(savePath))
                 throw new InvalidOperationException(
-                    "SaveNameResolver returned null, empty, or whitespace."
+                    "SavePathResolver returned null, empty, or whitespace."
                 );
 
-            if (saveName == "." || saveName == "..")
+            if (Path.IsPathRooted(savePath))
                 throw new InvalidOperationException(
-                    "SaveNameResolver returned an invalid directory name."
+                    "SavePathResolver returned an absolute path. Save paths must be relative to the save root."
+                );
+
+            var segments = savePath
+                .Split(new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar }, StringSplitOptions.None)
+                .ToArray();
+
+            if (segments.Length == 0)
+                throw new InvalidOperationException(
+                    "SavePathResolver returned an invalid relative path."
                 );
 
             var invalidChars = Path.GetInvalidFileNameChars();
-            if (saveName.IndexOfAny(invalidChars) >= 0)
-                throw new InvalidOperationException(
-                    $"SaveNameResolver returned a name containing invalid path characters: '{saveName}'"
-                );
+            foreach (var segment in segments)
+            {
+                if (string.IsNullOrWhiteSpace(segment))
+                    throw new InvalidOperationException(
+                        "SavePathResolver returned a path with an empty segment."
+                    );
+
+                if (segment == "." || segment == "..")
+                    throw new InvalidOperationException(
+                        "SavePathResolver returned a path containing '.' or '..'."
+                    );
+
+                if (string.Equals(segment, BackupFolderName, StringComparison.Ordinal))
+                    throw new InvalidOperationException(
+                        $"SavePathResolver returned a path containing reserved segment '{BackupFolderName}'."
+                    );
+
+                if (segment.EndsWith(_options.TempFolderName, StringComparison.Ordinal) ||
+                    segment.EndsWith(ToDeleteFolderName, StringComparison.Ordinal))
+                    throw new InvalidOperationException(
+                        "SavePathResolver returned a path segment that conflicts with save-system artifact folder names."
+                    );
+
+                if (segment.IndexOfAny(invalidChars) >= 0)
+                    throw new InvalidOperationException(
+                        $"SavePathResolver returned a path segment containing invalid characters: '{segment}'"
+                    );
+            }
+
+            return Path.Combine(segments);
         }
 
         private void ValidateFileName(string fileName)
