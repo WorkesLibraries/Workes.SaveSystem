@@ -27,6 +27,7 @@ public sealed class FileSystemSafetyTests
     {
         var manager = CreateManager(identity => identity);
         manager.RegisterProvider<TestState>(new TestProvider("player", new TestState { Value = 1 }));
+        manager.ValidateRegistrations();
 
         var ex = Assert.Throws<InvalidOperationException>(() => manager.SaveToDisk("bad/name"));
 
@@ -39,7 +40,7 @@ public sealed class FileSystemSafetyTests
         var manager = CreateManager(fileNameResolver: _ => "bad/name");
         manager.RegisterProvider<TestState>(new TestProvider("player", new TestState { Value = 1 }));
 
-        var ex = Assert.Throws<InvalidOperationException>(() => manager.SaveToDisk("slot"));
+        var ex = Assert.Throws<InvalidOperationException>(() => manager.ValidateRegistrations());
 
         Assert.That(ex!.Message, Does.Contain("invalid characters"));
     }
@@ -58,10 +59,12 @@ public sealed class FileSystemSafetyTests
         var alphaManager = CreateManager(enableBackupSystem: true, backupSystemMaxBackupCount: 3);
         var alphaProvider = new TestProvider("player", new TestState { Value = 1 });
         alphaManager.RegisterProvider<TestState>(alphaProvider);
+        alphaManager.ValidateRegistrations();
 
         var alpha2Manager = CreateManager(enableBackupSystem: true, backupSystemMaxBackupCount: 3);
         var alpha2Provider = new TestProvider("player", new TestState { Value = 10 });
         alpha2Manager.RegisterProvider<TestState>(alpha2Provider);
+        alpha2Manager.ValidateRegistrations();
 
         alphaManager.SaveToDisk("alpha");
         alphaProvider.Current = new TestState { Value = 2 };

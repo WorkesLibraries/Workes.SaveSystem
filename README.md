@@ -43,6 +43,7 @@ var manager = SaveManager<string>.CreateDefault(
 
 var playerProvider = new PlayerSaveProvider();
 manager.RegisterProvider<PlayerState>(playerProvider);
+manager.ValidateRegistrations();
 
 manager.SaveToDisk("slot-1");
 
@@ -99,6 +100,8 @@ var manager = new SaveManager<string>(
 
 `CreateDefault(ISaveSerializer)` is a convenience factory for plain .NET applications and writes under the current user's application data folder. Engine integrations should prefer `CreateDefault(ISaveSerializer, string)` or the options constructor so the engine owns the persistent data path.
 
+After registering providers, call `ValidateRegistrations()` before disk save/load operations. Registration is intentionally lightweight; validation captures provider state, checks serializer compatibility, validates migration policy, and verifies file-name behavior at the setup point you choose.
+
 ## Providers
 
 Each `ISaveProvider` owns one stable save key and one schema version.
@@ -109,6 +112,7 @@ Provider state must be compatible with the serializer and with the type passed t
 
 ```csharp
 manager.RegisterProvider<PlayerState>(playerProvider);
+manager.ValidateRegistrations();
 ```
 
 Providers can optionally implement `ISaveLifecycle` to receive `OnBeforeSave()` before capture and `OnAfterLoad()` after a successful restore. Providers can also be registered without a schematic through `RegisterProvider(provider)` when they should participate in snapshots but not write their state to disk.
@@ -126,6 +130,10 @@ var options = new SaveSystemOptions<string>(
     fileNameResolver: SaveSystemOptions<string>.DefaultFileNameResolver,
     enableBackupSystem: true,
     backupSystemMaxBackupCount: 3);
+
+var manager = new SaveManager<string>(options);
+manager.RegisterProvider<PlayerState>(playerProvider);
+manager.ValidateRegistrations();
 ```
 
 Backup slot `1` is the most recent previous save. Older backups rotate to higher slot numbers.
@@ -207,7 +215,7 @@ Migration rules:
 
 - one `SaveMigrationStep` migrates from `FromVersion` to `FromVersion + 1`;
 - every version gap must have exactly one step;
-- duplicate `FromVersion` steps are rejected during provider registration;
+- duplicate `FromVersion` steps are rejected during registration validation;
 - migration steps mutate the provider payload's `Data` node, not the full envelope;
 - after successful migration, the manager updates the envelope schema version before deserializing;
 - downgrades are rejected.

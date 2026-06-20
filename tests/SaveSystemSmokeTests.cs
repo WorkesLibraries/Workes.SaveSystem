@@ -57,6 +57,7 @@ public sealed class SaveSystemSmokeTests
         var manager = new SaveManager<string>(CreateOptions(new JsonSaveSerializer()));
         var provider = new TestProvider("player", new TestState { Name = "BeforeSave", Level = 7 });
         manager.RegisterProvider<TestState>(provider);
+        manager.ValidateRegistrations();
 
         manager.SaveToDisk("slot-a");
         provider.Current = new TestState { Name = "Changed", Level = 1 };
@@ -74,6 +75,7 @@ public sealed class SaveSystemSmokeTests
         var manager = new SaveManager<string>(CreateOptions(new JsonSaveSerializer()));
         var provider = new TestProvider("cache", new TestState { Name = "Memory", Level = 3 });
         manager.RegisterProvider(provider);
+        manager.ValidateRegistrations();
 
         var snapshot = manager.CaptureSnapshot();
         manager.SaveToDisk("slot-b");

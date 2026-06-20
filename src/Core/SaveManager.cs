@@ -45,6 +45,7 @@ namespace Workes.SaveSystem
         private readonly SaveSystemOptions<TIdentity> _options;
         private readonly BackupManager _backupManager;
         private readonly MigrationEngine _migrationEngine;
+        private bool _registrationsValidated;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="SaveManager{TIdentity}"/> class with the specified options.
@@ -72,7 +73,7 @@ namespace Workes.SaveSystem
         /// <see cref="CreateDefault(ISaveSerializer, string)"/> and pass an engine-owned persistent data path.
         /// </summary>
         /// <param name="serializer">The serializer to use for saving and loading data.</param>
-        /// <returns>A new <see cref="SaveManager{TIdentity}"/> instance with string save names and default configuration.</returns>
+        /// <returns>A new string-identity save manager instance with default configuration.</returns>
         public static SaveManager<string> CreateDefault(ISaveSerializer serializer)
         {
             return CreateDefault(
@@ -87,7 +88,7 @@ namespace Workes.SaveSystem
         /// </summary>
         /// <param name="serializer">The serializer to use for saving and loading data.</param>
         /// <param name="saveRootPath">The root directory path where all saves are stored.</param>
-        /// <returns>A new <see cref="SaveManager{TIdentity}"/> instance with string save names and default configuration.</returns>
+        /// <returns>A new string-identity save manager instance with default configuration.</returns>
         public static SaveManager<string> CreateDefault(ISaveSerializer serializer, string saveRootPath)
         {
             return new SaveManager<string>(
@@ -102,17 +103,17 @@ namespace Workes.SaveSystem
         }
 
         /// <summary>
-        /// Registers a save provider for persistence. The serializer creates a schematic for the given state type;
-        /// the provider's state must be compatible with <typeparamref name="TState"/> (as returned by <see cref="ISaveProvider.CaptureState"/>).
+        /// Registers a save provider for persistence. The serializer creates a schematic for the given state type.
         /// </summary>
         /// <remarks>
         /// Use this overload for providers that should be written to disk. The provider key and schema version become
         /// part of the persisted save contract, so changing them can affect compatibility with existing saves.
+        /// Call <see cref="ValidateRegistrations"/> after registration is complete and before disk save/load operations.
         /// </remarks>
         /// <typeparam name="TState">The type of state object the provider captures and restores (e.g. <c>PlayerState</c>).</typeparam>
         /// <param name="provider">The save provider to register. Must have a unique <see cref="ISaveProvider.SaveKey"/>.</param>
         /// <exception cref="ArgumentNullException">Thrown when <paramref name="provider"/> is null.</exception>
-        /// <exception cref="InvalidOperationException">Thrown when a provider with the same key is already registered, or when the provider's state is incompatible with the serializer's schematic.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when a provider with the same key is already registered.</exception>
         public void RegisterProvider<TState>(ISaveProvider provider)
         {
             ValidateProvider(provider);
@@ -125,38 +126,12 @@ namespace Workes.SaveSystem
             var schematic = _options.Serializer.CreateSchematic(typeof(TState));
             schematic.SchemaVersion = provider.SchemaVersion;
 
-            var testState = provider.CaptureState();
-            try
-            {
-                _options.Serializer.Serialize(testState, schematic);
-            }
-            catch (Exception ex)
-            {
-                throw new InvalidOperationException(
-                    $"SaveProvider with key '{provider.SaveKey}' produces incompatible state for its schematic (state type {typeof(TState).Name}).",
-                    ex
-                );
-            }
-
-            if (provider is ISaveMigratable migratable)
-            {
-                if (!(_options.Serializer is ISaveMigrationCapableSerializer))
-                {
-                    throw new InvalidOperationException(
-                        $"SaveProvider with key '{provider.SaveKey}' implements ISaveMigratable but the serializer ({_options.Serializer.GetType().Name}) does not implement ISaveMigrationCapableSerializer. " +
-                        "Migration-capable providers require migration-capable serializers."
-                    );
-                }
-
-                var migrationSource = migratable.CreateMigrationSource();
-                _migrationEngine.ValidateMigrationPolicy(provider.SaveKey, migrationSource, provider.SchemaVersion);
-            }
-
             _providers.Add(provider.SaveKey, new ProviderEntry
             {
                 Provider = provider,
                 Schematic = schematic
             });
+            _registrationsValidated = false;
         }
 
         /// <summary>
@@ -166,6 +141,7 @@ namespace Workes.SaveSystem
         /// <remarks>
         /// Use this overload only when the provider state is intentionally memory-only. The provider is included in
         /// <see cref="CaptureSnapshot"/> and <see cref="RestoreSnapshot"/>, but no provider file is written to disk.
+        /// Call <see cref="ValidateRegistrations"/> after registration is complete and before disk save/load operations.
         /// </remarks>
         /// <param name="provider">The save provider to register.</param>
         public void RegisterProvider(ISaveProvider provider)
@@ -182,6 +158,7 @@ namespace Workes.SaveSystem
                 Provider = provider,
                 Schematic = null
             });
+            _registrationsValidated = false;
         }
 
         /// <summary>
@@ -193,7 +170,8 @@ namespace Workes.SaveSystem
             if (provider == null)
                 return;
 
-            _providers.Remove(provider.SaveKey);
+            if (_providers.Remove(provider.SaveKey))
+                _registrationsValidated = false;
         }
 
         private static void ValidateProvider(ISaveProvider provider)
@@ -203,6 +181,91 @@ namespace Workes.SaveSystem
 
             if (string.IsNullOrWhiteSpace(provider.SaveKey))
                 throw new ArgumentException("SaveProvider SaveKey cannot be null, empty, or whitespace.", nameof(provider));
+        }
+
+        /// <summary>
+        /// Validates all registered persisted providers before disk save/load operations are allowed.
+        /// </summary>
+        /// <remarks>
+        /// Registration itself is intentionally lightweight. This method performs provider state capture,
+        /// serializer compatibility checks, file-name checks, and migration policy validation at the caller's
+        /// chosen setup point. Call this again after registering or unregistering providers.
+        /// </remarks>
+        /// <exception cref="InvalidOperationException">Thrown when any persisted provider registration is invalid.</exception>
+        public void ValidateRegistrations()
+        {
+            ValidateFileExtension(_options.Serializer.FileExtension);
+
+            foreach (var providerEntry in _providers.Values)
+            {
+                ValidateProvider(providerEntry.Provider);
+
+                var schematic = providerEntry.Schematic;
+                if (schematic == null)
+                    continue;
+
+                schematic.SchemaVersion = providerEntry.Provider.SchemaVersion;
+
+                var context = new SaveFileContext(
+                    providerEntry.Provider.SaveKey,
+                    providerEntry.Provider.SchemaVersion,
+                    _options.Serializer.GetType());
+                ValidateFileName(_options.FileNameResolver(context));
+
+                ValidateProviderSerialization(providerEntry, schematic);
+                ValidateProviderMigration(providerEntry);
+            }
+
+            _registrationsValidated = true;
+        }
+
+        private void ValidateProviderSerialization(ProviderEntry providerEntry, ISaveSchematic schematic)
+        {
+            object state;
+            try
+            {
+                state = providerEntry.Provider.CaptureState();
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException(
+                    $"SaveProvider with key '{providerEntry.Provider.SaveKey}' failed while capturing state during registration validation.",
+                    ex);
+            }
+
+            try
+            {
+                _options.Serializer.Serialize(state, schematic);
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException(
+                    $"SaveProvider with key '{providerEntry.Provider.SaveKey}' produces incompatible state for its registered schematic.",
+                    ex);
+            }
+        }
+
+        private void ValidateProviderMigration(ProviderEntry providerEntry)
+        {
+            if (!(providerEntry.Provider is ISaveMigratable migratable))
+                return;
+
+            if (!(_options.Serializer is ISaveMigrationCapableSerializer))
+            {
+                throw new InvalidOperationException(
+                    $"SaveProvider with key '{providerEntry.Provider.SaveKey}' implements ISaveMigratable but the serializer ({_options.Serializer.GetType().Name}) does not implement ISaveMigrationCapableSerializer. " +
+                    "Migration-capable providers require migration-capable serializers.");
+            }
+
+            var migrationSource = migratable.CreateMigrationSource();
+            _migrationEngine.ValidateMigrationPolicy(providerEntry.Provider.SaveKey, migrationSource, providerEntry.Provider.SchemaVersion);
+        }
+
+        private void EnsureRegistrationsValidated()
+        {
+            if (!_registrationsValidated)
+                throw new InvalidOperationException(
+                    "Save registrations must be validated with ValidateRegistrations() before disk save/load operations.");
         }
 
         /// <summary>
@@ -341,10 +404,15 @@ namespace Workes.SaveSystem
         /// of the previous save before writing the new one.
         /// </summary>
         /// <param name="identity">The identity that identifies which save slot to write to.</param>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="identity"/> is null.</exception>
         /// <exception cref="InvalidOperationException">Thrown when validation fails (invalid save name, missing files, deserialization errors, etc.).</exception>
+        /// <remarks>
+        /// Call <see cref="ValidateRegistrations"/> successfully after provider registration and before calling this method.
+        /// </remarks>
         public void SaveToDisk(TIdentity identity)
         {
             var saveName = ResolveSaveName(identity);
+            EnsureRegistrationsValidated();
             var folderPath = GetMainFolderPath(saveName);
             var tempPath = GetTempFolderPath(saveName, _options.TempFolderName);
             var metaPath = GetMetadataFilePath(tempPath);
@@ -407,9 +475,15 @@ namespace Workes.SaveSystem
         /// </summary>
         /// <param name="identity">The identity that identifies which save slot to load from.</param>
         /// <returns>True if a save was found and loaded successfully, false if no save exists for this identity.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="identity"/> is null.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when registrations have not been validated or saved data cannot be loaded.</exception>
+        /// <remarks>
+        /// Call <see cref="ValidateRegistrations"/> successfully after provider registration and before calling this method.
+        /// </remarks>
         public bool LoadFromDisk(TIdentity identity)
         {
             var folderPath = GetSaveFolderPath(identity);
+            EnsureRegistrationsValidated();
 
             RecoverSave(identity);
 
@@ -430,13 +504,17 @@ namespace Workes.SaveSystem
         /// <param name="identity">The identity that identifies which save's backup to load.</param>
         /// <param name="slotNumber">The backup slot number (1-based, e.g., 1 = _0001, 2 = _0002). Must be at least 1.</param>
         /// <returns>True if the backup slot was found and loaded successfully, false if the backup doesn't exist or backups are disabled.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="identity"/> is null.</exception>
         /// <exception cref="ArgumentException">Thrown when <paramref name="slotNumber"/> is less than 1 or greater than <see cref="SaveSystemOptions{TIdentity}.BackupSystemMaxBackupCount"/>.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when registrations have not been validated or saved data cannot be loaded.</exception>
         /// <remarks>
+        /// Call <see cref="ValidateRegistrations"/> successfully after provider registration and before calling this method.
         /// If the backup system is disabled, this method logs a warning and returns false without throwing an exception.
         /// </remarks>
         public bool LoadBackupSlotFromDisk(TIdentity identity, int slotNumber)
         {
             var saveName = ResolveSaveName(identity);
+            EnsureRegistrationsValidated();
 
             if (!_options.EnableBackupSystem)
             {
@@ -470,6 +548,7 @@ namespace Workes.SaveSystem
         /// Checks for temporary save folders and attempts to complete or restore interrupted save operations.
         /// </summary>
         /// <param name="identity">The identity of the save to recover.</param>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="identity"/> is null.</exception>
         /// <exception cref="InvalidOperationException">Thrown when recovery fails due to data corruption or tampering.</exception>
         public void RecoverSave(TIdentity identity)
         {

@@ -32,6 +32,7 @@ public sealed class ReadmeExampleTests
 
         var playerProvider = new PlayerSaveProvider();
         manager.RegisterProvider<PlayerState>(playerProvider);
+        manager.ValidateRegistrations();
 
         manager.SaveToDisk("slot-1");
 
@@ -59,6 +60,7 @@ public sealed class ReadmeExampleTests
         var manager = new SaveManager<string>(options);
         var playerProvider = new PlayerSaveProvider();
         manager.RegisterProvider<PlayerState>(playerProvider);
+        manager.ValidateRegistrations();
         manager.SaveToDisk("slot-1");
         playerProvider.Current = new PlayerState { Name = "Later", Level = 8 };
         manager.SaveToDisk("slot-1");

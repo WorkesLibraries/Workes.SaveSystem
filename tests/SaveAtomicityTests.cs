@@ -57,10 +57,11 @@ public sealed class SaveAtomicityTests
         badManager.RegisterProvider<TestState>(provider);
         provider.Current = new TestState { Value = 2 };
 
-        var ex = Assert.Throws<InvalidOperationException>(() => badManager.SaveToDisk("slot"));
+        var ex = Assert.Throws<InvalidOperationException>(() => badManager.ValidateRegistrations());
 
         var loadManager = CreateManager();
         loadManager.RegisterProvider<TestState>(provider);
+        loadManager.ValidateRegistrations();
         provider.Current = new TestState { Value = 99 };
         var loaded = loadManager.LoadFromDisk("slot");
 
@@ -90,6 +91,7 @@ public sealed class SaveAtomicityTests
         int value)
     {
         provider.Current = new TestState { Value = value };
+        manager.ValidateRegistrations();
         manager.SaveToDisk(slot);
     }
 

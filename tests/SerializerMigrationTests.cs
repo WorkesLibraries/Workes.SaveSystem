@@ -59,7 +59,9 @@ public sealed class SerializerMigrationTests
                 new SaveMigrationStep(1, (_, _) => { })
             });
 
-        var ex = Assert.Throws<InvalidOperationException>(() => manager.RegisterProvider<V2State>(provider));
+        manager.RegisterProvider<V2State>(provider);
+
+        var ex = Assert.Throws<InvalidOperationException>(() => manager.ValidateRegistrations());
 
         Assert.That(ex!.Message, Does.Contain("multiple migration steps"));
     }
@@ -70,6 +72,7 @@ public sealed class SerializerMigrationTests
         var oldManager = new SaveManager<string>(CreateOptions());
         var oldProvider = new V1Provider(new V1State { Name = "Scout" });
         oldManager.RegisterProvider<V1State>(oldProvider);
+        oldManager.ValidateRegistrations();
         oldManager.SaveToDisk("slot");
 
         var newManager = new SaveManager<string>(CreateOptions());
@@ -81,6 +84,7 @@ public sealed class SerializerMigrationTests
                 new SaveMigrationStep(1, (data, factory) => data.Set("Level", factory.CreateInt(12)))
             });
         newManager.RegisterProvider<V2State>(newProvider);
+        newManager.ValidateRegistrations();
 
         var loaded = newManager.LoadFromDisk("slot");
 
@@ -94,6 +98,7 @@ public sealed class SerializerMigrationTests
     {
         var oldManager = new SaveManager<string>(CreateOptions());
         oldManager.RegisterProvider<V1State>(new V1Provider(new V1State { Name = "Scout" }));
+        oldManager.ValidateRegistrations();
         oldManager.SaveToDisk("slot");
 
         var newManager = new SaveManager<string>(CreateOptions());
@@ -102,6 +107,7 @@ public sealed class SerializerMigrationTests
                 schemaVersion: 2,
                 current: new V2State { Name = "Unset", Level = 0 },
                 migrations: Array.Empty<SaveMigrationStep>()));
+        newManager.ValidateRegistrations();
 
         var ex = Assert.Throws<InvalidOperationException>(() => newManager.LoadFromDisk("slot"));
 
@@ -120,6 +126,7 @@ public sealed class SerializerMigrationTests
                 {
                     new SaveMigrationStep(1, (data, factory) => data.Set("Level", factory.CreateInt(1)))
                 }));
+        newerManager.ValidateRegistrations();
         newerManager.SaveToDisk("slot");
 
         var olderManager = new SaveManager<string>(CreateOptions());
@@ -131,6 +138,7 @@ public sealed class SerializerMigrationTests
                 {
                     new SaveMigrationStep(1, (data, factory) => data.Set("Level", factory.CreateInt(1)))
                 }));
+        olderManager.ValidateRegistrations();
 
         var ex = Assert.Throws<InvalidOperationException>(() => olderManager.LoadFromDisk("slot"));
 
@@ -143,6 +151,7 @@ public sealed class SerializerMigrationTests
     {
         var oldManager = new SaveManager<string>(CreateOptions());
         oldManager.RegisterProvider<V1State>(new V1Provider(new V1State { Name = "Scout" }));
+        oldManager.ValidateRegistrations();
         oldManager.SaveToDisk("slot");
         File.WriteAllText(Path.Combine(_tempRoot, "slot", "player.json"), """{"SchemaVersion":1}""");
 
@@ -155,6 +164,7 @@ public sealed class SerializerMigrationTests
                 {
                     new SaveMigrationStep(1, (data, factory) => data.Set("Level", factory.CreateInt(12)))
                 }));
+        newManager.ValidateRegistrations();
 
         var ex = Assert.Throws<InvalidOperationException>(() => newManager.LoadFromDisk("slot"));
 
@@ -166,6 +176,7 @@ public sealed class SerializerMigrationTests
     {
         var oldManager = new SaveManager<string>(CreateOptions());
         oldManager.RegisterProvider<V1State>(new V1Provider(new V1State { Name = "Scout" }));
+        oldManager.ValidateRegistrations();
         oldManager.SaveToDisk("slot");
 
         var newManager = new SaveManager<string>(CreateOptions());
@@ -177,6 +188,7 @@ public sealed class SerializerMigrationTests
                 {
                     new SaveMigrationStep(1, (_, _) => throw new InvalidOperationException("broken migration"))
                 }));
+        newManager.ValidateRegistrations();
 
         var ex = Assert.Throws<InvalidOperationException>(() => newManager.LoadFromDisk("slot"));
 

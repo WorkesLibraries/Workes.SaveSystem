@@ -29,6 +29,7 @@ public sealed class EngineNeutralDefaultsTests
         var manager = SaveManager<string>.CreateDefault(serializer, _tempRoot);
         var provider = new TestProvider("player", new TestState { Name = "Saved", Level = 4 });
         manager.RegisterProvider<TestState>(provider);
+        manager.ValidateRegistrations();
 
         manager.SaveToDisk("slot");
         provider.Current = new TestState { Name = "Changed", Level = 1 };
@@ -53,6 +54,7 @@ public sealed class EngineNeutralDefaultsTests
                 fileNameResolver: SaveSystemOptions<string>.DefaultFileNameResolver));
         var provider = new TestProvider("player", new TestState { Name = "Saved", Level = 4 });
         manager.RegisterProvider<TestState>(provider);
+        manager.ValidateRegistrations();
 
         manager.SaveToDisk("slot");
         provider.Current = new TestState { Name = "Changed", Level = 1 };
@@ -77,6 +79,7 @@ public sealed class EngineNeutralDefaultsTests
                 fileNameResolver: SaveSystemOptions<ProfileSlotIdentity>.DefaultFileNameResolver));
         var provider = new TestProvider("player", new TestState { Name = "Saved", Level = 4 });
         manager.RegisterProvider<TestState>(provider);
+        manager.ValidateRegistrations();
 
         manager.SaveToDisk(new ProfileSlotIdentity("profile-a", "slot-1"));
         provider.Current = new TestState { Name = "Changed", Level = 1 };

@@ -63,6 +63,7 @@ public sealed class BackupAndRecoveryTests
         var manager = CreateManager();
         var provider = new TestProvider(new TestState { Value = 1 });
         manager.RegisterProvider<TestState>(provider);
+        manager.ValidateRegistrations();
 
         var loaded = manager.LoadBackupSlotFromDisk("slot", slotNumber: 1);
 
@@ -257,6 +258,7 @@ public sealed class BackupAndRecoveryTests
         int value)
     {
         provider.Current = new TestState { Value = value };
+        manager.ValidateRegistrations();
         manager.SaveToDisk(slot);
     }
 

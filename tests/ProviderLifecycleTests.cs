@@ -74,6 +74,7 @@ public sealed class ProviderLifecycleTests
         var log = new List<string>();
         var manager = new SaveManager<string>(CreateOptions());
         manager.RegisterProvider<TestState>(new LifecycleProvider("player", loadPriority: 0, value: 1, log));
+        manager.ValidateRegistrations();
         log.Clear();
 
         var loaded = manager.LoadFromDisk("missing");
