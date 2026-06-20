@@ -688,6 +688,62 @@ namespace Workes.SaveSystem
         }
 
         /// <summary>
+        /// Deletes the main save folder for the specified identity from disk.
+        /// </summary>
+        /// <remarks>
+        /// This method also removes temp and to-delete folders for the same resolved save name so abandoned
+        /// recovery artifacts do not remain visible to later operations. Backup folders are not deleted; use
+        /// <see cref="DeleteBackupSlot"/> to remove individual backups.
+        /// </remarks>
+        /// <param name="identity">The identity that identifies which save slot to delete.</param>
+        /// <returns>True if a main save or related recovery artifact was deleted; otherwise, false.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="identity"/> is null.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when the resolved save name is invalid.</exception>
+        public bool DeleteSave(TIdentity identity)
+        {
+            var saveName = ResolveSaveName(identity);
+            var folderPath = GetMainFolderPath(saveName);
+            var tempPath = GetTempFolderPath(saveName, _options.TempFolderName);
+            var toDeletePath = GetToDeleteFolderPath(saveName);
+
+            var deleted = DeleteDirectoryIfExists(tempPath);
+            deleted = DeleteDirectoryIfExists(toDeletePath) || deleted;
+
+            if (!Directory.Exists(folderPath))
+                return deleted;
+
+            Directory.Move(folderPath, toDeletePath);
+            Directory.Delete(toDeletePath, recursive: true);
+            return true;
+        }
+
+        /// <summary>
+        /// Deletes a numbered backup slot for the specified identity from disk.
+        /// </summary>
+        /// <remarks>
+        /// Backup deletion is available even when the backup system is currently disabled, which allows cleanup
+        /// tools to remove old backup folders without re-enabling backup creation.
+        /// </remarks>
+        /// <param name="identity">The identity that identifies which save's backup should be deleted.</param>
+        /// <param name="slotNumber">The backup slot number (1-based, e.g., 1 = _0001, 2 = _0002).</param>
+        /// <returns>True if the backup slot was found and deleted; otherwise, false.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="identity"/> is null.</exception>
+        /// <exception cref="ArgumentException">Thrown when <paramref name="slotNumber"/> is less than 1.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when the resolved save name is invalid.</exception>
+        public bool DeleteBackupSlot(TIdentity identity, int slotNumber)
+        {
+            var saveName = ResolveSaveName(identity);
+
+            if (slotNumber < 1)
+                throw new ArgumentException("Backup slot number must be at least 1.", nameof(slotNumber));
+
+            var backupSuffix = $"_{slotNumber:D4}";
+            var backupFolderPath = _backupManager.GetBackupFolderPath(saveName, backupSuffix);
+
+            return DeleteDirectoryIfExists(backupFolderPath);
+        }
+
+        /// <summary>
         /// Attempts to recover an incomplete save operation. This is automatically called by <see cref="LoadFromDisk"/>.
         /// Checks for temporary save folders and attempts to complete or restore interrupted save operations.
         /// </summary>
@@ -965,6 +1021,15 @@ namespace Workes.SaveSystem
                 return false;
 
             return File.Exists(GetMetadataFilePath(folderPath));
+        }
+
+        private static bool DeleteDirectoryIfExists(string folderPath)
+        {
+            if (!Directory.Exists(folderPath))
+                return false;
+
+            Directory.Delete(folderPath, recursive: true);
+            return true;
         }
 
         private void ValidateTempSaveFolderFromDisk(string saveFolderPath)

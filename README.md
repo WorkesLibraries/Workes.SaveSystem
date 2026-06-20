@@ -107,6 +107,15 @@ IReadOnlyList<string> slots = manager.ListSaveSlots();
 
 The returned values are resolved save folder names, not `TIdentity` values, because custom identity resolvers may not be reversible. The list is sorted with ordinal string ordering and ignores backup folders, temp folders, to-delete folders, and directories that do not contain save metadata.
 
+Use `DeleteSave(...)` and `DeleteBackupSlot(...)` for save-menu cleanup or debug tooling.
+
+```csharp
+bool saveDeleted = manager.DeleteSave("slot-1");
+bool backupDeleted = manager.DeleteBackupSlot("slot-1", slotNumber: 1);
+```
+
+`DeleteSave(...)` removes the main save and any temp or to-delete artifacts for the same resolved save name. It does not remove backups. `DeleteBackupSlot(...)` removes only the numbered backup folder and can be used even when backup creation is currently disabled.
+
 ## Providers
 
 Each `ISaveProvider` owns one stable save key and one schema version.
