@@ -119,6 +119,17 @@ public sealed class RegistrationValidationTests
     }
 
     [Test]
+    public void ValidateRegistrations_RejectsNullProviderState()
+    {
+        var manager = CreateManager();
+        manager.RegisterProvider(new NullStateProvider());
+
+        var ex = Assert.Throws<InvalidOperationException>(() => manager.ValidateRegistrations());
+
+        Assert.That(ex!.Message, Does.Contain("returned null state"));
+    }
+
+    [Test]
     public void ValidateRegistrations_RejectsDuplicateResolvedProviderFileNames()
     {
         var manager = CreateManager(fileNameResolver: _ => "shared");
@@ -297,6 +308,24 @@ public sealed class RegistrationValidationTests
         }
 
         public void RestoreState(UnserializableState state)
+        {
+        }
+    }
+
+    private sealed class NullStateProvider : ISaveProvider<TestState>
+    {
+        public string SaveKey => "null-state";
+
+        public int SchemaVersion => 1;
+
+        public int LoadPriority => 0;
+
+        public TestState CaptureState()
+        {
+            return null!;
+        }
+
+        public void RestoreState(TestState state)
         {
         }
     }

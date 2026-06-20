@@ -3,7 +3,7 @@ using System;
 namespace Workes.SaveSystem
 {
     /// <summary>
-    /// A BSON-backed save schematic that wraps state in a versioned payload and encodes the binary payload as Base64.
+    /// A binary save schematic that wraps state in a versioned payload and encodes the binary token payload as Base64.
     /// </summary>
     /// <typeparam name="T">The type of state object this schematic serializes. Must be compatible with Newtonsoft.Json.</typeparam>
     public sealed class BinarySaveSchematic<T> : SaveSchematic<T>

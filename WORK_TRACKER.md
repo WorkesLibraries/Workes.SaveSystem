@@ -4,17 +4,14 @@ This file is the durable planning tracker for the save system work. Keep it upda
 
 ## To-do
 
-1. Fix `BinarySaveSerializer` XML documentation that still describes the implementation as BSON-backed even though the current serializer uses a package-owned binary token codec encoded as Base64.
-2. Add recovery tests for corrupt temp folders when `_toDelete` is also present, so recovery does not delete the last valid save during interrupted swaps.
-3. Add recovery tests for interrupted saves written with older provider schema versions after the application updates, so recovery and migration behavior stay compatible.
-4. Add try-load backup tests for disabled backups combined with invalid identity and unvalidated registrations, once the desired ordering is decided.
-5. Document whether provider `CaptureState()` is allowed to return null; if null state remains unsupported, make that explicit in XML docs and README provider contracts.
-6. Add `TryRegisterProvider(...)` and `TryRegisterMemoryProvider(...)` convenience APIs that tentatively register a provider, run registration validation immediately, and leave the manager unchanged when validation fails.
-7. Update recovery to validate temp and old recovery candidates, prefer valid temp, fall back to valid `_toDelete`, warn when falling back, and preserve artifacts if neither candidate is valid.
-8. Update recovery validation to use the normal load-compatible path, including schema-version extraction and migrations, so interrupted saves from older provider schema versions can recover after application updates.
-9. Keep `TryLoadBackupSlotFromDisk(...)` option A behavior: when backups are disabled, return `BackupSystemDisabled` before validating identity, slot number, or registrations.
-10. Keep null provider state unsupported for the first version and document that `CaptureState()` must return a non-null state object.
-11. Simplify `ISaveMigrationCapableSerializer` to option B: remove `ISaveDataNodeFactory` inheritance and expose node creation only through `NodeFactory`.
+1. Add recovery tests for corrupt temp folders when `_toDelete` is also present, so recovery does not delete the last valid save during interrupted swaps.
+2. Add recovery tests for interrupted saves written with older provider schema versions after the application updates, so recovery and migration behavior stay compatible.
+3. Add try-load backup tests for disabled backups combined with invalid identity and unvalidated registrations, once the desired ordering is decided.
+4. Add `TryRegisterProvider(...)` and `TryRegisterMemoryProvider(...)` convenience APIs that tentatively register a provider, run registration validation immediately, and leave the manager unchanged when validation fails.
+5. Update recovery to validate temp and old recovery candidates, prefer valid temp, fall back to valid `_toDelete`, warn when falling back, and preserve artifacts if neither candidate is valid.
+6. Update recovery validation to use the normal load-compatible path, including schema-version extraction and migrations, so interrupted saves from older provider schema versions can recover after application updates.
+7. Keep `TryLoadBackupSlotFromDisk(...)` option A behavior: when backups are disabled, return `BackupSystemDisabled` before validating identity, slot number, or registrations.
+8. Simplify `ISaveMigrationCapableSerializer` to option B: remove `ISaveDataNodeFactory` inheritance and expose node creation only through `NodeFactory`.
 
 ## Later
 
@@ -416,6 +413,15 @@ These points are completed for the current package migration.
 - Updated README and XML documentation for provider identity/version stability and custom file-name resolver uniqueness.
 - Added tests for duplicate resolved file names, changed provider keys after registration, changed provider keys after validation, changed schema versions after validation, and memory-provider schema drift.
 - `dotnet test Workes.SaveSystem.sln` passes with 140 tests.
+
+### 44. Clarified Binary Serializer And Non-Null Provider State Contracts
+
+- Updated `BinarySaveSerializer` and `BinarySaveSchematic` XML documentation to describe the package-owned binary token codec instead of BSON.
+- Documented that provider `CaptureState()` must return a non-null state object and that empty state should be represented by an explicit DTO.
+- Added registration validation for null provider state so persisted providers fail during `ValidateRegistrations()` rather than during first save.
+- Updated README provider contract guidance for non-null captured state.
+- Added regression coverage for null provider state during registration validation.
+- `dotnet test Workes.SaveSystem.sln` passes with 141 tests.
 
 ## Maintenance Rules
 

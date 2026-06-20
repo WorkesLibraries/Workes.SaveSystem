@@ -7,12 +7,12 @@ using Newtonsoft.Json.Linq;
 namespace Workes.SaveSystem
 {
     /// <summary>
-    /// A BSON-backed serializer for save files.
+    /// A binary-token serializer for save files.
     /// </summary>
     /// <remarks>
-    /// The current save serializer contract stores provider data as strings. This serializer writes BSON payloads
-    /// encoded as Base64 strings, preserving a binary payload format while staying compatible with the package's
-    /// text-based persistence contract.
+    /// The current save serializer contract stores provider data as strings. This serializer writes a package-owned
+    /// binary token payload encoded as Base64, preserving a binary payload format while staying compatible with the
+    /// package's text-based persistence contract.
     /// </remarks>
     public sealed class BinarySaveSerializer : ISaveSerializer, ISaveMigrationCapableSerializer
     {

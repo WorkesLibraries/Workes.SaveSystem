@@ -231,7 +231,7 @@ Save keys are persistent identity. Changing a provider key changes the filename 
 
 Custom `FileNameResolver` values must also resolve every persisted provider to a unique file name. The default resolver uses `SaveKey`, so uniqueness follows from unique provider keys. A custom resolver that maps multiple providers to the same file is rejected during registration validation.
 
-Provider state must be compatible with the serializer and with the provider's `ISaveProvider<TState>` state type.
+Provider state must be non-null, compatible with the serializer, and compatible with the provider's `ISaveProvider<TState>` state type. If a provider has no data to save, return an explicit empty state object rather than `null`.
 The built-in JSON serializer does not require a public parameterless constructor during registration; constructor-based DTOs are supported when Newtonsoft.Json can serialize and deserialize the real captured state.
 
 ```csharp
@@ -350,7 +350,7 @@ Implement `ISaveProvider<TState>` for each subsystem that owns saveable state.
 | `SaveKey` | Stable provider identity. It must be unique within a manager and must not change after provider registration. |
 | `SchemaVersion` | Stable integer version for the provider state shape. Increase it when older payloads need migration. It must not change after registration validation. |
 | `LoadPriority` | Lower values restore first. Use it when one provider must exist before another restores. |
-| `CaptureState()` | Return a serializer-compatible state object of type `TState`. The manager calls lifecycle `OnBeforeSave()` before capture. |
+| `CaptureState()` | Return a non-null, serializer-compatible state object of type `TState`. The manager calls lifecycle `OnBeforeSave()` before capture. |
 | `RestoreState(TState)` | Accept the object shape produced by the registered schematic. |
 
 Use `RegisterProvider(provider)` for disk persistence. The provider's `ISaveProvider<TState>` implementation supplies the state type.

@@ -42,7 +42,10 @@ namespace Workes.SaveSystem
         /// <summary>
         /// Captures the current state of this provider.
         /// </summary>
-        /// <returns>The current state of this provider.</returns>
+        /// <returns>The current non-null state of this provider.</returns>
+        /// <remarks>
+        /// Null provider state is not supported. Return an explicit empty state object when a provider has no data.
+        /// </remarks>
         TState CaptureState();
 
         /// <summary>

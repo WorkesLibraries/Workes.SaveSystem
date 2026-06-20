@@ -425,6 +425,13 @@ namespace Workes.SaveSystem
                     ex);
             }
 
+            if (state == null)
+            {
+                throw new InvalidOperationException(
+                    $"SaveProvider with key '{providerEntry.RegisteredSaveKey}' returned null state during registration validation. " +
+                    "Provider CaptureState() must return a non-null state object.");
+            }
+
             try
             {
                 _options.Serializer.Serialize(state, schematic);
