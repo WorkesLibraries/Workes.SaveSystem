@@ -28,7 +28,9 @@ That dependency is intentional for the current package shape:
 - migration data nodes are backed by Newtonsoft `JToken`/`JObject` values.
 - save metadata is currently read and written with Newtonsoft.
 
-`System.Text.Json` support may be added later as a separate serializer implementation, but it is not a drop-in replacement for the current migration node model. For now, consumers should treat Newtonsoft as part of the package contract.
+`System.Text.Json` is not part of the core package for the first reusable version. Under the current `netstandard2.1` target, using it requires an additional package reference, so adding a parallel `System.Text.Json` serializer would not make the package dependency-free. Replacing Newtonsoft would also require replacing the migration data-node model, the JSON serializer, the binary serializer's token model, and metadata persistence together. For now, consumers should treat Newtonsoft as part of the package contract.
+
+A future `System.Text.Json` adapter is still possible, especially for applications that do not need migration data nodes or that target newer frameworks directly. Treat it as a separate compatibility decision rather than a drop-in replacement for existing saves.
 
 ## Quick Start
 
@@ -465,5 +467,5 @@ For saves expected to survive package and application updates:
 ## Suggested Next Steps
 
 1. Add NuGet package metadata once naming, README wording, and license are final.
-2. Decide whether a future `System.Text.Json` serializer is worth maintaining alongside the Newtonsoft implementation.
+2. Consider a `System.Text.Json` adapter only if a clear consumer need appears and its compatibility limits are acceptable.
 3. Add engine-specific adapter packages only if repeated Unity or Godot setup code becomes noisy enough to justify them.
