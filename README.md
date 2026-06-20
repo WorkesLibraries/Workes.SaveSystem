@@ -6,7 +6,7 @@ The package is not tied to Unity, Godot, or any game engine. Engine projects cho
 
 ## Installation
 
-NuGet publishing is planned after package metadata, package readme wiring, and licensing are finalized. Until then, reference the project directly:
+NuGet publishing is planned after release versioning and licensing are finalized. Until then, reference the project directly:
 
 ```xml
 <ItemGroup>
@@ -14,7 +14,7 @@ NuGet publishing is planned after package metadata, package readme wiring, and l
 </ItemGroup>
 ```
 
-The main project is `src/Workes.SaveSystem.csproj`.
+The main project is `src/Workes.SaveSystem.csproj`. The project already includes NuGet package metadata and README packaging for `Workes.SaveSystem`.
 
 ## Dependency Notes
 
@@ -506,7 +506,7 @@ The current built-in migration system migrates provider payload schema inside on
 For saves expected to survive package and application updates:
 
 - keep provider keys stable and human-readable;
-- use the default file-name resolver unless there is a strong reason not to;
+- use the default save path and file-name resolvers unless there is a strong reason not to;
 - keep state DTOs simple and serializer-friendly;
 - bump provider schema versions deliberately;
 - keep migration steps deterministic;
@@ -516,6 +516,6 @@ For saves expected to survive package and application updates:
 
 ## Suggested Next Steps
 
-1. Add NuGet package metadata once naming, README wording, and license are final.
+1. Choose the package license and final release version before publishing.
 2. Consider a `System.Text.Json` adapter only if a clear consumer need appears and its compatibility limits are acceptable.
 3. Add engine-specific adapter packages only if repeated Unity or Godot setup code becomes noisy enough to justify them.

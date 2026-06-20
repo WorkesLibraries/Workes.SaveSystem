@@ -6,10 +6,25 @@
     <ImplicitUsings>disable</ImplicitUsings>
     <LangVersion>10.0</LangVersion>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <PackageId>Workes.SaveSystem</PackageId>
+    <Version>0.1.0</Version>
+    <Authors>Workes</Authors>
+    <Company>Workes</Company>
+    <Product>Workes.SaveSystem</Product>
+    <Description>Engine-neutral .NET save system with provider registration, snapshots, backups, migrations, and JSON/binary serializers.</Description>
+    <PackageTags>save;save-system;serialization;backup;migration;game-development</PackageTags>
+    <PackageProjectUrl>https://github.com/WorkesLibraries/Workes.SaveSystem</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/WorkesLibraries/Workes.SaveSystem.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
 </Project>
