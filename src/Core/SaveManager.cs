@@ -23,6 +23,7 @@ namespace Workes.SaveSystem
         }
 
         private const string SaveMetadataFileName = "savemetadata.json";
+        private const string BackupFolderName = "_backup";
         private const string ToDeleteFolderName = "_toDelete";
 
         private string GetMainFolderPath(string saveName) =>
@@ -260,6 +261,29 @@ namespace Workes.SaveSystem
             }
 
             _registrationsValidated = true;
+        }
+
+        /// <summary>
+        /// Lists the resolved save slot folder names currently available in the configured save root.
+        /// </summary>
+        /// <remarks>
+        /// This method returns resolved folder names rather than <typeparamref name="TIdentity"/> values because
+        /// custom save-name resolvers are not guaranteed to be reversible. Backup folders, temp folders,
+        /// to-delete folders, and folders without save metadata are ignored.
+        /// </remarks>
+        /// <returns>A deterministic, ordinally sorted list of resolved save slot folder names.</returns>
+        public IReadOnlyList<string> ListSaveSlots()
+        {
+            if (!Directory.Exists(_options.SaveRootPath))
+                return Array.Empty<string>();
+
+            return Directory.EnumerateDirectories(_options.SaveRootPath)
+                .Where(IsSaveSlotFolder)
+                .Select(Path.GetFileName)
+                .Where(name => !string.IsNullOrEmpty(name))
+                .Select(name => name!)
+                .OrderBy(name => name, StringComparer.Ordinal)
+                .ToArray();
         }
 
         private void ValidateProviderSerialization(ProviderEntry providerEntry, ISaveSchematic schematic)
@@ -923,6 +947,24 @@ namespace Workes.SaveSystem
             {
                 return null;
             }
+        }
+
+        private bool IsSaveSlotFolder(string folderPath)
+        {
+            var folderName = Path.GetFileName(folderPath);
+            if (string.IsNullOrEmpty(folderName))
+                return false;
+
+            if (string.Equals(folderName, BackupFolderName, StringComparison.Ordinal))
+                return false;
+
+            if (folderName.EndsWith(_options.TempFolderName, StringComparison.Ordinal))
+                return false;
+
+            if (folderName.EndsWith(ToDeleteFolderName, StringComparison.Ordinal))
+                return false;
+
+            return File.Exists(GetMetadataFilePath(folderPath));
         }
 
         private void ValidateTempSaveFolderFromDisk(string saveFolderPath)

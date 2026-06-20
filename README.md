@@ -99,6 +99,14 @@ var manager = new SaveManager<string>(
 
 After registering providers, call `ValidateRegistrations()` before disk save/load operations. Registration is intentionally lightweight; validation captures provider state, checks serializer compatibility, validates migration policy, and verifies file-name behavior at the setup point you choose.
 
+Use `ListSaveSlots()` to populate save/load menus or tooling with the saves currently present under the configured save root.
+
+```csharp
+IReadOnlyList<string> slots = manager.ListSaveSlots();
+```
+
+The returned values are resolved save folder names, not `TIdentity` values, because custom identity resolvers may not be reversible. The list is sorted with ordinal string ordering and ignores backup folders, temp folders, to-delete folders, and directories that do not contain save metadata.
+
 ## Providers
 
 Each `ISaveProvider` owns one stable save key and one schema version.
