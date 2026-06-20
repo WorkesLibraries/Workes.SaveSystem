@@ -4,7 +4,7 @@ namespace Workes.SaveSystem
 {
     /// <summary>
     /// Factory for creating JSON-backed save data nodes.
-    /// Produces <see cref="JsonSaveDataNode"/> instances wrapping JToken types.
+    /// Produces nodes backed by Newtonsoft JSON tokens.
     /// </summary>
     public sealed class JsonSaveDataNodeFactory : ISaveDataNodeFactory
     {
@@ -42,6 +42,12 @@ namespace Workes.SaveSystem
         public ISaveDataNode CreateBool(bool value)
         {
             return new JsonSaveDataNode(new JValue(value));
+        }
+
+        /// <inheritdoc />
+        public ISaveDataNode CreateNull()
+        {
+            return new JsonSaveDataNode(JValue.CreateNull());
         }
     }
 }

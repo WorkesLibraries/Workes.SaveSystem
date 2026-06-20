@@ -48,13 +48,9 @@ public sealed class ReadmeExampleTests
     [Test]
     public void BackupExample_LoadsMostRecentPreviousSave()
     {
-        var options = new SaveSystemOptions<string>(
+        var options = SaveSystemOptions.CreateWithBackups(
             saveRootPath: _tempRoot,
             serializer: new JsonSaveSerializer(),
-            tempFolderName: SaveSystemOptions<string>.DefaultTempFolderName(),
-            saveNameResolver: identity => identity,
-            fileNameResolver: SaveSystemOptions<string>.DefaultFileNameResolver,
-            enableBackupSystem: true,
             backupSystemMaxBackupCount: 3);
 
         var manager = new SaveManager<string>(options);

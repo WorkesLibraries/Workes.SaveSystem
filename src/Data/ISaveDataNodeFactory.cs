@@ -4,6 +4,9 @@ namespace Workes.SaveSystem
     /// Factory interface for creating save data nodes of various types.
     /// Used by migration-capable serializers to create nodes during migration operations.
     /// </summary>
+    /// <remarks>
+    /// Nodes should be combined only with other nodes created by the same serializer/factory implementation.
+    /// </remarks>
     public interface ISaveDataNodeFactory
     {
         /// <summary>
@@ -45,5 +48,11 @@ namespace Workes.SaveSystem
         /// <param name="value">The boolean value.</param>
         /// <returns>A new boolean node.</returns>
         ISaveDataNode CreateBool(bool value);
+
+        /// <summary>
+        /// Creates a new null node.
+        /// </summary>
+        /// <returns>A new null node.</returns>
+        ISaveDataNode CreateNull();
     }
 }

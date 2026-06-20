@@ -136,5 +136,8 @@ namespace Workes.SaveSystem
 
         /// <inheritdoc />
         public ISaveDataNode CreateBool(bool value) => NodeFactory.CreateBool(value);
+
+        /// <inheritdoc />
+        public ISaveDataNode CreateNull() => NodeFactory.CreateNull();
     }
 }

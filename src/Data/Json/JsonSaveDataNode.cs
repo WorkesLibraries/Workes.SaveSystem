@@ -32,13 +32,11 @@ namespace Workes.SaveSystem
                         return SaveDataNodeType.String;
                     case JTokenType.Boolean:
                         return SaveDataNodeType.Bool;
+                    case JTokenType.Null:
+                    case JTokenType.Undefined:
+                        return SaveDataNodeType.Null;
                     default:
-                        // Fallback for other types - try to determine from value
-                        if (_token is JObject)
-                            return SaveDataNodeType.Object;
-                        if (_token is JArray)
-                            return SaveDataNodeType.Array;
-                        return SaveDataNodeType.Object; // Default fallback
+                        return SaveDataNodeType.String;
                 }
             }
         }
@@ -69,7 +67,7 @@ namespace Workes.SaveSystem
         {
             if (_token is JArray array)
             {
-                array[index] = ((JsonSaveDataNode)value)._token;
+                array[index] = RequireJsonNode(value)._token;
                 return;
             }
             throw new InvalidOperationException("Node is not an array");
@@ -81,7 +79,7 @@ namespace Workes.SaveSystem
             {
                 if (index < 0 || index > array.Count)
                     return false;
-                array.Insert(index, ((JsonSaveDataNode)value)._token);
+                array.Insert(index, RequireJsonNode(value)._token);
                 return true;
             }
             return false;
@@ -103,17 +101,26 @@ namespace Workes.SaveSystem
         {
             if (_token is JArray array)
             {
-                array.Add(((JsonSaveDataNode)value)._token);
+                array.Add(RequireJsonNode(value)._token);
                 return;
             }
             throw new InvalidOperationException("Node is not an array");
         }
 
-        public bool Has(string key) => _token[key] != null;
+        public bool Has(string key)
+        {
+            if (_token is JObject obj)
+                return obj[key] != null;
+
+            throw new InvalidOperationException("Node is not an object");
+        }
 
         public ISaveDataNode Get(string key)
         {
-            var child = _token[key];
+            if (!(_token is JObject obj))
+                throw new InvalidOperationException("Node is not an object");
+
+            var child = obj[key];
             if (child == null)
                 throw new InvalidOperationException($"Node does not contain key '{key}'.");
 
@@ -121,7 +128,15 @@ namespace Workes.SaveSystem
         }
 
         public void Set(string key, ISaveDataNode value)
-            => ((JObject)_token)[key] = ((JsonSaveDataNode)value)._token;
+        {
+            if (_token is JObject obj)
+            {
+                obj[key] = RequireJsonNode(value)._token;
+                return;
+            }
+
+            throw new InvalidOperationException("Node is not an object");
+        }
 
         public bool Remove(string key)
         {
@@ -146,5 +161,16 @@ namespace Workes.SaveSystem
 
         public IEnumerable<string> Keys =>
             _token is JObject obj ? obj.Properties().Select(p => p.Name) : Enumerable.Empty<string>();
+
+        private static JsonSaveDataNode RequireJsonNode(ISaveDataNode value)
+        {
+            if (value == null)
+                throw new ArgumentNullException(nameof(value));
+
+            if (value is JsonSaveDataNode jsonNode)
+                return jsonNode;
+
+            throw new InvalidOperationException("JSON data nodes can only be combined with nodes created by the JSON node factory.");
+        }
     }
 }
