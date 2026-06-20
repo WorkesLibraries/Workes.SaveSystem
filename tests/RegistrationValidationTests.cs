@@ -28,7 +28,7 @@ public sealed class RegistrationValidationTests
         var manager = CreateManager();
         var provider = new CountingProvider();
 
-        manager.RegisterProvider<TestState>(provider);
+        manager.RegisterProvider(provider);
 
         Assert.That(provider.CaptureCount, Is.Zero);
     }
@@ -37,7 +37,7 @@ public sealed class RegistrationValidationTests
     public void SaveToDisk_RequiresValidatedRegistrations()
     {
         var manager = CreateManager();
-        manager.RegisterProvider<TestState>(new CountingProvider());
+        manager.RegisterProvider(new CountingProvider());
 
         var ex = Assert.Throws<InvalidOperationException>(() => manager.SaveToDisk("slot"));
 
@@ -48,7 +48,7 @@ public sealed class RegistrationValidationTests
     public void LoadFromDisk_RequiresValidatedRegistrations()
     {
         var manager = CreateManager();
-        manager.RegisterProvider<TestState>(new CountingProvider());
+        manager.RegisterProvider(new CountingProvider());
 
         var ex = Assert.Throws<InvalidOperationException>(() => manager.LoadFromDisk("slot"));
 
@@ -59,7 +59,7 @@ public sealed class RegistrationValidationTests
     public void LoadBackupSlotFromDisk_RequiresValidatedRegistrations()
     {
         var manager = CreateManager(enableBackupSystem: true, backupSystemMaxBackupCount: 1);
-        manager.RegisterProvider<TestState>(new CountingProvider());
+        manager.RegisterProvider(new CountingProvider());
 
         var ex = Assert.Throws<InvalidOperationException>(() => manager.LoadBackupSlotFromDisk("slot", slotNumber: 1));
 
@@ -71,7 +71,7 @@ public sealed class RegistrationValidationTests
     {
         var manager = CreateManager();
         var provider = new CountingProvider();
-        manager.RegisterProvider<TestState>(provider);
+        manager.RegisterProvider(provider);
 
         manager.ValidateRegistrations();
 
@@ -83,7 +83,7 @@ public sealed class RegistrationValidationTests
     {
         var manager = CreateManager();
         var provider = new CountingProvider { ThrowOnCapture = true };
-        manager.RegisterProvider<TestState>(provider);
+        manager.RegisterProvider(provider);
 
         var ex = Assert.Throws<InvalidOperationException>(() => manager.ValidateRegistrations());
 
@@ -95,7 +95,7 @@ public sealed class RegistrationValidationTests
     {
         var manager = CreateManager();
         var provider = new ConstructorStateProvider(new ConstructorState("Rook", 5));
-        manager.RegisterProvider<ConstructorState>(provider);
+        manager.RegisterProvider(provider);
 
         manager.ValidateRegistrations();
         manager.SaveToDisk("slot");
@@ -111,7 +111,7 @@ public sealed class RegistrationValidationTests
     public void ValidateRegistrations_RejectsStateThatCannotSerialize()
     {
         var manager = CreateManager();
-        manager.RegisterProvider<UnserializableState>(new UnserializableProvider());
+        manager.RegisterProvider(new UnserializableProvider());
 
         var ex = Assert.Throws<InvalidOperationException>(() => manager.ValidateRegistrations());
 
@@ -156,7 +156,7 @@ public sealed class RegistrationValidationTests
         public Stream Stream { get; } = Stream.Null;
     }
 
-    private sealed class CountingProvider : ISaveProvider
+    private sealed class CountingProvider : ISaveProvider<TestState>
     {
         public string SaveKey => "player";
 
@@ -168,7 +168,7 @@ public sealed class RegistrationValidationTests
 
         public bool ThrowOnCapture { get; set; }
 
-        public object CaptureState()
+        public TestState CaptureState()
         {
             CaptureCount++;
             if (ThrowOnCapture)
@@ -177,12 +177,12 @@ public sealed class RegistrationValidationTests
             return new TestState { Value = 1 };
         }
 
-        public void RestoreState(object state)
+        public void RestoreState(TestState state)
         {
         }
     }
 
-    private sealed class ConstructorStateProvider : ISaveProvider
+    private sealed class ConstructorStateProvider : ISaveProvider<ConstructorState>
     {
         public ConstructorStateProvider(ConstructorState current)
         {
@@ -197,18 +197,18 @@ public sealed class RegistrationValidationTests
 
         public ConstructorState Current { get; set; }
 
-        public object CaptureState()
+        public ConstructorState CaptureState()
         {
             return Current;
         }
 
-        public void RestoreState(object state)
+        public void RestoreState(ConstructorState state)
         {
-            Current = (ConstructorState)state;
+            Current = state;
         }
     }
 
-    private sealed class UnserializableProvider : ISaveProvider
+    private sealed class UnserializableProvider : ISaveProvider<UnserializableState>
     {
         public string SaveKey => "unserializable";
 
@@ -216,12 +216,12 @@ public sealed class RegistrationValidationTests
 
         public int LoadPriority => 0;
 
-        public object CaptureState()
+        public UnserializableState CaptureState()
         {
             return new UnserializableState();
         }
 
-        public void RestoreState(object state)
+        public void RestoreState(UnserializableState state)
         {
         }
     }

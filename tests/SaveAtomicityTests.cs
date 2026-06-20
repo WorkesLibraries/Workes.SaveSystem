@@ -27,7 +27,7 @@ public sealed class SaveAtomicityTests
     {
         var manager = CreateManager();
         var provider = new TestProvider(new TestState { Value = 1 });
-        manager.RegisterProvider<TestState>(provider);
+        manager.RegisterProvider(provider);
         SaveValue(manager, provider, "slot", 1);
         provider.Current = new TestState { Value = 2 };
         provider.ThrowOnCapture = true;
@@ -50,17 +50,17 @@ public sealed class SaveAtomicityTests
     {
         var goodManager = CreateManager();
         var provider = new TestProvider(new TestState { Value = 1 });
-        goodManager.RegisterProvider<TestState>(provider);
+        goodManager.RegisterProvider(provider);
         SaveValue(goodManager, provider, "slot", 1);
 
         var badManager = CreateManager(fileNameResolver: _ => "bad/name");
-        badManager.RegisterProvider<TestState>(provider);
+        badManager.RegisterProvider(provider);
         provider.Current = new TestState { Value = 2 };
 
         var ex = Assert.Throws<InvalidOperationException>(() => badManager.ValidateRegistrations());
 
         var loadManager = CreateManager();
-        loadManager.RegisterProvider<TestState>(provider);
+        loadManager.RegisterProvider(provider);
         loadManager.ValidateRegistrations();
         provider.Current = new TestState { Value = 99 };
         var loaded = loadManager.LoadFromDisk("slot");
@@ -100,7 +100,7 @@ public sealed class SaveAtomicityTests
         public int Value { get; set; }
     }
 
-    private sealed class TestProvider : ISaveProvider
+    private sealed class TestProvider : ISaveProvider<TestState>
     {
         public TestProvider(TestState current)
         {
@@ -113,7 +113,7 @@ public sealed class SaveAtomicityTests
         public TestState Current { get; set; }
         public bool ThrowOnCapture { get; set; }
 
-        public object CaptureState()
+        public TestState CaptureState()
         {
             if (ThrowOnCapture)
                 throw new InvalidOperationException("capture failed");
@@ -121,9 +121,9 @@ public sealed class SaveAtomicityTests
             return Current;
         }
 
-        public void RestoreState(object state)
+        public void RestoreState(TestState state)
         {
-            Current = (TestState)state;
+            Current = state;
         }
     }
 }

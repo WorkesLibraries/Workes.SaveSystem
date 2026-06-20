@@ -31,7 +31,7 @@ public sealed class ReadmeExampleTests
             saveRootPath: _tempRoot);
 
         var playerProvider = new PlayerSaveProvider();
-        manager.RegisterProvider<PlayerState>(playerProvider);
+        manager.RegisterProvider(playerProvider);
         manager.ValidateRegistrations();
 
         manager.SaveToDisk("slot-1");
@@ -59,7 +59,7 @@ public sealed class ReadmeExampleTests
 
         var manager = new SaveManager<string>(options);
         var playerProvider = new PlayerSaveProvider();
-        manager.RegisterProvider<PlayerState>(playerProvider);
+        manager.RegisterProvider(playerProvider);
         manager.ValidateRegistrations();
         manager.SaveToDisk("slot-1");
         playerProvider.Current = new PlayerState { Name = "Later", Level = 8 };
@@ -79,7 +79,7 @@ public sealed class ReadmeExampleTests
         public int Level { get; set; }
     }
 
-    public sealed class PlayerSaveProvider : ISaveProvider
+    public sealed class PlayerSaveProvider : ISaveProvider<PlayerState>
     {
         public string SaveKey => "player";
         public int SchemaVersion => 1;
@@ -91,14 +91,14 @@ public sealed class ReadmeExampleTests
             Level = 5
         };
 
-        public object CaptureState()
+        public PlayerState CaptureState()
         {
             return Current;
         }
 
-        public void RestoreState(object state)
+        public void RestoreState(PlayerState state)
         {
-            Current = (PlayerState)state;
+            Current = state;
         }
     }
 }

@@ -28,7 +28,7 @@ public sealed class EngineNeutralDefaultsTests
         var serializer = new JsonSaveSerializer();
         var manager = SaveManager<string>.CreateDefault(serializer, _tempRoot);
         var provider = new TestProvider("player", new TestState { Name = "Saved", Level = 4 });
-        manager.RegisterProvider<TestState>(provider);
+        manager.RegisterProvider(provider);
         manager.ValidateRegistrations();
 
         manager.SaveToDisk("slot");
@@ -53,7 +53,7 @@ public sealed class EngineNeutralDefaultsTests
                 saveNameResolver: identity => identity,
                 fileNameResolver: SaveSystemOptions<string>.DefaultFileNameResolver));
         var provider = new TestProvider("player", new TestState { Name = "Saved", Level = 4 });
-        manager.RegisterProvider<TestState>(provider);
+        manager.RegisterProvider(provider);
         manager.ValidateRegistrations();
 
         manager.SaveToDisk("slot");
@@ -78,7 +78,7 @@ public sealed class EngineNeutralDefaultsTests
                 saveNameResolver: identity => identity.ProfileId + "-" + identity.SlotId,
                 fileNameResolver: SaveSystemOptions<ProfileSlotIdentity>.DefaultFileNameResolver));
         var provider = new TestProvider("player", new TestState { Name = "Saved", Level = 4 });
-        manager.RegisterProvider<TestState>(provider);
+        manager.RegisterProvider(provider);
         manager.ValidateRegistrations();
 
         manager.SaveToDisk(new ProfileSlotIdentity("profile-a", "slot-1"));
@@ -140,7 +140,7 @@ public sealed class EngineNeutralDefaultsTests
     public void SaveManager_RejectsNullIdentityForSave()
     {
         var manager = CreateStringManager();
-        manager.RegisterProvider<TestState>(new TestProvider("player", new TestState { Name = "Saved", Level = 4 }));
+        manager.RegisterProvider(new TestProvider("player", new TestState { Name = "Saved", Level = 4 }));
 
         var ex = Assert.Throws<ArgumentNullException>(() => manager.SaveToDisk(null!));
 
@@ -221,7 +221,7 @@ public sealed class EngineNeutralDefaultsTests
         public int Level { get; set; }
     }
 
-    private sealed class TestProvider : ISaveProvider
+    private sealed class TestProvider : ISaveProvider<TestState>
     {
         public TestProvider(string saveKey, TestState current)
         {
@@ -234,14 +234,14 @@ public sealed class EngineNeutralDefaultsTests
         public int LoadPriority => 0;
         public TestState Current { get; set; }
 
-        public object CaptureState()
+        public TestState CaptureState()
         {
             return Current;
         }
 
-        public void RestoreState(object state)
+        public void RestoreState(TestState state)
         {
-            Current = (TestState)state;
+            Current = state;
         }
     }
 }

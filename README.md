@@ -42,7 +42,7 @@ var manager = SaveManager<string>.CreateDefault(
     saveRootPath: "Saves");
 
 var playerProvider = new PlayerSaveProvider();
-manager.RegisterProvider<PlayerState>(playerProvider);
+manager.RegisterProvider(playerProvider);
 manager.ValidateRegistrations();
 
 manager.SaveToDisk("slot-1");
@@ -58,7 +58,7 @@ public sealed class PlayerState
     public int Level { get; set; }
 }
 
-public sealed class PlayerSaveProvider : ISaveProvider
+public sealed class PlayerSaveProvider : ISaveProvider<PlayerState>
 {
     public string SaveKey => "player";
     public int SchemaVersion => 1;
@@ -70,14 +70,14 @@ public sealed class PlayerSaveProvider : ISaveProvider
         Level = 5
     };
 
-    public object CaptureState()
+    public PlayerState CaptureState()
     {
         return Current;
     }
 
-    public void RestoreState(object state)
+    public void RestoreState(PlayerState state)
     {
-        Current = (PlayerState)state;
+        Current = state;
     }
 }
 ```
@@ -108,15 +108,15 @@ Each `ISaveProvider` owns one stable save key and one schema version.
 
 Save keys are persistent identity. Changing a provider key changes the filename and breaks loading of existing provider data unless the application handles that compatibility.
 
-Provider state must be compatible with the serializer and with the type passed to `RegisterProvider<TState>()`.
+Provider state must be compatible with the serializer and with the provider's `ISaveProvider<TState>` state type.
 The built-in JSON serializer does not require a public parameterless constructor during registration; constructor-based DTOs are supported when Newtonsoft.Json can serialize and deserialize the real captured state.
 
 ```csharp
-manager.RegisterProvider<PlayerState>(playerProvider);
+manager.RegisterProvider(playerProvider);
 manager.ValidateRegistrations();
 ```
 
-Providers can optionally implement `ISaveLifecycle` to receive `OnBeforeSave()` before capture and `OnAfterLoad()` after a successful restore. Providers can also be registered without a schematic through `RegisterProvider(provider)` when they should participate in snapshots but not write their state to disk.
+Providers can optionally implement `ISaveLifecycle` to receive `OnBeforeSave()` before capture and `OnAfterLoad()` after a successful restore. Providers can also be registered without a schematic through `RegisterMemoryProvider(provider)` when they should participate in snapshots but not write their state to disk.
 
 Providers can be removed with `UnregisterProvider(provider)` when you still own the registered instance, or with `UnregisterProvider("player")` when removal by key is intentional. The instance overload only removes the provider if it is the same object that was registered; another provider instance with the same key will not remove it. If a provider is removed, call `ValidateRegistrations()` again before the next disk save or load.
 
@@ -137,7 +137,7 @@ var options = new SaveSystemOptions<string>(
     backupSystemMaxBackupCount: 3);
 
 var manager = new SaveManager<string>(options);
-manager.RegisterProvider<PlayerState>(playerProvider);
+manager.RegisterProvider(playerProvider);
 manager.ValidateRegistrations();
 ```
 
@@ -154,14 +154,14 @@ Providers that need to load older schema versions implement `ISaveMigratable`.
 Each `SaveMigrationStep` migrates from version `x` to version `x + 1`. To migrate from version 1 to version 3, provide a step from 1 to 2 and another from 2 to 3.
 
 ```csharp
-public sealed class PlayerSaveProvider : ISaveProvider, ISaveMigratable
+public sealed class PlayerSaveProvider : ISaveProvider<PlayerStateV2>, ISaveMigratable
 {
     public string SaveKey => "player";
     public int SchemaVersion => 2;
     public int LoadPriority => 0;
 
-    public object CaptureState() => Current;
-    public void RestoreState(object state) => Current = (PlayerStateV2)state;
+    public PlayerStateV2 CaptureState() => Current;
+    public void RestoreState(PlayerStateV2 state) => Current = state;
 
     public PlayerStateV2 Current { get; set; } = new PlayerStateV2();
 
@@ -188,23 +188,23 @@ Downgrades are not supported. A save written with a newer schema version than th
 
 ## Extending The System
 
-Most application code should use `SaveManager<TIdentity>`, `ISaveProvider`, `JsonSaveSerializer`, and plain state DTOs. The interfaces below are extension contracts for projects that need custom persistence formats, migration behavior, or serializer-backed data nodes.
+Most application code should use `SaveManager<TIdentity>`, `ISaveProvider<TState>`, `JsonSaveSerializer`, and plain state DTOs. The interfaces below are extension contracts for projects that need custom persistence formats, migration behavior, or serializer-backed data nodes.
 
 ### Provider Contracts
 
-Implement `ISaveProvider` for each subsystem that owns saveable state.
+Implement `ISaveProvider<TState>` for each subsystem that owns saveable state.
 
 | Member | Contract |
 |---|---|
 | `SaveKey` | Stable provider identity. It must be unique within a manager and should not change after saves exist. |
 | `SchemaVersion` | Stable integer version for the provider state shape. Increase it when older payloads need migration. |
 | `LoadPriority` | Lower values restore first. Use it when one provider must exist before another restores. |
-| `CaptureState()` | Return a serializer-compatible state object. The manager calls lifecycle `OnBeforeSave()` before capture. |
-| `RestoreState(object)` | Accept the object shape produced by the registered schematic. Keep casts explicit and fail loudly on incompatible state. |
+| `CaptureState()` | Return a serializer-compatible state object of type `TState`. The manager calls lifecycle `OnBeforeSave()` before capture. |
+| `RestoreState(TState)` | Accept the object shape produced by the registered schematic. |
 
-Use `RegisterProvider<TState>(provider)` for disk persistence. The generic state type should match the object returned by `CaptureState()` and accepted by `RestoreState(...)`.
+Use `RegisterProvider(provider)` for disk persistence. The provider's `ISaveProvider<TState>` implementation supplies the state type.
 
-Use `RegisterProvider(provider)` only for memory-only providers that should participate in snapshots but not be written to disk.
+Use `RegisterMemoryProvider(provider)` only for memory-only providers that should participate in snapshots but not be written to disk.
 
 Implement `ISaveLifecycle` when a provider needs deterministic setup around save/load:
 

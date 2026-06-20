@@ -59,7 +59,7 @@ public sealed class SerializerMigrationTests
                 new SaveMigrationStep(1, (_, _) => { })
             });
 
-        manager.RegisterProvider<V2State>(provider);
+        manager.RegisterProvider(provider);
 
         var ex = Assert.Throws<InvalidOperationException>(() => manager.ValidateRegistrations());
 
@@ -71,7 +71,7 @@ public sealed class SerializerMigrationTests
     {
         var oldManager = new SaveManager<string>(CreateOptions());
         var oldProvider = new V1Provider(new V1State { Name = "Scout" });
-        oldManager.RegisterProvider<V1State>(oldProvider);
+        oldManager.RegisterProvider(oldProvider);
         oldManager.ValidateRegistrations();
         oldManager.SaveToDisk("slot");
 
@@ -83,7 +83,7 @@ public sealed class SerializerMigrationTests
             {
                 new SaveMigrationStep(1, (data, factory) => data.Set("Level", factory.CreateInt(12)))
             });
-        newManager.RegisterProvider<V2State>(newProvider);
+        newManager.RegisterProvider(newProvider);
         newManager.ValidateRegistrations();
 
         var loaded = newManager.LoadFromDisk("slot");
@@ -97,12 +97,12 @@ public sealed class SerializerMigrationTests
     public void LoadFromDisk_ThrowsWhenMigrationPathIsMissing()
     {
         var oldManager = new SaveManager<string>(CreateOptions());
-        oldManager.RegisterProvider<V1State>(new V1Provider(new V1State { Name = "Scout" }));
+        oldManager.RegisterProvider(new V1Provider(new V1State { Name = "Scout" }));
         oldManager.ValidateRegistrations();
         oldManager.SaveToDisk("slot");
 
         var newManager = new SaveManager<string>(CreateOptions());
-        newManager.RegisterProvider<V2State>(
+        newManager.RegisterProvider(
             new MigratingProvider(
                 schemaVersion: 2,
                 current: new V2State { Name = "Unset", Level = 0 },
@@ -118,7 +118,7 @@ public sealed class SerializerMigrationTests
     public void LoadFromDisk_ThrowsWhenSavedVersionIsNewerThanProviderVersion()
     {
         var newerManager = new SaveManager<string>(CreateOptions());
-        newerManager.RegisterProvider<V2State>(
+        newerManager.RegisterProvider(
             new MigratingProvider(
                 schemaVersion: 2,
                 current: new V2State { Name = "Scout", Level = 12 },
@@ -130,7 +130,7 @@ public sealed class SerializerMigrationTests
         newerManager.SaveToDisk("slot");
 
         var olderManager = new SaveManager<string>(CreateOptions());
-        olderManager.RegisterProvider<V2State>(
+        olderManager.RegisterProvider(
             new MigratingProvider(
                 schemaVersion: 1,
                 current: new V2State { Name = "Unset", Level = 0 },
@@ -150,13 +150,13 @@ public sealed class SerializerMigrationTests
     public void LoadFromDisk_ThrowsWhenMigrationPayloadIsMissingDataEnvelope()
     {
         var oldManager = new SaveManager<string>(CreateOptions());
-        oldManager.RegisterProvider<V1State>(new V1Provider(new V1State { Name = "Scout" }));
+        oldManager.RegisterProvider(new V1Provider(new V1State { Name = "Scout" }));
         oldManager.ValidateRegistrations();
         oldManager.SaveToDisk("slot");
         File.WriteAllText(Path.Combine(_tempRoot, "slot", "player.json"), """{"SchemaVersion":1}""");
 
         var newManager = new SaveManager<string>(CreateOptions());
-        newManager.RegisterProvider<V2State>(
+        newManager.RegisterProvider(
             new MigratingProvider(
                 schemaVersion: 2,
                 current: new V2State { Name = "Unset", Level = 0 },
@@ -175,12 +175,12 @@ public sealed class SerializerMigrationTests
     public void LoadFromDisk_ThrowsWhenMigrationStepFails()
     {
         var oldManager = new SaveManager<string>(CreateOptions());
-        oldManager.RegisterProvider<V1State>(new V1Provider(new V1State { Name = "Scout" }));
+        oldManager.RegisterProvider(new V1Provider(new V1State { Name = "Scout" }));
         oldManager.ValidateRegistrations();
         oldManager.SaveToDisk("slot");
 
         var newManager = new SaveManager<string>(CreateOptions());
-        newManager.RegisterProvider<V2State>(
+        newManager.RegisterProvider(
             new MigratingProvider(
                 schemaVersion: 2,
                 current: new V2State { Name = "Unset", Level = 0 },
@@ -216,7 +216,7 @@ public sealed class SerializerMigrationTests
         public int Level { get; set; }
     }
 
-    private sealed class V1Provider : ISaveProvider
+    private sealed class V1Provider : ISaveProvider<V1State>
     {
         public V1Provider(V1State current)
         {
@@ -228,18 +228,18 @@ public sealed class SerializerMigrationTests
         public int LoadPriority => 0;
         public V1State Current { get; set; }
 
-        public object CaptureState()
+        public V1State CaptureState()
         {
             return Current;
         }
 
-        public void RestoreState(object state)
+        public void RestoreState(V1State state)
         {
-            Current = (V1State)state;
+            Current = state;
         }
     }
 
-    private sealed class MigratingProvider : ISaveProvider, ISaveMigratable
+    private sealed class MigratingProvider : ISaveProvider<V2State>, ISaveMigratable
     {
         private readonly IReadOnlyList<SaveMigrationStep> _migrations;
 
@@ -255,14 +255,14 @@ public sealed class SerializerMigrationTests
         public int LoadPriority => 0;
         public V2State Current { get; set; }
 
-        public object CaptureState()
+        public V2State CaptureState()
         {
             return Current;
         }
 
-        public void RestoreState(object state)
+        public void RestoreState(V2State state)
         {
-            Current = (V2State)state;
+            Current = state;
         }
 
         public ISaveMigrationSource CreateMigrationSource()

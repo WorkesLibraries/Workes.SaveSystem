@@ -17,6 +17,9 @@ namespace Workes.SaveSystem
         {
             public ISaveProvider Provider = null!;
             public ISaveSchematic? Schematic;
+            public Type StateType = null!;
+            public Func<object> CaptureState = null!;
+            public Action<object> RestoreState = null!;
         }
 
         private const string SaveMetadataFileName = "savemetadata.json";
@@ -103,18 +106,18 @@ namespace Workes.SaveSystem
         }
 
         /// <summary>
-        /// Registers a save provider for persistence. The serializer creates a schematic for the given state type.
+        /// Registers a typed save provider for persistence. The serializer creates a schematic for the provider state type.
         /// </summary>
         /// <remarks>
         /// Use this overload for providers that should be written to disk. The provider key and schema version become
         /// part of the persisted save contract, so changing them can affect compatibility with existing saves.
         /// Call <see cref="ValidateRegistrations"/> after registration is complete and before disk save/load operations.
         /// </remarks>
-        /// <typeparam name="TState">The type of state object the provider captures and restores (e.g. <c>PlayerState</c>).</typeparam>
+        /// <typeparam name="TState">The state type the provider captures and restores (e.g. <c>PlayerState</c>).</typeparam>
         /// <param name="provider">The save provider to register. Must have a unique <see cref="ISaveProvider.SaveKey"/>.</param>
         /// <exception cref="ArgumentNullException">Thrown when <paramref name="provider"/> is null.</exception>
         /// <exception cref="InvalidOperationException">Thrown when a provider with the same key is already registered.</exception>
-        public void RegisterProvider<TState>(ISaveProvider provider)
+        public void RegisterProvider<TState>(ISaveProvider<TState> provider)
         {
             ValidateProvider(provider);
 
@@ -129,22 +132,25 @@ namespace Workes.SaveSystem
             _providers.Add(provider.SaveKey, new ProviderEntry
             {
                 Provider = provider,
-                Schematic = schematic
+                Schematic = schematic,
+                StateType = typeof(TState),
+                CaptureState = () => provider.CaptureState()!,
+                RestoreState = state => provider.RestoreState((TState)state)
             });
             _registrationsValidated = false;
         }
 
         /// <summary>
-        /// Registers a save provider without persistence. The provider will participate in snapshots
+        /// Registers a typed save provider without persistence. The provider will participate in snapshots
         /// but will not be written to or read from disk (memory-only storage, e.g. for caching).
         /// </summary>
         /// <remarks>
-        /// Use this overload only when the provider state is intentionally memory-only. The provider is included in
+        /// Use this method only when the provider state is intentionally memory-only. The provider is included in
         /// <see cref="CaptureSnapshot"/> and <see cref="RestoreSnapshot"/>, but no provider file is written to disk.
         /// Call <see cref="ValidateRegistrations"/> after registration is complete and before disk save/load operations.
         /// </remarks>
         /// <param name="provider">The save provider to register.</param>
-        public void RegisterProvider(ISaveProvider provider)
+        public void RegisterMemoryProvider<TState>(ISaveProvider<TState> provider)
         {
             ValidateProvider(provider);
 
@@ -156,7 +162,10 @@ namespace Workes.SaveSystem
             _providers.Add(provider.SaveKey, new ProviderEntry
             {
                 Provider = provider,
-                Schematic = null
+                Schematic = null,
+                StateType = typeof(TState),
+                CaptureState = () => provider.CaptureState()!,
+                RestoreState = state => provider.RestoreState((TState)state)
             });
             _registrationsValidated = false;
         }
@@ -259,7 +268,7 @@ namespace Workes.SaveSystem
             object state;
             try
             {
-                state = providerEntry.Provider.CaptureState();
+                state = providerEntry.CaptureState();
             }
             catch (Exception ex)
             {
@@ -321,7 +330,7 @@ namespace Workes.SaveSystem
                 snapshot.Add(
                     provider.Provider.SaveKey,
                     provider.Provider.SchemaVersion,
-                    provider.Provider.CaptureState(),
+                    provider.CaptureState(),
                     provider.Provider.LoadPriority
                 );
             }
@@ -339,7 +348,7 @@ namespace Workes.SaveSystem
         /// <exception cref="InvalidOperationException">Thrown when the snapshot is invalid for the current registrations.</exception>
         /// <remarks>
         /// This method validates the snapshot before mutating providers. If validation passes but a provider throws
-        /// from <see cref="ISaveProvider.RestoreState"/>, earlier providers may already have been restored.
+        /// from its restore method, earlier providers may already have been restored.
         /// </remarks>
         public void RestoreSnapshot(SaveSnapshot snapshot)
         {
@@ -351,7 +360,7 @@ namespace Workes.SaveSystem
                 if (!_providers.TryGetValue(entry.SaveKey, out var provider))
                     continue;
 
-                provider.Provider.RestoreState(entry.State);
+                provider.RestoreState(entry.State);
             }
 
             foreach (var provider in _providers.Values)
@@ -404,6 +413,12 @@ namespace Workes.SaveSystem
 
         private void ValidateSnapshotEntryState(SaveSnapshot.Entry entry, ProviderEntry providerEntry)
         {
+            if (!providerEntry.StateType.IsInstanceOfType(entry.State))
+            {
+                throw new InvalidOperationException(
+                    $"Snapshot entry for provider '{entry.SaveKey}' contains state incompatible with the registered provider state type.");
+            }
+
             var schematic = providerEntry.Schematic;
             if (schematic == null)
                 return;

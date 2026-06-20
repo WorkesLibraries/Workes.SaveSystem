@@ -27,7 +27,7 @@ public sealed class BackupAndRecoveryTests
     {
         var manager = CreateManager(enableBackupSystem: true, backupSystemMaxBackupCount: 2);
         var provider = new TestProvider(new TestState { Value = 1 });
-        manager.RegisterProvider<TestState>(provider);
+        manager.RegisterProvider(provider);
 
         SaveValue(manager, provider, "slot", 1);
         SaveValue(manager, provider, "slot", 2);
@@ -45,7 +45,7 @@ public sealed class BackupAndRecoveryTests
     {
         var manager = CreateManager(enableBackupSystem: true, backupSystemMaxBackupCount: 2);
         var provider = new TestProvider(new TestState { Value = 0 });
-        manager.RegisterProvider<TestState>(provider);
+        manager.RegisterProvider(provider);
         SaveValue(manager, provider, "slot", 1);
         SaveValue(manager, provider, "slot", 2);
         SaveValue(manager, provider, "slot", 3);
@@ -62,7 +62,7 @@ public sealed class BackupAndRecoveryTests
     {
         var manager = CreateManager();
         var provider = new TestProvider(new TestState { Value = 1 });
-        manager.RegisterProvider<TestState>(provider);
+        manager.RegisterProvider(provider);
         manager.ValidateRegistrations();
 
         var loaded = manager.LoadBackupSlotFromDisk("slot", slotNumber: 1);
@@ -75,7 +75,7 @@ public sealed class BackupAndRecoveryTests
     {
         var manager = CreateManager(enableBackupSystem: true, backupSystemMaxBackupCount: 3);
         var provider = new TestProvider(new TestState { Value = 0 });
-        manager.RegisterProvider<TestState>(provider);
+        manager.RegisterProvider(provider);
         SaveValue(manager, provider, "slot", 1);
         SaveValue(manager, provider, "slot", 2);
         SaveValue(manager, provider, "slot", 3);
@@ -95,7 +95,7 @@ public sealed class BackupAndRecoveryTests
     {
         var manager = CreateManager(enableBackupSystem: true, backupSystemMaxBackupCount: 2);
         var provider = new TestProvider(new TestState { Value = 0 });
-        manager.RegisterProvider<TestState>(provider);
+        manager.RegisterProvider(provider);
         SaveValue(manager, provider, "slot", 1);
         SaveValue(manager, provider, "slot", 2);
         SaveValue(manager, provider, "slot", 3);
@@ -117,7 +117,7 @@ public sealed class BackupAndRecoveryTests
     {
         var manager = CreateManager(enableBackupSystem: true, backupSystemMaxBackupCount: 2);
         var provider = new TestProvider(new TestState { Value = 0 });
-        manager.RegisterProvider<TestState>(provider);
+        manager.RegisterProvider(provider);
         SaveValue(manager, provider, "slot", 1);
         SaveValue(manager, provider, "slot", 2);
         Directory.CreateDirectory(Path.Combine(_tempRoot, "_backup", "slot_extra"));
@@ -140,7 +140,7 @@ public sealed class BackupAndRecoveryTests
     {
         var manager = CreateManager();
         var provider = new TestProvider(new TestState { Value = 1 });
-        manager.RegisterProvider<TestState>(provider);
+        manager.RegisterProvider(provider);
         SaveValue(manager, provider, "slot", 1);
         SaveValue(manager, provider, "other", 7);
 
@@ -164,7 +164,7 @@ public sealed class BackupAndRecoveryTests
     {
         var manager = CreateManager();
         var provider = new TestProvider(new TestState { Value = 1 });
-        manager.RegisterProvider<TestState>(provider);
+        manager.RegisterProvider(provider);
         SaveValue(manager, provider, "slot", 1);
 
         var slotPath = Path.Combine(_tempRoot, "slot");
@@ -184,7 +184,7 @@ public sealed class BackupAndRecoveryTests
     {
         var manager = CreateManager();
         var provider = new TestProvider(new TestState { Value = 1 });
-        manager.RegisterProvider<TestState>(provider);
+        manager.RegisterProvider(provider);
         SaveValue(manager, provider, "slot", 1);
 
         var slotPath = Path.Combine(_tempRoot, "slot");
@@ -206,7 +206,7 @@ public sealed class BackupAndRecoveryTests
     {
         var manager = CreateManager();
         var provider = new TestProvider(new TestState { Value = 1 });
-        manager.RegisterProvider<TestState>(provider);
+        manager.RegisterProvider(provider);
         SaveValue(manager, provider, "slot", 1);
         SaveValue(manager, provider, "old", 9);
 
@@ -225,7 +225,7 @@ public sealed class BackupAndRecoveryTests
     {
         var manager = CreateManager();
         var provider = new TestProvider(new TestState { Value = 1 });
-        manager.RegisterProvider<TestState>(provider);
+        manager.RegisterProvider(provider);
         SaveValue(manager, provider, "slot", 1);
         SaveValue(manager, provider, "other", 2);
 
@@ -315,7 +315,7 @@ public sealed class BackupAndRecoveryTests
         public int Value { get; set; }
     }
 
-    private sealed class TestProvider : ISaveProvider
+    private sealed class TestProvider : ISaveProvider<TestState>
     {
         public TestProvider(TestState current)
         {
@@ -327,14 +327,14 @@ public sealed class BackupAndRecoveryTests
         public int LoadPriority => 0;
         public TestState Current { get; set; }
 
-        public object CaptureState()
+        public TestState CaptureState()
         {
             return Current;
         }
 
-        public void RestoreState(object state)
+        public void RestoreState(TestState state)
         {
-            Current = (TestState)state;
+            Current = state;
         }
     }
 }

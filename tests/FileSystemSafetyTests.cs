@@ -26,7 +26,7 @@ public sealed class FileSystemSafetyTests
     public void SaveToDisk_RejectsInvalidResolvedSaveNames()
     {
         var manager = CreateManager(identity => identity);
-        manager.RegisterProvider<TestState>(new TestProvider("player", new TestState { Value = 1 }));
+        manager.RegisterProvider(new TestProvider("player", new TestState { Value = 1 }));
         manager.ValidateRegistrations();
 
         var ex = Assert.Throws<InvalidOperationException>(() => manager.SaveToDisk("bad/name"));
@@ -38,7 +38,7 @@ public sealed class FileSystemSafetyTests
     public void SaveToDisk_RejectsInvalidResolvedFileNames()
     {
         var manager = CreateManager(fileNameResolver: _ => "bad/name");
-        manager.RegisterProvider<TestState>(new TestProvider("player", new TestState { Value = 1 }));
+        manager.RegisterProvider(new TestProvider("player", new TestState { Value = 1 }));
 
         var ex = Assert.Throws<InvalidOperationException>(() => manager.ValidateRegistrations());
 
@@ -58,12 +58,12 @@ public sealed class FileSystemSafetyTests
     {
         var alphaManager = CreateManager(enableBackupSystem: true, backupSystemMaxBackupCount: 3);
         var alphaProvider = new TestProvider("player", new TestState { Value = 1 });
-        alphaManager.RegisterProvider<TestState>(alphaProvider);
+        alphaManager.RegisterProvider(alphaProvider);
         alphaManager.ValidateRegistrations();
 
         var alpha2Manager = CreateManager(enableBackupSystem: true, backupSystemMaxBackupCount: 3);
         var alpha2Provider = new TestProvider("player", new TestState { Value = 10 });
-        alpha2Manager.RegisterProvider<TestState>(alpha2Provider);
+        alpha2Manager.RegisterProvider(alpha2Provider);
         alpha2Manager.ValidateRegistrations();
 
         alphaManager.SaveToDisk("alpha");
@@ -119,7 +119,7 @@ public sealed class FileSystemSafetyTests
         public int Value { get; set; }
     }
 
-    private sealed class TestProvider : ISaveProvider
+    private sealed class TestProvider : ISaveProvider<TestState>
     {
         public TestProvider(string saveKey, TestState current)
         {
@@ -132,14 +132,14 @@ public sealed class FileSystemSafetyTests
         public int LoadPriority => 0;
         public TestState Current { get; set; }
 
-        public object CaptureState()
+        public TestState CaptureState()
         {
             return Current;
         }
 
-        public void RestoreState(object state)
+        public void RestoreState(TestState state)
         {
-            Current = (TestState)state;
+            Current = state;
         }
     }
 }

@@ -84,7 +84,7 @@ public sealed class ProviderLifecycleTests
         var log = new List<string>();
         var manager = new SaveManager<string>(CreateOptions());
         var provider = new LifecycleProvider("player", loadPriority: 0, value: 1, log);
-        manager.RegisterProvider<TestState>(provider);
+        manager.RegisterProvider(provider);
         var snapshot = new SaveSnapshot();
         snapshot.Add("player", schemaVersion: 1, state: new TestState { Value = 10 });
         snapshot.Add("player", schemaVersion: 1, state: new TestState { Value = 20 });
@@ -136,9 +136,26 @@ public sealed class ProviderLifecycleTests
         var log = new List<string>();
         var manager = new SaveManager<string>(CreateOptions());
         var provider = new LifecycleProvider("player", loadPriority: 0, value: 1, log);
-        manager.RegisterProvider<TestState>(provider);
+        manager.RegisterProvider(provider);
         var snapshot = new SaveSnapshot();
         snapshot.Add("player", schemaVersion: 1, state: "not test state");
+
+        var ex = Assert.Throws<InvalidOperationException>(() => manager.RestoreSnapshot(snapshot));
+
+        Assert.That(ex!.Message, Does.Contain("incompatible"));
+        Assert.That(provider.Current.Value, Is.EqualTo(1));
+        Assert.That(log, Is.Empty);
+    }
+
+    [Test]
+    public void RestoreSnapshot_RejectsIncompatibleMemoryOnlyStateBeforeMutatingProviders()
+    {
+        var log = new List<string>();
+        var manager = new SaveManager<string>(CreateOptions());
+        var provider = new LifecycleProvider("cache", loadPriority: 0, value: 1, log);
+        manager.RegisterMemoryProvider(provider);
+        var snapshot = new SaveSnapshot();
+        snapshot.Add("cache", schemaVersion: 1, state: "not test state");
 
         var ex = Assert.Throws<InvalidOperationException>(() => manager.RestoreSnapshot(snapshot));
 
@@ -162,7 +179,7 @@ public sealed class ProviderLifecycleTests
     {
         var log = new List<string>();
         var manager = new SaveManager<string>(CreateOptions());
-        manager.RegisterProvider<TestState>(new LifecycleProvider("player", loadPriority: 0, value: 1, log));
+        manager.RegisterProvider(new LifecycleProvider("player", loadPriority: 0, value: 1, log));
         manager.ValidateRegistrations();
         log.Clear();
 
@@ -239,7 +256,7 @@ public sealed class ProviderLifecycleTests
         var log = new List<string>();
         var manager = new SaveManager<string>(CreateOptions());
         var provider = new LifecycleProvider("player", loadPriority: 0, value: 1, log);
-        manager.RegisterProvider<TestState>(provider);
+        manager.RegisterProvider(provider);
         manager.ValidateRegistrations();
 
         manager.UnregisterProvider(provider);
@@ -254,7 +271,7 @@ public sealed class ProviderLifecycleTests
         var manager = new SaveManager<string>(CreateOptions());
         var provider = new LifecycleProvider(string.Empty, loadPriority: 0, value: 1, new List<string>());
 
-        var ex = Assert.Throws<ArgumentException>(() => manager.RegisterProvider<TestState>(provider));
+        var ex = Assert.Throws<ArgumentException>(() => manager.RegisterProvider(provider));
 
         Assert.That(ex!.ParamName, Is.EqualTo("provider"));
         Assert.That(ex.Message, Does.Contain("SaveKey"));
@@ -275,7 +292,7 @@ public sealed class ProviderLifecycleTests
         public int Value { get; set; }
     }
 
-    private sealed class LifecycleProvider : ISaveProvider, ISaveLifecycle
+    private sealed class LifecycleProvider : ISaveProvider<TestState>, ISaveLifecycle
     {
         private readonly List<string> _log;
 
@@ -292,15 +309,15 @@ public sealed class ProviderLifecycleTests
         public int LoadPriority { get; }
         public TestState Current { get; private set; }
 
-        public object CaptureState()
+        public TestState CaptureState()
         {
             _log.Add($"{SaveKey}:capture");
             return Current;
         }
 
-        public void RestoreState(object state)
+        public void RestoreState(TestState state)
         {
-            Current = (TestState)state;
+            Current = state;
             _log.Add($"{SaveKey}:restore:{Current.Value}");
         }
 

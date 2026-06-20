@@ -45,9 +45,9 @@ public sealed class SaveSystemSmokeTests
         var first = new TestProvider("player", new TestState { Name = "A", Level = 1 });
         var second = new TestProvider("player", new TestState { Name = "B", Level = 2 });
 
-        manager.RegisterProvider<TestState>(first);
+        manager.RegisterProvider(first);
 
-        var ex = Assert.Throws<InvalidOperationException>(() => manager.RegisterProvider<TestState>(second));
+        var ex = Assert.Throws<InvalidOperationException>(() => manager.RegisterProvider(second));
         Assert.That(ex!.Message, Does.Contain("already registered"));
     }
 
@@ -56,7 +56,7 @@ public sealed class SaveSystemSmokeTests
     {
         var manager = new SaveManager<string>(CreateOptions(new JsonSaveSerializer()));
         var provider = new TestProvider("player", new TestState { Name = "BeforeSave", Level = 7 });
-        manager.RegisterProvider<TestState>(provider);
+        manager.RegisterProvider(provider);
         manager.ValidateRegistrations();
 
         manager.SaveToDisk("slot-a");
@@ -74,7 +74,7 @@ public sealed class SaveSystemSmokeTests
     {
         var manager = new SaveManager<string>(CreateOptions(new JsonSaveSerializer()));
         var provider = new TestProvider("cache", new TestState { Name = "Memory", Level = 3 });
-        manager.RegisterProvider(provider);
+        manager.RegisterMemoryProvider(provider);
         manager.ValidateRegistrations();
 
         var snapshot = manager.CaptureSnapshot();
@@ -105,7 +105,7 @@ public sealed class SaveSystemSmokeTests
         public int Level { get; set; }
     }
 
-    private sealed class TestProvider : ISaveProvider
+    private sealed class TestProvider : ISaveProvider<TestState>
     {
         public TestProvider(string saveKey, TestState current)
         {
@@ -118,14 +118,14 @@ public sealed class SaveSystemSmokeTests
         public int LoadPriority => 0;
         public TestState Current { get; set; }
 
-        public object CaptureState()
+        public TestState CaptureState()
         {
             return Current;
         }
 
-        public void RestoreState(object state)
+        public void RestoreState(TestState state)
         {
-            Current = (TestState)state;
+            Current = state;
         }
     }
 }
