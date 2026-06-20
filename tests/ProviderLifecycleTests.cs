@@ -28,7 +28,7 @@ public sealed class ProviderLifecycleTests
     public void CaptureSnapshot_CapturesProvidersInLoadPriorityOrder()
     {
         var log = new List<string>();
-        var manager = new SaveManager<StringSaveIdentity>(CreateOptions());
+        var manager = new SaveManager<string>(CreateOptions());
         var late = new LifecycleProvider("late", loadPriority: 20, value: 2, log);
         var early = new LifecycleProvider("early", loadPriority: -10, value: 1, log);
         manager.RegisterProvider(late);
@@ -50,7 +50,7 @@ public sealed class ProviderLifecycleTests
     public void RestoreSnapshot_RestoresEntriesInSnapshotPriorityOrderThenRunsAfterLoadCallbacks()
     {
         var log = new List<string>();
-        var manager = new SaveManager<StringSaveIdentity>(CreateOptions());
+        var manager = new SaveManager<string>(CreateOptions());
         var late = new LifecycleProvider("late", loadPriority: 20, value: 0, log);
         var early = new LifecycleProvider("early", loadPriority: -10, value: 0, log);
         manager.RegisterProvider(late);
@@ -72,11 +72,11 @@ public sealed class ProviderLifecycleTests
     public void LoadFromDisk_ReturnsFalseWithoutAfterLoadCallbacksWhenSaveDoesNotExist()
     {
         var log = new List<string>();
-        var manager = new SaveManager<StringSaveIdentity>(CreateOptions());
+        var manager = new SaveManager<string>(CreateOptions());
         manager.RegisterProvider<TestState>(new LifecycleProvider("player", loadPriority: 0, value: 1, log));
         log.Clear();
 
-        var loaded = manager.LoadFromDisk(new StringSaveIdentity("missing"));
+        var loaded = manager.LoadFromDisk("missing");
 
         Assert.That(loaded, Is.False);
         Assert.That(log, Is.Empty);
@@ -86,7 +86,7 @@ public sealed class ProviderLifecycleTests
     public void UnregisterProvider_RemovesProviderFromFutureSnapshots()
     {
         var log = new List<string>();
-        var manager = new SaveManager<StringSaveIdentity>(CreateOptions());
+        var manager = new SaveManager<string>(CreateOptions());
         var provider = new LifecycleProvider("player", loadPriority: 0, value: 1, log);
         manager.RegisterProvider(provider);
         manager.UnregisterProvider(provider);
@@ -100,7 +100,7 @@ public sealed class ProviderLifecycleTests
     [Test]
     public void RegisterProvider_RejectsEmptySaveKeys()
     {
-        var manager = new SaveManager<StringSaveIdentity>(CreateOptions());
+        var manager = new SaveManager<string>(CreateOptions());
         var provider = new LifecycleProvider(string.Empty, loadPriority: 0, value: 1, new List<string>());
 
         var ex = Assert.Throws<ArgumentException>(() => manager.RegisterProvider<TestState>(provider));
@@ -109,14 +109,14 @@ public sealed class ProviderLifecycleTests
         Assert.That(ex.Message, Does.Contain("SaveKey"));
     }
 
-    private SaveSystemOptions<StringSaveIdentity> CreateOptions()
+    private SaveSystemOptions<string> CreateOptions()
     {
-        return new SaveSystemOptions<StringSaveIdentity>(
+        return new SaveSystemOptions<string>(
             saveRootPath: _tempRoot,
             serializer: new JsonSaveSerializer(),
-            tempFolderName: SaveSystemOptions<StringSaveIdentity>.DefaultTempFolderName(),
-            saveNameResolver: identity => identity.SaveName,
-            fileNameResolver: SaveSystemOptions<StringSaveIdentity>.DefaultFileNameResolver);
+            tempFolderName: SaveSystemOptions<string>.DefaultTempFolderName(),
+            saveNameResolver: identity => identity,
+            fileNameResolver: SaveSystemOptions<string>.DefaultFileNameResolver);
     }
 
     public sealed class TestState

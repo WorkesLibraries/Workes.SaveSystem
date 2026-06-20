@@ -26,17 +26,17 @@ public sealed class ReadmeExampleTests
     public void QuickStart_SaveAndLoadSlot_RestoresProviderState()
     {
         var serializer = new JsonSaveSerializer();
-        var manager = SaveManager<StringSaveIdentity>.CreateDefault(
+        var manager = SaveManager<string>.CreateDefault(
             serializer,
             saveRootPath: _tempRoot);
 
         var playerProvider = new PlayerSaveProvider();
         manager.RegisterProvider<PlayerState>(playerProvider);
 
-        manager.SaveToDisk(new StringSaveIdentity("slot-1"));
+        manager.SaveToDisk("slot-1");
 
         playerProvider.Current = new PlayerState();
-        var loaded = manager.LoadFromDisk(new StringSaveIdentity("slot-1"));
+        var loaded = manager.LoadFromDisk("slot-1");
 
         Assert.That(loaded, Is.True);
         Assert.That(playerProvider.Current.Name, Is.EqualTo("Rook"));
@@ -47,24 +47,24 @@ public sealed class ReadmeExampleTests
     [Test]
     public void BackupExample_LoadsMostRecentPreviousSave()
     {
-        var options = new SaveSystemOptions<StringSaveIdentity>(
+        var options = new SaveSystemOptions<string>(
             saveRootPath: _tempRoot,
             serializer: new JsonSaveSerializer(),
-            tempFolderName: SaveSystemOptions<StringSaveIdentity>.DefaultTempFolderName(),
-            saveNameResolver: identity => identity.SaveName,
-            fileNameResolver: SaveSystemOptions<StringSaveIdentity>.DefaultFileNameResolver,
+            tempFolderName: SaveSystemOptions<string>.DefaultTempFolderName(),
+            saveNameResolver: identity => identity,
+            fileNameResolver: SaveSystemOptions<string>.DefaultFileNameResolver,
             enableBackupSystem: true,
             backupSystemMaxBackupCount: 3);
 
-        var manager = new SaveManager<StringSaveIdentity>(options);
+        var manager = new SaveManager<string>(options);
         var playerProvider = new PlayerSaveProvider();
         manager.RegisterProvider<PlayerState>(playerProvider);
-        manager.SaveToDisk(new StringSaveIdentity("slot-1"));
+        manager.SaveToDisk("slot-1");
         playerProvider.Current = new PlayerState { Name = "Later", Level = 8 };
-        manager.SaveToDisk(new StringSaveIdentity("slot-1"));
+        manager.SaveToDisk("slot-1");
         playerProvider.Current = new PlayerState { Name = "Changed", Level = 1 };
 
-        var loaded = manager.LoadBackupSlotFromDisk(new StringSaveIdentity("slot-1"), slotNumber: 1);
+        var loaded = manager.LoadBackupSlotFromDisk("slot-1", slotNumber: 1);
 
         Assert.That(loaded, Is.True);
         Assert.That(playerProvider.Current.Name, Is.EqualTo("Rook"));

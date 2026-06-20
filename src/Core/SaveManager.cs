@@ -10,8 +10,8 @@ namespace Workes.SaveSystem
     /// Manages saving and loading game state to/from disk. Provides a centralized system for
     /// registering save providers, capturing snapshots, and persisting data with optional backup support.
     /// </summary>
-    /// <typeparam name="TIdentity">The type used to identify saves. Must implement <see cref="ISaveIdentity"/>.</typeparam>
-    public sealed class SaveManager<TIdentity> where TIdentity : ISaveIdentity
+    /// <typeparam name="TIdentity">The type used to identify saves.</typeparam>
+    public sealed class SaveManager<TIdentity>
     {
         private sealed class ProviderEntry
         {
@@ -66,14 +66,14 @@ namespace Workes.SaveSystem
         }
 
         /// <summary>
-        /// Creates a default save manager instance using <see cref="StringSaveIdentity"/> for save identification.
+        /// Creates a default save manager instance using <see cref="string"/> for save identification.
         /// Uses the current user application data folder as the save root directory. This is intended as a
         /// convenience default for plain .NET applications; Unity, Godot, and other host engines should prefer
         /// <see cref="CreateDefault(ISaveSerializer, string)"/> and pass an engine-owned persistent data path.
         /// </summary>
         /// <param name="serializer">The serializer to use for saving and loading data.</param>
-        /// <returns>A new <see cref="SaveManager{StringSaveIdentity}"/> instance with default configuration.</returns>
-        public static SaveManager<StringSaveIdentity> CreateDefault(ISaveSerializer serializer)
+        /// <returns>A new <see cref="SaveManager{TIdentity}"/> instance with string save names and default configuration.</returns>
+        public static SaveManager<string> CreateDefault(ISaveSerializer serializer)
         {
             return CreateDefault(
                 serializer,
@@ -82,21 +82,21 @@ namespace Workes.SaveSystem
         }
 
         /// <summary>
-        /// Creates a default save manager instance using <see cref="StringSaveIdentity"/> for save identification
+        /// Creates a default save manager instance using <see cref="string"/> for save identification
         /// and an explicit save root directory supplied by the host application or engine.
         /// </summary>
         /// <param name="serializer">The serializer to use for saving and loading data.</param>
         /// <param name="saveRootPath">The root directory path where all saves are stored.</param>
-        /// <returns>A new <see cref="SaveManager{StringSaveIdentity}"/> instance with default configuration.</returns>
-        public static SaveManager<StringSaveIdentity> CreateDefault(ISaveSerializer serializer, string saveRootPath)
+        /// <returns>A new <see cref="SaveManager{TIdentity}"/> instance with string save names and default configuration.</returns>
+        public static SaveManager<string> CreateDefault(ISaveSerializer serializer, string saveRootPath)
         {
-            return new SaveManager<StringSaveIdentity>(
-                new SaveSystemOptions<StringSaveIdentity>(
+            return new SaveManager<string>(
+                new SaveSystemOptions<string>(
                     saveRootPath: saveRootPath,
                     serializer: serializer,
-                    tempFolderName: SaveSystemOptions<StringSaveIdentity>.DefaultTempFolderName(),
-                    saveNameResolver: id => id.SaveName,
-                    fileNameResolver: SaveSystemOptions<StringSaveIdentity>.DefaultFileNameResolver
+                    tempFolderName: SaveSystemOptions<string>.DefaultTempFolderName(),
+                    saveNameResolver: id => id,
+                    fileNameResolver: SaveSystemOptions<string>.DefaultFileNameResolver
                 )
             );
         }
@@ -344,8 +344,7 @@ namespace Workes.SaveSystem
         /// <exception cref="InvalidOperationException">Thrown when validation fails (invalid save name, missing files, deserialization errors, etc.).</exception>
         public void SaveToDisk(TIdentity identity)
         {
-            var saveName = _options.SaveNameResolver(identity);
-            ValidateSaveName(saveName);
+            var saveName = ResolveSaveName(identity);
             var folderPath = GetMainFolderPath(saveName);
             var tempPath = GetTempFolderPath(saveName, _options.TempFolderName);
             var metaPath = GetMetadataFilePath(tempPath);
@@ -437,6 +436,8 @@ namespace Workes.SaveSystem
         /// </remarks>
         public bool LoadBackupSlotFromDisk(TIdentity identity, int slotNumber)
         {
+            var saveName = ResolveSaveName(identity);
+
             if (!_options.EnableBackupSystem)
             {
                 SaveSystemDiagnostics.LogWarning(
@@ -450,9 +451,6 @@ namespace Workes.SaveSystem
                     $"Backup slot number must be between 1 and {_options.BackupSystemMaxBackupCount}, but got {slotNumber}.",
                     nameof(slotNumber)
                 );
-
-            var saveName = _options.SaveNameResolver(identity);
-            ValidateSaveName(saveName);
 
             var backupSuffix = $"_{slotNumber:D4}";
             var backupFolderPath = _backupManager.GetBackupFolderPath(saveName, backupSuffix);
@@ -475,8 +473,8 @@ namespace Workes.SaveSystem
         /// <exception cref="InvalidOperationException">Thrown when recovery fails due to data corruption or tampering.</exception>
         public void RecoverSave(TIdentity identity)
         {
-            var folderPath = GetSaveFolderPath(identity);
-            var saveName = _options.SaveNameResolver(identity);
+            var saveName = ResolveSaveName(identity);
+            var folderPath = GetMainFolderPath(saveName);
             var tempPath = GetTempFolderPath(saveName, _options.TempFolderName);
             var toDeletePath = GetToDeleteFolderPath(saveName);
 
@@ -549,13 +547,18 @@ namespace Workes.SaveSystem
 
         private string GetSaveFolderPath(TIdentity identity)
         {
-            if (identity == null)
+            return GetMainFolderPath(ResolveSaveName(identity));
+        }
+
+        private string ResolveSaveName(TIdentity identity)
+        {
+            if (identity is null)
                 throw new ArgumentNullException(nameof(identity));
 
             var saveName = _options.SaveNameResolver(identity);
             ValidateSaveName(saveName);
 
-            return GetMainFolderPath(saveName);
+            return saveName;
         }
 
         private void PerformAtomicSwap(string folderPath)

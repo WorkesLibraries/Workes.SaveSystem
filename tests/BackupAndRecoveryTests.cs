@@ -51,7 +51,7 @@ public sealed class BackupAndRecoveryTests
         SaveValue(manager, provider, "slot", 3);
         provider.Current = new TestState { Value = 99 };
 
-        var loaded = manager.LoadBackupSlotFromDisk(new StringSaveIdentity("slot"), slotNumber: 1);
+        var loaded = manager.LoadBackupSlotFromDisk("slot", slotNumber: 1);
 
         Assert.That(loaded, Is.True);
         Assert.That(provider.Current.Value, Is.EqualTo(2));
@@ -64,7 +64,7 @@ public sealed class BackupAndRecoveryTests
         var provider = new TestProvider(new TestState { Value = 1 });
         manager.RegisterProvider<TestState>(provider);
 
-        var loaded = manager.LoadBackupSlotFromDisk(new StringSaveIdentity("slot"), slotNumber: 1);
+        var loaded = manager.LoadBackupSlotFromDisk("slot", slotNumber: 1);
 
         Assert.That(loaded, Is.False);
     }
@@ -149,7 +149,7 @@ public sealed class BackupAndRecoveryTests
         Directory.Move(slotPath, tempPath);
         Directory.Move(Path.Combine(_tempRoot, "other"), toDeletePath);
 
-        var loaded = manager.LoadFromDisk(new StringSaveIdentity("slot"));
+        var loaded = manager.LoadFromDisk("slot");
 
         Assert.That(loaded, Is.True);
         Assert.That(provider.Current.Value, Is.EqualTo(1));
@@ -170,7 +170,7 @@ public sealed class BackupAndRecoveryTests
         var tempPath = Path.Combine(_tempRoot, "slot_tmp");
         Directory.Move(slotPath, tempPath);
 
-        var loaded = manager.LoadFromDisk(new StringSaveIdentity("slot"));
+        var loaded = manager.LoadFromDisk("slot");
 
         Assert.That(loaded, Is.True);
         Assert.That(provider.Current.Value, Is.EqualTo(1));
@@ -191,7 +191,7 @@ public sealed class BackupAndRecoveryTests
         CopyDirectory(slotPath, tempPath);
         WriteValueToFolder(tempPath, 2);
 
-        var loaded = manager.LoadFromDisk(new StringSaveIdentity("slot"));
+        var loaded = manager.LoadFromDisk("slot");
 
         Assert.That(loaded, Is.True);
         Assert.That(provider.Current.Value, Is.EqualTo(2));
@@ -212,7 +212,7 @@ public sealed class BackupAndRecoveryTests
         var toDeletePath = Path.Combine(_tempRoot, "slot_toDelete");
         Directory.Move(Path.Combine(_tempRoot, "old"), toDeletePath);
 
-        var loaded = manager.LoadFromDisk(new StringSaveIdentity("slot"));
+        var loaded = manager.LoadFromDisk("slot");
 
         Assert.That(loaded, Is.True);
         Assert.That(provider.Current.Value, Is.EqualTo(1));
@@ -230,34 +230,34 @@ public sealed class BackupAndRecoveryTests
 
         Directory.Move(Path.Combine(_tempRoot, "other"), Path.Combine(_tempRoot, "slot_tmp"));
 
-        var ex = Assert.Throws<InvalidOperationException>(() => manager.RecoverSave(new StringSaveIdentity("slot")));
+        var ex = Assert.Throws<InvalidOperationException>(() => manager.RecoverSave("slot"));
 
         Assert.That(ex!.Message, Does.Contain("SaveId mismatch"));
     }
 
-    private SaveManager<StringSaveIdentity> CreateManager(
+    private SaveManager<string> CreateManager(
         bool enableBackupSystem = false,
         int backupSystemMaxBackupCount = 0)
     {
-        return new SaveManager<StringSaveIdentity>(
-            new SaveSystemOptions<StringSaveIdentity>(
+        return new SaveManager<string>(
+            new SaveSystemOptions<string>(
                 saveRootPath: _tempRoot,
                 serializer: new JsonSaveSerializer(),
-                tempFolderName: SaveSystemOptions<StringSaveIdentity>.DefaultTempFolderName(),
-                saveNameResolver: identity => identity.SaveName,
-                fileNameResolver: SaveSystemOptions<StringSaveIdentity>.DefaultFileNameResolver,
+                tempFolderName: SaveSystemOptions<string>.DefaultTempFolderName(),
+                saveNameResolver: identity => identity,
+                fileNameResolver: SaveSystemOptions<string>.DefaultFileNameResolver,
                 enableBackupSystem: enableBackupSystem,
                 backupSystemMaxBackupCount: backupSystemMaxBackupCount));
     }
 
     private static void SaveValue(
-        SaveManager<StringSaveIdentity> manager,
+        SaveManager<string> manager,
         TestProvider provider,
         string slot,
         int value)
     {
         provider.Current = new TestState { Value = value };
-        manager.SaveToDisk(new StringSaveIdentity(slot));
+        manager.SaveToDisk(slot);
     }
 
     private static int ReadValueFromFolder(string folderPath)

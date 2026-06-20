@@ -32,11 +32,11 @@ public sealed class SaveAtomicityTests
         provider.Current = new TestState { Value = 2 };
         provider.ThrowOnCapture = true;
 
-        var ex = Assert.Throws<InvalidOperationException>(() => manager.SaveToDisk(new StringSaveIdentity("slot")));
+        var ex = Assert.Throws<InvalidOperationException>(() => manager.SaveToDisk("slot"));
 
         provider.ThrowOnCapture = false;
         provider.Current = new TestState { Value = 99 };
-        var loaded = manager.LoadFromDisk(new StringSaveIdentity("slot"));
+        var loaded = manager.LoadFromDisk("slot");
 
         Assert.That(ex!.Message, Does.Contain("capture failed"));
         Assert.That(loaded, Is.True);
@@ -57,12 +57,12 @@ public sealed class SaveAtomicityTests
         badManager.RegisterProvider<TestState>(provider);
         provider.Current = new TestState { Value = 2 };
 
-        var ex = Assert.Throws<InvalidOperationException>(() => badManager.SaveToDisk(new StringSaveIdentity("slot")));
+        var ex = Assert.Throws<InvalidOperationException>(() => badManager.SaveToDisk("slot"));
 
         var loadManager = CreateManager();
         loadManager.RegisterProvider<TestState>(provider);
         provider.Current = new TestState { Value = 99 };
-        var loaded = loadManager.LoadFromDisk(new StringSaveIdentity("slot"));
+        var loaded = loadManager.LoadFromDisk("slot");
 
         Assert.That(ex!.Message, Does.Contain("invalid characters"));
         Assert.That(loaded, Is.True);
@@ -71,26 +71,26 @@ public sealed class SaveAtomicityTests
         Assert.That(Directory.Exists(Path.Combine(_tempRoot, "slot_toDelete")), Is.False);
     }
 
-    private SaveManager<StringSaveIdentity> CreateManager(
+    private SaveManager<string> CreateManager(
         Func<SaveFileContext, string>? fileNameResolver = null)
     {
-        return new SaveManager<StringSaveIdentity>(
-            new SaveSystemOptions<StringSaveIdentity>(
+        return new SaveManager<string>(
+            new SaveSystemOptions<string>(
                 saveRootPath: _tempRoot,
                 serializer: new JsonSaveSerializer(),
-                tempFolderName: SaveSystemOptions<StringSaveIdentity>.DefaultTempFolderName(),
-                saveNameResolver: identity => identity.SaveName,
-                fileNameResolver: fileNameResolver ?? SaveSystemOptions<StringSaveIdentity>.DefaultFileNameResolver));
+                tempFolderName: SaveSystemOptions<string>.DefaultTempFolderName(),
+                saveNameResolver: identity => identity,
+                fileNameResolver: fileNameResolver ?? SaveSystemOptions<string>.DefaultFileNameResolver));
     }
 
     private static void SaveValue(
-        SaveManager<StringSaveIdentity> manager,
+        SaveManager<string> manager,
         TestProvider provider,
         string slot,
         int value)
     {
         provider.Current = new TestState { Value = value };
-        manager.SaveToDisk(new StringSaveIdentity(slot));
+        manager.SaveToDisk(slot);
     }
 
     public sealed class TestState

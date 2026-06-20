@@ -25,10 +25,10 @@ public sealed class FileSystemSafetyTests
     [Test]
     public void SaveToDisk_RejectsInvalidResolvedSaveNames()
     {
-        var manager = CreateManager(identity => identity.SaveName);
+        var manager = CreateManager(identity => identity);
         manager.RegisterProvider<TestState>(new TestProvider("player", new TestState { Value = 1 }));
 
-        var ex = Assert.Throws<InvalidOperationException>(() => manager.SaveToDisk(new StringSaveIdentity("bad/name")));
+        var ex = Assert.Throws<InvalidOperationException>(() => manager.SaveToDisk("bad/name"));
 
         Assert.That(ex!.Message, Does.Contain("invalid path characters"));
     }
@@ -39,7 +39,7 @@ public sealed class FileSystemSafetyTests
         var manager = CreateManager(fileNameResolver: _ => "bad/name");
         manager.RegisterProvider<TestState>(new TestProvider("player", new TestState { Value = 1 }));
 
-        var ex = Assert.Throws<InvalidOperationException>(() => manager.SaveToDisk(new StringSaveIdentity("slot")));
+        var ex = Assert.Throws<InvalidOperationException>(() => manager.SaveToDisk("slot"));
 
         Assert.That(ex!.Message, Does.Contain("invalid characters"));
     }
@@ -63,16 +63,16 @@ public sealed class FileSystemSafetyTests
         var alpha2Provider = new TestProvider("player", new TestState { Value = 10 });
         alpha2Manager.RegisterProvider<TestState>(alpha2Provider);
 
-        alphaManager.SaveToDisk(new StringSaveIdentity("alpha"));
+        alphaManager.SaveToDisk("alpha");
         alphaProvider.Current = new TestState { Value = 2 };
-        alphaManager.SaveToDisk(new StringSaveIdentity("alpha"));
+        alphaManager.SaveToDisk("alpha");
 
-        alpha2Manager.SaveToDisk(new StringSaveIdentity("alpha2"));
+        alpha2Manager.SaveToDisk("alpha2");
         alpha2Provider.Current = new TestState { Value = 11 };
-        alpha2Manager.SaveToDisk(new StringSaveIdentity("alpha2"));
+        alpha2Manager.SaveToDisk("alpha2");
 
         alphaProvider.Current = new TestState { Value = 3 };
-        alphaManager.SaveToDisk(new StringSaveIdentity("alpha"));
+        alphaManager.SaveToDisk("alpha");
 
         Assert.That(Directory.Exists(Path.Combine(_tempRoot, "_backup", "alpha_0001")), Is.True);
         Assert.That(Directory.Exists(Path.Combine(_tempRoot, "_backup", "alpha_0002")), Is.True);
@@ -80,13 +80,13 @@ public sealed class FileSystemSafetyTests
         Assert.That(Directory.Exists(Path.Combine(_tempRoot, "_backup", "alpha2_0002")), Is.False);
     }
 
-    private SaveManager<StringSaveIdentity> CreateManager(
-        Func<StringSaveIdentity, string>? saveNameResolver = null,
+    private SaveManager<string> CreateManager(
+        Func<string, string>? saveNameResolver = null,
         Func<SaveFileContext, string>? fileNameResolver = null,
         bool enableBackupSystem = false,
         int backupSystemMaxBackupCount = 0)
     {
-        return new SaveManager<StringSaveIdentity>(
+        return new SaveManager<string>(
             CreateOptions(
                 saveNameResolver: saveNameResolver,
                 fileNameResolver: fileNameResolver,
@@ -94,19 +94,19 @@ public sealed class FileSystemSafetyTests
                 backupSystemMaxBackupCount: backupSystemMaxBackupCount));
     }
 
-    private SaveSystemOptions<StringSaveIdentity> CreateOptions(
+    private SaveSystemOptions<string> CreateOptions(
         string? tempFolderName = null,
-        Func<StringSaveIdentity, string>? saveNameResolver = null,
+        Func<string, string>? saveNameResolver = null,
         Func<SaveFileContext, string>? fileNameResolver = null,
         bool enableBackupSystem = false,
         int backupSystemMaxBackupCount = 0)
     {
-        return new SaveSystemOptions<StringSaveIdentity>(
+        return new SaveSystemOptions<string>(
             saveRootPath: _tempRoot,
             serializer: new JsonSaveSerializer(),
-            tempFolderName: tempFolderName ?? SaveSystemOptions<StringSaveIdentity>.DefaultTempFolderName(),
-            saveNameResolver: saveNameResolver ?? (identity => identity.SaveName),
-            fileNameResolver: fileNameResolver ?? SaveSystemOptions<StringSaveIdentity>.DefaultFileNameResolver,
+            tempFolderName: tempFolderName ?? SaveSystemOptions<string>.DefaultTempFolderName(),
+            saveNameResolver: saveNameResolver ?? (identity => identity),
+            fileNameResolver: fileNameResolver ?? SaveSystemOptions<string>.DefaultFileNameResolver,
             enableBackupSystem: enableBackupSystem,
             backupSystemMaxBackupCount: backupSystemMaxBackupCount);
     }

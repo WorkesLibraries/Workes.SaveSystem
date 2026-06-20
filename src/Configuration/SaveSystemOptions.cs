@@ -7,7 +7,7 @@ namespace Workes.SaveSystem
     /// Configuration options for a <see cref="SaveManager{TIdentity}"/> instance.
     /// </summary>
     /// <typeparam name="TIdentity">The type used to identify saves.</typeparam>
-    public sealed class SaveSystemOptions<TIdentity> where TIdentity : ISaveIdentity
+    public sealed class SaveSystemOptions<TIdentity>
     {
         /// <summary>
         /// Gets the root directory path where all saves are stored.

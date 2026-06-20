@@ -65,11 +65,4 @@ public sealed class PublicApiShapeTests
         Assert.That(unexpectedTypes, Is.Empty);
     }
 
-    [Test]
-    public void StringSaveIdentity_RejectsWhitespaceSaveName()
-    {
-        var ex = Assert.Throws<ArgumentException>(() => new StringSaveIdentity("   "));
-
-        Assert.That(ex!.ParamName, Is.EqualTo("saveName"));
-    }
 }

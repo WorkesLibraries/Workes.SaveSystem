@@ -49,7 +49,7 @@ public sealed class SerializerMigrationTests
     [Test]
     public void RegisterProvider_RejectsDuplicateMigrationSteps()
     {
-        var manager = new SaveManager<StringSaveIdentity>(CreateOptions());
+        var manager = new SaveManager<string>(CreateOptions());
         var provider = new MigratingProvider(
             schemaVersion: 2,
             current: new V2State { Name = "Current", Level = 1 },
@@ -67,12 +67,12 @@ public sealed class SerializerMigrationTests
     [Test]
     public void LoadFromDisk_AppliesMigrationStepsSequentially()
     {
-        var oldManager = new SaveManager<StringSaveIdentity>(CreateOptions());
+        var oldManager = new SaveManager<string>(CreateOptions());
         var oldProvider = new V1Provider(new V1State { Name = "Scout" });
         oldManager.RegisterProvider<V1State>(oldProvider);
-        oldManager.SaveToDisk(new StringSaveIdentity("slot"));
+        oldManager.SaveToDisk("slot");
 
-        var newManager = new SaveManager<StringSaveIdentity>(CreateOptions());
+        var newManager = new SaveManager<string>(CreateOptions());
         var newProvider = new MigratingProvider(
             schemaVersion: 2,
             current: new V2State { Name = "Unset", Level = 0 },
@@ -82,7 +82,7 @@ public sealed class SerializerMigrationTests
             });
         newManager.RegisterProvider<V2State>(newProvider);
 
-        var loaded = newManager.LoadFromDisk(new StringSaveIdentity("slot"));
+        var loaded = newManager.LoadFromDisk("slot");
 
         Assert.That(loaded, Is.True);
         Assert.That(newProvider.Current.Name, Is.EqualTo("Scout"));
@@ -92,18 +92,18 @@ public sealed class SerializerMigrationTests
     [Test]
     public void LoadFromDisk_ThrowsWhenMigrationPathIsMissing()
     {
-        var oldManager = new SaveManager<StringSaveIdentity>(CreateOptions());
+        var oldManager = new SaveManager<string>(CreateOptions());
         oldManager.RegisterProvider<V1State>(new V1Provider(new V1State { Name = "Scout" }));
-        oldManager.SaveToDisk(new StringSaveIdentity("slot"));
+        oldManager.SaveToDisk("slot");
 
-        var newManager = new SaveManager<StringSaveIdentity>(CreateOptions());
+        var newManager = new SaveManager<string>(CreateOptions());
         newManager.RegisterProvider<V2State>(
             new MigratingProvider(
                 schemaVersion: 2,
                 current: new V2State { Name = "Unset", Level = 0 },
                 migrations: Array.Empty<SaveMigrationStep>()));
 
-        var ex = Assert.Throws<InvalidOperationException>(() => newManager.LoadFromDisk(new StringSaveIdentity("slot")));
+        var ex = Assert.Throws<InvalidOperationException>(() => newManager.LoadFromDisk("slot"));
 
         Assert.That(ex!.Message, Does.Contain("Failed to migrate save data"));
     }
@@ -111,7 +111,7 @@ public sealed class SerializerMigrationTests
     [Test]
     public void LoadFromDisk_ThrowsWhenSavedVersionIsNewerThanProviderVersion()
     {
-        var newerManager = new SaveManager<StringSaveIdentity>(CreateOptions());
+        var newerManager = new SaveManager<string>(CreateOptions());
         newerManager.RegisterProvider<V2State>(
             new MigratingProvider(
                 schemaVersion: 2,
@@ -120,9 +120,9 @@ public sealed class SerializerMigrationTests
                 {
                     new SaveMigrationStep(1, (data, factory) => data.Set("Level", factory.CreateInt(1)))
                 }));
-        newerManager.SaveToDisk(new StringSaveIdentity("slot"));
+        newerManager.SaveToDisk("slot");
 
-        var olderManager = new SaveManager<StringSaveIdentity>(CreateOptions());
+        var olderManager = new SaveManager<string>(CreateOptions());
         olderManager.RegisterProvider<V2State>(
             new MigratingProvider(
                 schemaVersion: 1,
@@ -132,7 +132,7 @@ public sealed class SerializerMigrationTests
                     new SaveMigrationStep(1, (data, factory) => data.Set("Level", factory.CreateInt(1)))
                 }));
 
-        var ex = Assert.Throws<InvalidOperationException>(() => olderManager.LoadFromDisk(new StringSaveIdentity("slot")));
+        var ex = Assert.Throws<InvalidOperationException>(() => olderManager.LoadFromDisk("slot"));
 
         Assert.That(ex!.Message, Does.Contain("Failed to migrate save data"));
         Assert.That(ex.Message, Does.Contain("from schema version 2 to 1"));
@@ -141,12 +141,12 @@ public sealed class SerializerMigrationTests
     [Test]
     public void LoadFromDisk_ThrowsWhenMigrationPayloadIsMissingDataEnvelope()
     {
-        var oldManager = new SaveManager<StringSaveIdentity>(CreateOptions());
+        var oldManager = new SaveManager<string>(CreateOptions());
         oldManager.RegisterProvider<V1State>(new V1Provider(new V1State { Name = "Scout" }));
-        oldManager.SaveToDisk(new StringSaveIdentity("slot"));
+        oldManager.SaveToDisk("slot");
         File.WriteAllText(Path.Combine(_tempRoot, "slot", "player.json"), """{"SchemaVersion":1}""");
 
-        var newManager = new SaveManager<StringSaveIdentity>(CreateOptions());
+        var newManager = new SaveManager<string>(CreateOptions());
         newManager.RegisterProvider<V2State>(
             new MigratingProvider(
                 schemaVersion: 2,
@@ -156,7 +156,7 @@ public sealed class SerializerMigrationTests
                     new SaveMigrationStep(1, (data, factory) => data.Set("Level", factory.CreateInt(12)))
                 }));
 
-        var ex = Assert.Throws<InvalidOperationException>(() => newManager.LoadFromDisk(new StringSaveIdentity("slot")));
+        var ex = Assert.Throws<InvalidOperationException>(() => newManager.LoadFromDisk("slot"));
 
         Assert.That(ex!.Message, Does.Contain("Failed to migrate save data"));
     }
@@ -164,11 +164,11 @@ public sealed class SerializerMigrationTests
     [Test]
     public void LoadFromDisk_ThrowsWhenMigrationStepFails()
     {
-        var oldManager = new SaveManager<StringSaveIdentity>(CreateOptions());
+        var oldManager = new SaveManager<string>(CreateOptions());
         oldManager.RegisterProvider<V1State>(new V1Provider(new V1State { Name = "Scout" }));
-        oldManager.SaveToDisk(new StringSaveIdentity("slot"));
+        oldManager.SaveToDisk("slot");
 
-        var newManager = new SaveManager<StringSaveIdentity>(CreateOptions());
+        var newManager = new SaveManager<string>(CreateOptions());
         newManager.RegisterProvider<V2State>(
             new MigratingProvider(
                 schemaVersion: 2,
@@ -178,19 +178,19 @@ public sealed class SerializerMigrationTests
                     new SaveMigrationStep(1, (_, _) => throw new InvalidOperationException("broken migration"))
                 }));
 
-        var ex = Assert.Throws<InvalidOperationException>(() => newManager.LoadFromDisk(new StringSaveIdentity("slot")));
+        var ex = Assert.Throws<InvalidOperationException>(() => newManager.LoadFromDisk("slot"));
 
         Assert.That(ex!.Message, Does.Contain("Failed to migrate save data"));
     }
 
-    private SaveSystemOptions<StringSaveIdentity> CreateOptions()
+    private SaveSystemOptions<string> CreateOptions()
     {
-        return new SaveSystemOptions<StringSaveIdentity>(
+        return new SaveSystemOptions<string>(
             saveRootPath: _tempRoot,
             serializer: new JsonSaveSerializer(),
-            tempFolderName: SaveSystemOptions<StringSaveIdentity>.DefaultTempFolderName(),
-            saveNameResolver: identity => identity.SaveName,
-            fileNameResolver: SaveSystemOptions<StringSaveIdentity>.DefaultFileNameResolver);
+            tempFolderName: SaveSystemOptions<string>.DefaultTempFolderName(),
+            saveNameResolver: identity => identity,
+            fileNameResolver: SaveSystemOptions<string>.DefaultFileNameResolver);
     }
 
     public sealed class V1State

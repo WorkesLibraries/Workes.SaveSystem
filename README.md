@@ -37,17 +37,17 @@ Create a save manager, register providers, then save and load a slot.
 using Workes.SaveSystem;
 
 var serializer = new JsonSaveSerializer();
-var manager = SaveManager<StringSaveIdentity>.CreateDefault(
+var manager = SaveManager<string>.CreateDefault(
     serializer,
     saveRootPath: "Saves");
 
 var playerProvider = new PlayerSaveProvider();
 manager.RegisterProvider<PlayerState>(playerProvider);
 
-manager.SaveToDisk(new StringSaveIdentity("slot-1"));
+manager.SaveToDisk("slot-1");
 
 playerProvider.Current = new PlayerState();
-manager.LoadFromDisk(new StringSaveIdentity("slot-1"));
+manager.LoadFromDisk("slot-1");
 ```
 
 ```csharp
@@ -85,16 +85,16 @@ public sealed class PlayerSaveProvider : ISaveProvider
 
 `SaveManager<TIdentity>` is the main coordinator. It owns provider registration, snapshot creation, disk persistence, loading, recovery, backups, and migration coordination.
 
-Use `StringSaveIdentity` unless the application needs a custom identity type.
+Use `string` identities for simple slot names unless the application needs a custom identity type.
 
 ```csharp
-var manager = new SaveManager<StringSaveIdentity>(
-    new SaveSystemOptions<StringSaveIdentity>(
+var manager = new SaveManager<string>(
+    new SaveSystemOptions<string>(
         saveRootPath: "Saves",
         serializer: new JsonSaveSerializer(),
-        tempFolderName: SaveSystemOptions<StringSaveIdentity>.DefaultTempFolderName(),
-        saveNameResolver: identity => identity.SaveName,
-        fileNameResolver: SaveSystemOptions<StringSaveIdentity>.DefaultFileNameResolver));
+        tempFolderName: SaveSystemOptions<string>.DefaultTempFolderName(),
+        saveNameResolver: identity => identity,
+        fileNameResolver: SaveSystemOptions<string>.DefaultFileNameResolver));
 ```
 
 `CreateDefault(ISaveSerializer)` is a convenience factory for plain .NET applications and writes under the current user's application data folder. Engine integrations should prefer `CreateDefault(ISaveSerializer, string)` or the options constructor so the engine owns the persistent data path.
@@ -118,12 +118,12 @@ Providers can optionally implement `ISaveLifecycle` to receive `OnBeforeSave()` 
 Backups are configured through `SaveSystemOptions<TIdentity>`.
 
 ```csharp
-var options = new SaveSystemOptions<StringSaveIdentity>(
+var options = new SaveSystemOptions<string>(
     saveRootPath: "Saves",
     serializer: new JsonSaveSerializer(),
-    tempFolderName: SaveSystemOptions<StringSaveIdentity>.DefaultTempFolderName(),
-    saveNameResolver: identity => identity.SaveName,
-    fileNameResolver: SaveSystemOptions<StringSaveIdentity>.DefaultFileNameResolver,
+    tempFolderName: SaveSystemOptions<string>.DefaultTempFolderName(),
+    saveNameResolver: identity => identity,
+    fileNameResolver: SaveSystemOptions<string>.DefaultFileNameResolver,
     enableBackupSystem: true,
     backupSystemMaxBackupCount: 3);
 ```
@@ -131,7 +131,7 @@ var options = new SaveSystemOptions<StringSaveIdentity>(
 Backup slot `1` is the most recent previous save. Older backups rotate to higher slot numbers.
 
 ```csharp
-manager.LoadBackupSlotFromDisk(new StringSaveIdentity("slot-1"), slotNumber: 1);
+manager.LoadBackupSlotFromDisk("slot-1", slotNumber: 1);
 ```
 
 ## Migration
@@ -250,7 +250,7 @@ The package targets `netstandard2.1`, which is suitable for modern Unity and God
 Unity projects should make sure Newtonsoft.Json is available through the project's package setup or assembly references. Use Unity's persistent data path when constructing the manager:
 
 ```csharp
-var manager = SaveManager<StringSaveIdentity>.CreateDefault(
+var manager = SaveManager<string>.CreateDefault(
     new JsonSaveSerializer(),
     saveRootPath: UnityEngine.Application.persistentDataPath);
 ```
@@ -258,7 +258,7 @@ var manager = SaveManager<StringSaveIdentity>.CreateDefault(
 Godot C# projects should restore the package dependency through normal .NET/NuGet restore. Use a Godot-owned user data path for saves:
 
 ```csharp
-var manager = SaveManager<StringSaveIdentity>.CreateDefault(
+var manager = SaveManager<string>.CreateDefault(
     new JsonSaveSerializer(),
     saveRootPath: ProjectSettings.GlobalizePath("user://saves"));
 ```

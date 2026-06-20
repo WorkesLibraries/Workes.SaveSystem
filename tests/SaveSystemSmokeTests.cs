@@ -34,14 +34,14 @@ public sealed class SaveSystemSmokeTests
         Assert.That(options.TempFolderName, Is.EqualTo("_tmp"));
         Assert.That(options.EnableBackupSystem, Is.False);
         Assert.That(options.BackupSystemMaxBackupCount, Is.Zero);
-        Assert.That(options.SaveNameResolver(new StringSaveIdentity("slot")), Is.EqualTo("slot"));
+        Assert.That(options.SaveNameResolver("slot"), Is.EqualTo("slot"));
         Assert.That(options.FileNameResolver(new SaveFileContext("player", 1, serializer.GetType())), Is.EqualTo("player"));
     }
 
     [Test]
     public void RegisterProvider_RejectsDuplicateSaveKey()
     {
-        var manager = new SaveManager<StringSaveIdentity>(CreateOptions(new JsonSaveSerializer()));
+        var manager = new SaveManager<string>(CreateOptions(new JsonSaveSerializer()));
         var first = new TestProvider("player", new TestState { Name = "A", Level = 1 });
         var second = new TestProvider("player", new TestState { Name = "B", Level = 2 });
 
@@ -54,14 +54,14 @@ public sealed class SaveSystemSmokeTests
     [Test]
     public void SaveAndLoad_RestoresRegisteredProviderState()
     {
-        var manager = new SaveManager<StringSaveIdentity>(CreateOptions(new JsonSaveSerializer()));
+        var manager = new SaveManager<string>(CreateOptions(new JsonSaveSerializer()));
         var provider = new TestProvider("player", new TestState { Name = "BeforeSave", Level = 7 });
         manager.RegisterProvider<TestState>(provider);
 
-        manager.SaveToDisk(new StringSaveIdentity("slot-a"));
+        manager.SaveToDisk("slot-a");
         provider.Current = new TestState { Name = "Changed", Level = 1 };
 
-        var loaded = manager.LoadFromDisk(new StringSaveIdentity("slot-a"));
+        var loaded = manager.LoadFromDisk("slot-a");
 
         Assert.That(loaded, Is.True);
         Assert.That(provider.Current.Name, Is.EqualTo("BeforeSave"));
@@ -71,15 +71,15 @@ public sealed class SaveSystemSmokeTests
     [Test]
     public void MemoryOnlyProvider_ParticipatesInSnapshotsButIsNotWrittenToDisk()
     {
-        var manager = new SaveManager<StringSaveIdentity>(CreateOptions(new JsonSaveSerializer()));
+        var manager = new SaveManager<string>(CreateOptions(new JsonSaveSerializer()));
         var provider = new TestProvider("cache", new TestState { Name = "Memory", Level = 3 });
         manager.RegisterProvider(provider);
 
         var snapshot = manager.CaptureSnapshot();
-        manager.SaveToDisk(new StringSaveIdentity("slot-b"));
+        manager.SaveToDisk("slot-b");
         provider.Current = new TestState { Name = "Changed", Level = 9 };
 
-        var loaded = manager.LoadFromDisk(new StringSaveIdentity("slot-b"));
+        var loaded = manager.LoadFromDisk("slot-b");
 
         Assert.That(snapshot.Entries.Single().SaveKey, Is.EqualTo("cache"));
         Assert.That(loaded, Is.True);
@@ -87,14 +87,14 @@ public sealed class SaveSystemSmokeTests
         Assert.That(File.Exists(Path.Combine(_tempRoot, "slot-b", "cache.json")), Is.False);
     }
 
-    private SaveSystemOptions<StringSaveIdentity> CreateOptions(ISaveSerializer serializer)
+    private SaveSystemOptions<string> CreateOptions(ISaveSerializer serializer)
     {
-        return new SaveSystemOptions<StringSaveIdentity>(
+        return new SaveSystemOptions<string>(
             saveRootPath: _tempRoot,
             serializer: serializer,
-            tempFolderName: SaveSystemOptions<StringSaveIdentity>.DefaultTempFolderName(),
-            saveNameResolver: identity => identity.SaveName,
-            fileNameResolver: SaveSystemOptions<StringSaveIdentity>.DefaultFileNameResolver);
+            tempFolderName: SaveSystemOptions<string>.DefaultTempFolderName(),
+            saveNameResolver: identity => identity,
+            fileNameResolver: SaveSystemOptions<string>.DefaultFileNameResolver);
     }
 
     public sealed class TestState
