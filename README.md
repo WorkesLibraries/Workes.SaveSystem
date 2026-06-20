@@ -23,6 +23,7 @@ The main project is `src/Workes.SaveSystem.csproj`.
 That dependency is intentional for the current package shape:
 
 - `JsonSaveSerializer` is the built-in serializer.
+- `BinarySaveSerializer` is a built-in binary-token serializer that uses the same Newtonsoft-compatible object model.
 - JSON schematics wrap provider state in a versioned payload.
 - migration data nodes are backed by Newtonsoft `JToken`/`JObject` values.
 - save metadata is currently read and written with Newtonsoft.
@@ -96,6 +97,17 @@ var manager = new SaveManager<string>(
 ```
 
 `CreateDefault(ISaveSerializer)` is a convenience factory for plain .NET applications and writes under the current user's application data folder. Engine integrations should prefer `CreateDefault(ISaveSerializer, string)`, `SaveSystemOptions.Create(...)`, or the options constructor so the engine owns the persistent data path.
+
+Use `JsonSaveSerializer` for readable save files and `BinarySaveSerializer` when you want less inspectable provider payloads with the same migration helper support.
+
+```csharp
+var manager = new SaveManager<string>(
+    SaveSystemOptions.Create(
+        saveRootPath: "Saves",
+        serializer: new BinarySaveSerializer()));
+```
+
+`BinarySaveSerializer` writes `.bin` provider files. The current serializer contract stores provider payloads as strings, so the binary token payload is Base64-encoded on disk rather than written as raw bytes.
 
 After registering providers, call `ValidateRegistrations()` before disk save/load operations. Registration is intentionally lightweight; validation captures provider state, checks serializer compatibility, validates migration policy, and verifies file-name behavior at the setup point you choose.
 
@@ -271,7 +283,7 @@ Downgrades are not supported. A save written with a newer schema version than th
 
 ## Extending The System
 
-Most application code should use `SaveManager<TIdentity>`, `ISaveProvider<TState>`, `JsonSaveSerializer`, and plain state DTOs. The interfaces below are extension contracts for projects that need custom persistence formats, migration behavior, or serializer-backed data nodes.
+Most application code should use `SaveManager<TIdentity>`, `ISaveProvider<TState>`, `JsonSaveSerializer` or `BinarySaveSerializer`, and plain state DTOs. The interfaces below are extension contracts for projects that need custom persistence formats, migration behavior, or serializer-backed data nodes.
 
 ### Provider Contracts
 
@@ -314,7 +326,7 @@ Migration steps should be deterministic. Avoid reading live game state, random v
 
 ### Serializer Contracts
 
-Implement `ISaveSerializer` only when the built-in JSON serializer does not fit the application's persistence format.
+Implement `ISaveSerializer` only when the built-in JSON and binary serializers do not fit the application's persistence format.
 
 A custom serializer must provide these pieces as one coherent format:
 
