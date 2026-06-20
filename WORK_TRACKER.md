@@ -4,7 +4,52 @@ This file is the durable planning tracker for the save system work. Keep it upda
 
 ## To-do
 
-There are no remaining behavior/API points in the active to-do list.
+1. Make recovery candidate validation strict about registered persisted provider files even when normal loads use `MissingProviderFileBehavior.Skip`.
+   - Recovery is deciding whether an interrupted temp or to-delete folder is valid enough to promote.
+   - Partial-load skip behavior should remain available for intentional loads, but recovery candidates should not be considered valid if any registered persisted provider file is missing.
+   - Update README recovery guidance and add regression coverage for skip-mode recovery with a missing provider file.
+
+2. Tighten migration data-node ownership for the built-in serializers.
+   - `BinarySaveSerializer` currently reuses the JSON data-node implementation and factory because the binary payload is a Base64-encoded package-owned token model backed by the same `JToken` tree used for migrations.
+   - That reuse keeps migration helpers shared, but it also means nodes from `JsonSaveSerializer.NodeFactory` can look acceptable to `BinarySaveSerializer.SerializeFromNode(...)`, which conflicts with the serializer-owned `NodeFactory` contract.
+   - Decide between owner-token validation on JSON-backed nodes or a separate binary node wrapper/factory, then update README/XML docs and cross-serializer node tests.
+
+3. Add internal load/recovery exception types for stable `TryLoad...` status classification.
+   - `ClassifyLoadException(...)` currently relies partly on exception messages, which is brittle as diagnostics evolve.
+   - Add internal exception types or a small internal status-carrying wrapper so `SaveLoadStatus` mapping is explicit without changing the public API.
+   - Update tests for important classifications.
+
+4. Reject null entries in custom migration lists with a clear validation error.
+   - `ValidateMigrationPolicy(...)` validates null sources and null lists, but custom `ISaveMigrationSource.Migrations` can still contain null elements.
+   - Reject null migration entries before grouping by version and add regression coverage.
+
+5. Document that registration validation does not catch every deserialize-only issue.
+   - Validation confirms provider capture, non-null state, file-name safety, migration policy, and serializer write compatibility.
+   - It does not currently perform a full serialize-then-deserialize round trip for every provider state, so problems that only appear during deserialization can still surface on load.
+   - README should present validation as an early compatibility check, not as a complete proof that future load-time deserialization cannot fail.
+
+6. Stop recovery candidate validation from automatically running provider migrations.
+   - Recovery validation currently uses the normal deserialize path, which can invoke user migration code while deciding whether a temp/to-delete candidate is valid.
+   - Recovery should validate candidate structure and provider-file integrity without mutating serialized data or relying on migration side effects.
+   - Define the desired older-schema recovery behavior, update README, and adjust tests that currently expect migration-compatible recovery.
+
+7. Reject or clearly classify null deserialized provider payloads.
+   - `JsonSaveSchematic<T>.Deserialize(...)` and the binary schematic can return null payload data after a valid envelope is parsed.
+   - Null provider state should produce a clear corrupt-save/load failure rather than surfacing later as a snapshot argument error or invalid request.
+   - Add JSON and binary coverage for `"Data": null` / null payload cases.
+
+8. Add recovery/test documentation coverage for strict recovery versus partial-load skip behavior.
+    - Cover temp-only, main-plus-temp, and main-missing fallback cases with missing provider files under `MissingProviderFileBehavior.Skip`.
+    - README should state that skip mode applies to normal loads, while recovery candidate promotion is stricter.
+
+9. Add serializer data-node ownership tests and documentation.
+    - Cover JSON serializer rejecting nodes not produced by its compatible factory.
+    - Cover binary serializer rejecting nodes produced by the JSON serializer if owner-token or separate-wrapper enforcement is chosen.
+    - README and XML docs should state how custom migration-capable serializers couple `DeserializeToNode`, `SerializeFromNode`, and `NodeFactory`.
+
+10. Add migration validation edge-case tests.
+    - Cover null migration entries from custom migration sources.
+    - Cover duplicate and missing migration paths after the new internal exception mapping is in place.
 
 ## Later
 
@@ -450,6 +495,15 @@ These points are completed for the current package migration.
 - Added coverage for corrupt temp fallback, all-candidate-invalid preservation, and recovering an interrupted older-schema temp save through provider migrations.
 - Added README recovery guidance covering automatic recovery, migration-compatible validation, fallback behavior, and artifact preservation.
 - `dotnet test Workes.SaveSystem.sln` passes with 151 tests.
+
+### 49. Tightened Provider Registration And Removal Edge Cases
+
+- Validated memory-provider captured state during `ValidateRegistrations()` so `TryRegisterMemoryProvider(...)` rejects null state instead of leaving a provider that fails later during snapshot capture.
+- Kept memory providers serializer-free while applying the same non-null state contract as persisted providers.
+- Changed `UnregisterProvider(ISaveProvider)` to find the exact registered provider instance and remove it by the originally registered key, even if the provider's current `SaveKey` has drifted.
+- Updated README provider guidance for memory-provider validation and instance-based unregister behavior.
+- Added regression coverage for null memory-provider state during validation/try-registration and unregistering a drifted provider instance.
+- `dotnet test Workes.SaveSystem.sln` passes with 154 tests.
 
 ## Maintenance Rules
 

@@ -223,13 +223,12 @@ namespace Workes.SaveSystem
             if (provider == null)
                 return false;
 
-            if (!_providers.TryGetValue(provider.SaveKey, out var providerEntry))
+            var registered = _providers
+                .FirstOrDefault(kvp => ReferenceEquals(kvp.Value.Provider, provider));
+            if (registered.Value == null)
                 return false;
 
-            if (!ReferenceEquals(providerEntry.Provider, provider))
-                return false;
-
-            _providers.Remove(provider.SaveKey);
+            _providers.Remove(registered.Key);
             _registrationsValidated = false;
             return true;
         }
@@ -297,14 +296,15 @@ namespace Workes.SaveSystem
         }
 
         /// <summary>
-        /// Validates all registered persisted providers before disk save/load operations are allowed.
+        /// Validates all registered providers before disk save/load operations are allowed.
         /// </summary>
         /// <remarks>
         /// Registration itself is intentionally lightweight. This method performs provider state capture,
-        /// serializer compatibility checks, file-name checks, and migration policy validation at the caller's
-        /// chosen setup point. Call this again after registering or unregistering providers.
+        /// non-null state validation, serializer compatibility checks for persisted providers, file-name checks,
+        /// and migration policy validation at the caller's chosen setup point. Call this again after registering
+        /// or unregistering providers.
         /// </remarks>
-        /// <exception cref="InvalidOperationException">Thrown when any persisted provider registration is invalid.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when any provider registration is invalid.</exception>
         public void ValidateRegistrations()
         {
             ValidateFileExtension(_options.Serializer.FileExtension);
@@ -318,6 +318,7 @@ namespace Workes.SaveSystem
                 var schematic = providerEntry.Schematic;
                 if (schematic == null)
                 {
+                    ValidateProviderCapturedState(providerEntry);
                     providerEntry.ValidatedSchemaVersion = providerEntry.Provider.SchemaVersion;
                     continue;
                 }
@@ -478,6 +479,22 @@ namespace Workes.SaveSystem
 
         private void ValidateProviderSerialization(ProviderEntry providerEntry, ISaveSchematic schematic)
         {
+            var state = ValidateProviderCapturedState(providerEntry);
+
+            try
+            {
+                _options.Serializer.Serialize(state, schematic);
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException(
+                    $"SaveProvider with key '{providerEntry.Provider.SaveKey}' produces incompatible state for its registered schematic.",
+                    ex);
+            }
+        }
+
+        private object ValidateProviderCapturedState(ProviderEntry providerEntry)
+        {
             object state;
             try
             {
@@ -497,16 +514,7 @@ namespace Workes.SaveSystem
                     "Provider CaptureState() must return a non-null state object.");
             }
 
-            try
-            {
-                _options.Serializer.Serialize(state, schematic);
-            }
-            catch (Exception ex)
-            {
-                throw new InvalidOperationException(
-                    $"SaveProvider with key '{providerEntry.Provider.SaveKey}' produces incompatible state for its registered schematic.",
-                    ex);
-            }
+            return state;
         }
 
         private void ValidateProviderMigration(ProviderEntry providerEntry)

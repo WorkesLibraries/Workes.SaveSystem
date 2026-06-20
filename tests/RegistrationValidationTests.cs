@@ -92,6 +92,19 @@ public sealed class RegistrationValidationTests
     }
 
     [Test]
+    public void TryRegisterMemoryProvider_WhenCapturedStateIsNull_DoesNotKeepProvider()
+    {
+        var manager = CreateManager();
+        var provider = new NullStateProvider();
+
+        var registered = manager.TryRegisterMemoryProvider(provider, out var error);
+
+        Assert.That(registered, Is.False);
+        Assert.That(error, Does.Contain("returned null state"));
+        Assert.That(manager.CaptureSnapshot().Entries, Is.Empty);
+    }
+
+    [Test]
     public void SaveToDisk_RequiresValidatedRegistrations()
     {
         var manager = CreateManager();
@@ -181,6 +194,17 @@ public sealed class RegistrationValidationTests
     {
         var manager = CreateManager();
         manager.RegisterProvider(new NullStateProvider());
+
+        var ex = Assert.Throws<InvalidOperationException>(() => manager.ValidateRegistrations());
+
+        Assert.That(ex!.Message, Does.Contain("returned null state"));
+    }
+
+    [Test]
+    public void ValidateRegistrations_RejectsNullMemoryProviderState()
+    {
+        var manager = CreateManager();
+        manager.RegisterMemoryProvider(new NullStateProvider());
 
         var ex = Assert.Throws<InvalidOperationException>(() => manager.ValidateRegistrations());
 

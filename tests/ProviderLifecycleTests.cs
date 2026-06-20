@@ -206,6 +206,20 @@ public sealed class ProviderLifecycleTests
     }
 
     [Test]
+    public void UnregisterProvider_WithSameInstanceAfterSaveKeyDrift_RemovesRegisteredProvider()
+    {
+        var manager = new SaveManager<string>(CreateOptions());
+        var provider = new MutableProvider("player");
+        manager.RegisterProvider(provider);
+        provider.SaveKey = "hero";
+
+        var removed = manager.UnregisterProvider(provider);
+
+        Assert.That(removed, Is.True);
+        Assert.That(manager.CaptureSnapshot().Entries, Is.Empty);
+    }
+
+    [Test]
     public void UnregisterProvider_WithDifferentInstanceSameKey_DoesNotRemoveRegisteredProvider()
     {
         var log = new List<string>();
@@ -329,6 +343,32 @@ public sealed class ProviderLifecycleTests
         public void OnAfterLoad()
         {
             _log.Add($"{SaveKey}:after");
+        }
+    }
+
+    private sealed class MutableProvider : ISaveProvider<TestState>
+    {
+        public MutableProvider(string saveKey)
+        {
+            SaveKey = saveKey;
+        }
+
+        public string SaveKey { get; set; }
+
+        public int SchemaVersion => 1;
+
+        public int LoadPriority => 0;
+
+        public TestState Current { get; private set; } = new TestState { Value = 1 };
+
+        public TestState CaptureState()
+        {
+            return Current;
+        }
+
+        public void RestoreState(TestState state)
+        {
+            Current = state;
         }
     }
 }
