@@ -179,12 +179,73 @@ public sealed class ProviderLifecycleTests
         var manager = new SaveManager<string>(CreateOptions());
         var provider = new LifecycleProvider("player", loadPriority: 0, value: 1, log);
         manager.RegisterProvider(provider);
-        manager.UnregisterProvider(provider);
+        var removed = manager.UnregisterProvider(provider);
 
         var snapshot = manager.CaptureSnapshot();
 
+        Assert.That(removed, Is.True);
         Assert.That(snapshot.Entries, Is.Empty);
         Assert.That(log, Is.Empty);
+    }
+
+    [Test]
+    public void UnregisterProvider_WithDifferentInstanceSameKey_DoesNotRemoveRegisteredProvider()
+    {
+        var log = new List<string>();
+        var manager = new SaveManager<string>(CreateOptions());
+        var registered = new LifecycleProvider("player", loadPriority: 0, value: 1, log);
+        var otherInstance = new LifecycleProvider("player", loadPriority: 0, value: 2, new List<string>());
+        manager.RegisterProvider(registered);
+
+        var removed = manager.UnregisterProvider(otherInstance);
+
+        var snapshot = manager.CaptureSnapshot();
+        Assert.That(removed, Is.False);
+        Assert.That(snapshot.Entries.Select(entry => entry.SaveKey), Is.EqualTo(new[] { "player" }));
+        Assert.That(registered.Current.Value, Is.EqualTo(1));
+        Assert.That(log, Is.EqualTo(new[] { "player:before", "player:capture" }));
+    }
+
+    [Test]
+    public void UnregisterProvider_BySaveKey_RemovesProviderFromFutureSnapshots()
+    {
+        var log = new List<string>();
+        var manager = new SaveManager<string>(CreateOptions());
+        var provider = new LifecycleProvider("player", loadPriority: 0, value: 1, log);
+        manager.RegisterProvider(provider);
+
+        var removed = manager.UnregisterProvider("player");
+
+        var snapshot = manager.CaptureSnapshot();
+        Assert.That(removed, Is.True);
+        Assert.That(snapshot.Entries, Is.Empty);
+        Assert.That(log, Is.Empty);
+    }
+
+    [Test]
+    public void UnregisterProvider_BySaveKeyRejectsEmptySaveKey()
+    {
+        var manager = new SaveManager<string>(CreateOptions());
+
+        var ex = Assert.Throws<ArgumentException>(() => manager.UnregisterProvider(" "));
+
+        Assert.That(ex!.ParamName, Is.EqualTo("saveKey"));
+        Assert.That(ex.Message, Does.Contain("SaveKey"));
+    }
+
+    [Test]
+    public void UnregisterProvider_RequiresRegistrationValidationBeforeNextDiskOperation()
+    {
+        var log = new List<string>();
+        var manager = new SaveManager<string>(CreateOptions());
+        var provider = new LifecycleProvider("player", loadPriority: 0, value: 1, log);
+        manager.RegisterProvider<TestState>(provider);
+        manager.ValidateRegistrations();
+
+        manager.UnregisterProvider(provider);
+
+        var ex = Assert.Throws<InvalidOperationException>(() => manager.SaveToDisk("slot"));
+        Assert.That(ex!.Message, Does.Contain("ValidateRegistrations"));
     }
 
     [Test]

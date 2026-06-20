@@ -162,16 +162,51 @@ namespace Workes.SaveSystem
         }
 
         /// <summary>
-        /// Unregisters a save provider. The provider will no longer be included in save/load operations.
+        /// Unregisters a save provider by instance. The provider will no longer be included in save/load operations.
         /// </summary>
-        /// <param name="provider">The save provider to unregister. If null, this method does nothing.</param>
-        public void UnregisterProvider(ISaveProvider provider)
+        /// <remarks>
+        /// This overload removes the provider only when the registered provider instance matches
+        /// <paramref name="provider"/>. To remove by provider key, use <see cref="UnregisterProvider(string)"/>.
+        /// Call <see cref="ValidateRegistrations"/> again before the next disk save/load operation if this returns true.
+        /// </remarks>
+        /// <param name="provider">The save provider instance to unregister. If null, this method returns false.</param>
+        /// <returns>True when the registered provider was removed; otherwise, false.</returns>
+        public bool UnregisterProvider(ISaveProvider provider)
         {
             if (provider == null)
-                return;
+                return false;
 
-            if (_providers.Remove(provider.SaveKey))
-                _registrationsValidated = false;
+            if (!_providers.TryGetValue(provider.SaveKey, out var providerEntry))
+                return false;
+
+            if (!ReferenceEquals(providerEntry.Provider, provider))
+                return false;
+
+            _providers.Remove(provider.SaveKey);
+            _registrationsValidated = false;
+            return true;
+        }
+
+        /// <summary>
+        /// Unregisters a save provider by save key. The provider will no longer be included in save/load operations.
+        /// </summary>
+        /// <remarks>
+        /// Use this overload when only the provider key is available or when removal by key is explicitly intended.
+        /// Call <see cref="ValidateRegistrations"/> again before the next disk save/load operation if this returns true.
+        /// </remarks>
+        /// <param name="saveKey">The save key of the provider to unregister.</param>
+        /// <returns>True when a registered provider was removed; otherwise, false.</returns>
+        /// <exception cref="ArgumentException">Thrown when <paramref name="saveKey"/> is null, empty, or whitespace.</exception>
+        public bool UnregisterProvider(string saveKey)
+        {
+            if (string.IsNullOrWhiteSpace(saveKey))
+                throw new ArgumentException("SaveKey cannot be null, empty, or whitespace.", nameof(saveKey));
+
+            if (!_providers.Remove(saveKey))
+                return false;
+
+            _registrationsValidated = false;
+            return true;
         }
 
         private static void ValidateProvider(ISaveProvider provider)
