@@ -175,6 +175,40 @@ namespace Workes.SaveSystem
         }
 
         /// <summary>
+        /// Attempts to register a typed save provider for persistence and immediately validates all registrations.
+        /// </summary>
+        /// <remarks>
+        /// This is a convenience wrapper around <see cref="RegisterProvider{TState}"/> and
+        /// <see cref="ValidateRegistrations"/>. If registration or validation fails, the provider is not kept
+        /// in the manager and the previous registration-validation state is restored.
+        /// </remarks>
+        /// <typeparam name="TState">The state type the provider captures and restores.</typeparam>
+        /// <param name="provider">The save provider to register.</param>
+        /// <param name="error">The validation or registration error when registration fails; otherwise, null.</param>
+        /// <returns>True when the provider was registered and all registrations validated successfully; otherwise, false.</returns>
+        public bool TryRegisterProvider<TState>(ISaveProvider<TState> provider, out string? error)
+        {
+            return TryRegister(() => RegisterProvider(provider), out error);
+        }
+
+        /// <summary>
+        /// Attempts to register a typed memory-only save provider and immediately validates all registrations.
+        /// </summary>
+        /// <remarks>
+        /// This is a convenience wrapper around <see cref="RegisterMemoryProvider{TState}"/> and
+        /// <see cref="ValidateRegistrations"/>. If registration or validation fails, the provider is not kept
+        /// in the manager and the previous registration-validation state is restored.
+        /// </remarks>
+        /// <typeparam name="TState">The state type the provider captures and restores.</typeparam>
+        /// <param name="provider">The save provider to register.</param>
+        /// <param name="error">The validation or registration error when registration fails; otherwise, null.</param>
+        /// <returns>True when the provider was registered and all registrations validated successfully; otherwise, false.</returns>
+        public bool TryRegisterMemoryProvider<TState>(ISaveProvider<TState> provider, out string? error)
+        {
+            return TryRegister(() => RegisterMemoryProvider(provider), out error);
+        }
+
+        /// <summary>
         /// Unregisters a save provider by instance. The provider will no longer be included in save/load operations.
         /// </summary>
         /// <remarks>
@@ -229,6 +263,37 @@ namespace Workes.SaveSystem
 
             if (string.IsNullOrWhiteSpace(provider.SaveKey))
                 throw new ArgumentException("SaveProvider SaveKey cannot be null, empty, or whitespace.", nameof(provider));
+        }
+
+        private bool TryRegister(Action register, out string? error)
+        {
+            var existingKeys = new HashSet<string>(_providers.Keys, StringComparer.Ordinal);
+            var wasValidated = _registrationsValidated;
+
+            try
+            {
+                register();
+                ValidateRegistrations();
+                error = null;
+                return true;
+            }
+            catch (Exception ex)
+            {
+                RemoveProvidersAddedAfter(existingKeys);
+                _registrationsValidated = wasValidated;
+                error = ex.Message;
+                return false;
+            }
+        }
+
+        private void RemoveProvidersAddedAfter(HashSet<string> existingKeys)
+        {
+            var addedKeys = _providers.Keys
+                .Where(key => !existingKeys.Contains(key))
+                .ToArray();
+
+            foreach (var key in addedKeys)
+                _providers.Remove(key);
         }
 
         /// <summary>

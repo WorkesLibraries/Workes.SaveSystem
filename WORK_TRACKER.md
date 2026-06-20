@@ -6,10 +6,9 @@ This file is the durable planning tracker for the save system work. Keep it upda
 
 1. Add recovery tests for corrupt temp folders when `_toDelete` is also present, so recovery does not delete the last valid save during interrupted swaps.
 2. Add recovery tests for interrupted saves written with older provider schema versions after the application updates, so recovery and migration behavior stay compatible.
-3. Add `TryRegisterProvider(...)` and `TryRegisterMemoryProvider(...)` convenience APIs that tentatively register a provider, run registration validation immediately, and leave the manager unchanged when validation fails.
-4. Update recovery to validate temp and old recovery candidates, prefer valid temp, fall back to valid `_toDelete`, warn when falling back, and preserve artifacts if neither candidate is valid.
-5. Update recovery validation to use the normal load-compatible path, including schema-version extraction and migrations, so interrupted saves from older provider schema versions can recover after application updates.
-6. Simplify `ISaveMigrationCapableSerializer` to option B: remove `ISaveDataNodeFactory` inheritance and expose node creation only through `NodeFactory`.
+3. Update recovery to validate temp and old recovery candidates, prefer valid temp, fall back to valid `_toDelete`, warn when falling back, and preserve artifacts if neither candidate is valid.
+4. Update recovery validation to use the normal load-compatible path, including schema-version extraction and migrations, so interrupted saves from older provider schema versions can recover after application updates.
+5. Simplify `ISaveMigrationCapableSerializer` to option B: remove `ISaveDataNodeFactory` inheritance and expose node creation only through `NodeFactory`.
 
 ## Later
 
@@ -427,6 +426,15 @@ These points are completed for the current package migration.
 - Added tests covering disabled backups with null identity, invalid slot numbers, and unvalidated registrations.
 - Updated README try-load guidance so backup-disabled UI checks are documented as cheap and non-throwing.
 - `dotnet test Workes.SaveSystem.sln` passes with 143 tests.
+
+### 46. Added Try-Register Provider Convenience APIs
+
+- Added `TryRegisterProvider(...)` and `TryRegisterMemoryProvider(...)` convenience APIs that tentatively register a provider and immediately run the normal global registration validation path.
+- Failed try-registration now removes the attempted provider and restores the previous registration-validation state.
+- Successful try-registration leaves the manager validated for disk save/load operations.
+- Updated README provider setup guidance with try-registration usage and rollback semantics.
+- Added tests for successful persisted try-registration, failed persisted try-registration rollback, previous validation-state preservation, and successful memory-provider try-registration.
+- `dotnet test Workes.SaveSystem.sln` passes with 147 tests.
 
 ## Maintenance Rules
 

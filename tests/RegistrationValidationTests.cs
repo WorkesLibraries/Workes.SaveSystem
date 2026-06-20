@@ -34,6 +34,64 @@ public sealed class RegistrationValidationTests
     }
 
     [Test]
+    public void TryRegisterProvider_WhenValidationSucceeds_RegistersProviderAndLeavesManagerValidated()
+    {
+        var manager = CreateManager();
+        var provider = new MutableProvider("player", schemaVersion: 1);
+
+        var registered = manager.TryRegisterProvider(provider, out var error);
+
+        Assert.That(registered, Is.True);
+        Assert.That(error, Is.Null);
+        Assert.DoesNotThrow(() => manager.SaveToDisk("slot"));
+        Assert.That(File.Exists(Path.Combine(_tempRoot, "slot", "player.json")), Is.True);
+    }
+
+    [Test]
+    public void TryRegisterProvider_WhenValidationFails_DoesNotKeepProvider()
+    {
+        var manager = CreateManager();
+        var provider = new CountingProvider { ThrowOnCapture = true };
+
+        var registered = manager.TryRegisterProvider(provider, out var error);
+
+        Assert.That(registered, Is.False);
+        Assert.That(error, Does.Contain("failed while capturing state"));
+        Assert.That(manager.CaptureSnapshot().Entries, Is.Empty);
+    }
+
+    [Test]
+    public void TryRegisterProvider_WhenValidationFails_RestoresPreviousValidationState()
+    {
+        var manager = CreateManager();
+        var existingProvider = new MutableProvider("player", schemaVersion: 1);
+        manager.RegisterProvider(existingProvider);
+        manager.ValidateRegistrations();
+        var invalidProvider = new NullStateProvider();
+
+        var registered = manager.TryRegisterProvider(invalidProvider, out var error);
+
+        Assert.That(registered, Is.False);
+        Assert.That(error, Does.Contain("returned null state"));
+        Assert.DoesNotThrow(() => manager.SaveToDisk("slot"));
+        Assert.That(File.Exists(Path.Combine(_tempRoot, "slot", "player.json")), Is.True);
+    }
+
+    [Test]
+    public void TryRegisterMemoryProvider_WhenValidationSucceeds_RegistersProviderAndLeavesManagerValidated()
+    {
+        var manager = CreateManager();
+        var provider = new MutableProvider("cache", schemaVersion: 1);
+
+        var registered = manager.TryRegisterMemoryProvider(provider, out var error);
+
+        Assert.That(registered, Is.True);
+        Assert.That(error, Is.Null);
+        Assert.DoesNotThrow(() => manager.SaveToDisk("slot"));
+        Assert.That(manager.CaptureSnapshot().Entries, Has.Count.EqualTo(1));
+    }
+
+    [Test]
     public void SaveToDisk_RequiresValidatedRegistrations()
     {
         var manager = CreateManager();
