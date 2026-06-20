@@ -111,7 +111,7 @@ var manager = new SaveManager<string>(
 
 `BinarySaveSerializer` writes `.bin` provider files. The current serializer contract stores provider payloads as strings, so the binary token payload is Base64-encoded on disk rather than written as raw bytes.
 
-After registering providers, call `ValidateRegistrations()` before disk save/load operations. Registration is intentionally lightweight; validation captures provider state, checks serializer compatibility, validates migration policy, verifies file-name behavior, and rejects provider file-name collisions at the setup point you choose.
+After registering providers, call `ValidateRegistrations()` before disk save/load operations. Registration is intentionally lightweight; validation captures provider state, checks serializer write compatibility, validates migration policy, verifies file-name behavior, and rejects provider file-name collisions at the setup point you choose. Validation is an early compatibility check, not a full future-load proof: issues that only appear while deserializing real saved data can still surface during load.
 
 Use `ListSaveSlots()` to populate save/load menus or tooling with the saves currently present under the configured save root.
 
@@ -392,7 +392,7 @@ Migration rules:
 
 - one `SaveMigrationStep` migrates from `FromVersion` to `FromVersion + 1`;
 - every version gap must have exactly one step;
-- duplicate `FromVersion` steps are rejected during registration validation;
+- duplicate `FromVersion` steps and null migration entries are rejected during registration validation;
 - migration steps mutate the provider payload's `Data` node, not the full envelope;
 - simple helper methods such as `AddIntDefault`, `Rename`, `Move`, `Remove`, and `SetString` cover common top-level field edits;
 - use `SaveMigrationStep.From(...)` to compose several helper actions into one schema-version step;
@@ -412,7 +412,7 @@ A custom serializer must provide these pieces as one coherent format:
 - serialization and deserialization through those schematics;
 - schema-version extraction without fully restoring provider state.
 
-Schematic creation should be lightweight where possible. Provider state compatibility is validated through real provider state during `ValidateRegistrations()` and through deserialization during load.
+Schematic creation should be lightweight where possible. Provider state write compatibility is validated through real provider state during `ValidateRegistrations()`. Read compatibility is validated when real save data is deserialized during load, so custom serializers should still fail clearly for deserialize-only problems.
 
 If providers using the serializer implement `ISaveMigratable`, the serializer must also implement `ISaveMigrationCapableSerializer`. That means it must parse serialized payloads into editable `ISaveDataNode` trees, serialize edited node trees back to the payload format, and expose a matching `NodeFactory` that creates new object, array, and primitive nodes for migration steps.
 

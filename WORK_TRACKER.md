@@ -19,37 +19,27 @@ This file is the durable planning tracker for the save system work. Keep it upda
    - Add internal exception types or a small internal status-carrying wrapper so `SaveLoadStatus` mapping is explicit without changing the public API.
    - Update tests for important classifications.
 
-4. Reject null entries in custom migration lists with a clear validation error.
-   - `ValidateMigrationPolicy(...)` validates null sources and null lists, but custom `ISaveMigrationSource.Migrations` can still contain null elements.
-   - Reject null migration entries before grouping by version and add regression coverage.
-
-5. Document that registration validation does not catch every deserialize-only issue.
-   - Validation confirms provider capture, non-null state, file-name safety, migration policy, and serializer write compatibility.
-   - It does not currently perform a full serialize-then-deserialize round trip for every provider state, so problems that only appear during deserialization can still surface on load.
-   - README should present validation as an early compatibility check, not as a complete proof that future load-time deserialization cannot fail.
-
-6. Stop recovery candidate validation from automatically running provider migrations.
+4. Stop recovery candidate validation from automatically running provider migrations.
    - Recovery validation currently uses the normal deserialize path, which can invoke user migration code while deciding whether a temp/to-delete candidate is valid.
    - Recovery should validate candidate structure and provider-file integrity without mutating serialized data or relying on migration side effects.
    - Define the desired older-schema recovery behavior, update README, and adjust tests that currently expect migration-compatible recovery.
 
-7. Reject or clearly classify null deserialized provider payloads.
+5. Reject or clearly classify null deserialized provider payloads.
    - `JsonSaveSchematic<T>.Deserialize(...)` and the binary schematic can return null payload data after a valid envelope is parsed.
    - Null provider state should produce a clear corrupt-save/load failure rather than surfacing later as a snapshot argument error or invalid request.
    - Add JSON and binary coverage for `"Data": null` / null payload cases.
 
-8. Add recovery/test documentation coverage for strict recovery versus partial-load skip behavior.
+6. Add recovery/test documentation coverage for strict recovery versus partial-load skip behavior.
     - Cover temp-only, main-plus-temp, and main-missing fallback cases with missing provider files under `MissingProviderFileBehavior.Skip`.
     - README should state that skip mode applies to normal loads, while recovery candidate promotion is stricter.
 
-9. Add serializer data-node ownership tests and documentation.
+7. Add serializer data-node ownership tests and documentation.
     - Cover JSON serializer rejecting nodes not produced by its compatible factory.
     - Cover binary serializer rejecting nodes produced by the JSON serializer if owner-token or separate-wrapper enforcement is chosen.
     - README and XML docs should state how custom migration-capable serializers couple `DeserializeToNode`, `SerializeFromNode`, and `NodeFactory`.
 
-10. Add migration validation edge-case tests.
-    - Cover null migration entries from custom migration sources.
-    - Cover duplicate and missing migration paths after the new internal exception mapping is in place.
+8. Add migration validation edge-case tests after the new internal exception mapping is in place.
+    - Re-check duplicate and missing migration paths once load-status classification no longer depends on exception message matching.
 
 ## Later
 
@@ -504,6 +494,15 @@ These points are completed for the current package migration.
 - Updated README provider guidance for memory-provider validation and instance-based unregister behavior.
 - Added regression coverage for null memory-provider state during validation/try-registration and unregistering a drifted provider instance.
 - `dotnet test Workes.SaveSystem.sln` passes with 154 tests.
+
+### 50. Clarified Registration Validation Limits And Migration List Validation
+
+- Rejected null entries in custom `ISaveMigrationSource.Migrations` lists with a clear registration-validation error before duplicate-version grouping runs.
+- Updated public migration source XML documentation to state that the migration list and each migration step must be non-null.
+- Clarified README validation guidance so `ValidateRegistrations()` is described as an early write-compatibility check, while deserialize-only issues can still surface during load.
+- Updated migration README guidance to mention null migration entries are rejected during registration validation.
+- Added regression coverage for null migration steps from custom migration sources.
+- `dotnet test Workes.SaveSystem.sln` passes with 155 tests.
 
 ## Maintenance Rules
 

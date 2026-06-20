@@ -67,6 +67,25 @@ public sealed class SerializerMigrationTests
     }
 
     [Test]
+    public void RegisterProvider_RejectsNullMigrationSteps()
+    {
+        var manager = new SaveManager<string>(CreateOptions());
+        var provider = new MigratingProvider(
+            schemaVersion: 2,
+            current: new V2State { Name = "Current", Level = 1 },
+            migrations: new SaveMigrationStep?[]
+            {
+                null
+            }!);
+
+        manager.RegisterProvider(provider);
+
+        var ex = Assert.Throws<InvalidOperationException>(() => manager.ValidateRegistrations());
+
+        Assert.That(ex!.Message, Does.Contain("contains null entries"));
+    }
+
+    [Test]
     public void LoadFromDisk_AppliesMigrationStepsSequentially()
     {
         var oldManager = new SaveManager<string>(CreateOptions());

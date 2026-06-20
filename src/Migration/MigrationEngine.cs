@@ -36,7 +36,11 @@ namespace Workes.SaveSystem
                     $"SaveProvider with key '{saveKey}' has a null Migrations list."
                 );
 
-            // Check for duplicate migration steps for the same version
+            if (migrations.Any(m => m == null))
+                throw new InvalidOperationException(
+                    $"SaveProvider with key '{saveKey}' has a Migrations list that contains null entries."
+                );
+
             var versionGroups = migrations.GroupBy(m => m.FromVersion).ToList();
             var duplicates = versionGroups.Where(g => g.Count() > 1).ToList();
 
