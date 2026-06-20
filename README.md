@@ -171,6 +171,56 @@ if (!result.Succeeded)
 
 The try-load APIs use the same load path as `LoadFromDisk(...)` and `LoadBackupSlotFromDisk(...)`. Successful loads restore providers normally. Missing saves, disabled backups, registration validation failures, missing provider files, migration failures, recovery failures, corrupt data, and other load failures are reported through `SaveLoadResult.Status`; failed error cases keep the captured exception on `SaveLoadResult.Exception`.
 
+## Scopes And Provider Sets
+
+The core package does not have a provider-group API. In the first reusable version, scope is modeled through save identities, save roots, and manager composition.
+
+Use a scoped identity when the same registered providers are saved per profile, character, world, or slot.
+
+```csharp
+public readonly struct ProfileSlotIdentity
+{
+    public ProfileSlotIdentity(string profileId, string slotId)
+    {
+        ProfileId = profileId;
+        SlotId = slotId;
+    }
+
+    public string ProfileId { get; }
+    public string SlotId { get; }
+}
+
+var profileSaves = new SaveManager<ProfileSlotIdentity>(
+    SaveSystemOptions.Create<ProfileSlotIdentity>(
+        saveRootPath: "ProfileSaves",
+        serializer: new JsonSaveSerializer(),
+        saveNameResolver: identity => $"{identity.ProfileId}_{identity.SlotId}"));
+
+profileSaves.SaveToDisk(new ProfileSlotIdentity("profile-a", "slot-1"));
+```
+
+Resolved save names are folder names, not relative paths, so scope resolvers should produce valid single folder names. Use separate save roots when you want physical folder hierarchy.
+
+Use separate managers when different provider sets have different lifecycles.
+
+```csharp
+var settingsSaves = new SaveManager<string>(
+    SaveSystemOptions.Create(
+        saveRootPath: "SettingsSaves",
+        serializer: new JsonSaveSerializer()));
+settingsSaves.RegisterProvider(settingsProvider);
+
+var gameplaySaves = new SaveManager<ProfileSlotIdentity>(
+    SaveSystemOptions.Create<ProfileSlotIdentity>(
+        saveRootPath: "GameplaySaves",
+        serializer: new JsonSaveSerializer(),
+        saveNameResolver: identity => $"{identity.ProfileId}_{identity.SlotId}"));
+gameplaySaves.RegisterProvider(playerProvider);
+gameplaySaves.RegisterProvider(inventoryProvider);
+```
+
+This keeps provider ownership explicit: settings can be saved globally while gameplay providers are saved per profile slot. If a future application repeatedly needs partial-save domains inside one manager, that can be revisited as a separate provider-group feature.
+
 ## Providers
 
 Each `ISaveProvider` owns one stable save key and one schema version.
