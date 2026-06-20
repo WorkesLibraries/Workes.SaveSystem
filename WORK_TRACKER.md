@@ -4,10 +4,7 @@ This file is the durable planning tracker for the save system work. Keep it upda
 
 ## To-do
 
-1. Add recovery tests for corrupt temp folders when `_toDelete` is also present, so recovery does not delete the last valid save during interrupted swaps.
-2. Add recovery tests for interrupted saves written with older provider schema versions after the application updates, so recovery and migration behavior stay compatible.
-3. Update recovery to validate temp and old recovery candidates, prefer valid temp, fall back to valid `_toDelete`, warn when falling back, and preserve artifacts if neither candidate is valid.
-4. Update recovery validation to use the normal load-compatible path, including schema-version extraction and migrations, so interrupted saves from older provider schema versions can recover after application updates.
+There are no remaining behavior/API points in the active to-do list.
 
 ## Later
 
@@ -443,6 +440,16 @@ These points are completed for the current package migration.
 - Updated migration engine internals, README guidance, and XML documentation to use the serializer-owned node factory.
 - Added public-shape coverage ensuring migration-capable serializers expose node creation through `NodeFactory` only.
 - `dotnet test Workes.SaveSystem.sln` passes with 148 tests.
+
+### 48. Hardened Save Recovery Candidate Validation
+
+- Changed recovery to validate candidate save folders through the normal load-compatible path, including metadata checks, provider file checks, schema-version extraction, migrations, deserialization, and snapshot validation.
+- Preferred valid temp saves during interrupted swaps, but fell back to a valid `_toDelete` previous save when the temp save was corrupt and the main save was missing.
+- Added warning-sink diagnostics when recovery falls back from an invalid temp save to the previous save.
+- Preserved recovery artifacts when neither temp nor previous-save candidates could be validated.
+- Added coverage for corrupt temp fallback, all-candidate-invalid preservation, and recovering an interrupted older-schema temp save through provider migrations.
+- Added README recovery guidance covering automatic recovery, migration-compatible validation, fallback behavior, and artifact preservation.
+- `dotnet test Workes.SaveSystem.sln` passes with 151 tests.
 
 ## Maintenance Rules
 

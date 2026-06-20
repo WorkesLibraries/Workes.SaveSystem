@@ -290,6 +290,14 @@ Backup slot `1` is the most recent previous save. Older backups rotate to higher
 manager.LoadBackupSlotFromDisk("slot-1", slotNumber: 1);
 ```
 
+## Recovery
+
+`LoadFromDisk(...)` automatically calls `RecoverSave(...)` before loading provider data. Recovery handles interrupted atomic save swaps involving the main save folder, the temp folder, and the to-delete folder for the same resolved save path.
+
+Recovery validates candidate save folders through the normal load-compatible path, including metadata checks, provider file checks, schema-version extraction, migrations, deserialization, and snapshot validation. This allows an interrupted save written by an older provider schema version to recover after the application updates, as long as the registered provider has a valid migration path.
+
+If both a temp folder and a previous `_toDelete` folder exist while the main save is missing, the valid temp save is preferred. If the temp save is invalid but the previous save is valid, recovery falls back to the previous save and emits a warning through the configured warning sink. If neither candidate is valid, recovery fails and preserves the recovery artifacts for inspection or manual repair.
+
 ## Migration
 
 Providers that need to load older schema versions implement `ISaveMigratable`.

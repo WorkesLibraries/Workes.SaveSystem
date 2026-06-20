@@ -1028,8 +1028,39 @@ namespace Workes.SaveSystem
 
             if (!Directory.Exists(folderPath) && Directory.Exists(toDeletePath) && Directory.Exists(tempPath))
             {
+                var tempCandidate = ValidateRecoveryCandidate(tempPath);
+                if (tempCandidate.IsValid)
+                {
+                    Directory.Move(tempPath, folderPath);
+                    Directory.Delete(toDeletePath, true);
+                    return;
+                }
+
+                var toDeleteCandidate = ValidateRecoveryCandidate(toDeletePath);
+                if (toDeleteCandidate.IsValid)
+                {
+                    _diagnostics.LogWarning(
+                        $"Recovery found an invalid temp save at '{tempPath}' and is falling back to the previous save at '{toDeletePath}'. Temp validation error: {tempCandidate.ErrorMessage}");
+                    Directory.Delete(tempPath, true);
+                    Directory.Move(toDeletePath, folderPath);
+                    return;
+                }
+
+                throw new InvalidOperationException(
+                    $"Recovery failed: neither temp save at '{tempPath}' nor previous save at '{toDeletePath}' could be validated. " +
+                    $"Temp error: {tempCandidate.ErrorMessage} Previous-save error: {toDeleteCandidate.ErrorMessage}");
+            }
+
+            if (!Directory.Exists(folderPath) && !Directory.Exists(toDeletePath) && Directory.Exists(tempPath))
+            {
+                var tempCandidate = ValidateRecoveryCandidate(tempPath);
+                if (!tempCandidate.IsValid)
+                {
+                    throw new InvalidOperationException(
+                        $"Recovery failed: temp save at '{tempPath}' could not be validated. {tempCandidate.ErrorMessage}");
+                }
+
                 Directory.Move(tempPath, folderPath);
-                Directory.Delete(toDeletePath, true);
                 return;
             }
 
@@ -1041,7 +1072,15 @@ namespace Workes.SaveSystem
 
             if (Directory.Exists(tempPath))
             {
-                ValidateTempSaveFolderFromDisk(tempPath);
+                var tempCandidate = ValidateRecoveryCandidate(tempPath);
+                if (!tempCandidate.IsValid)
+                {
+                    _diagnostics.LogWarning(
+                        $"Recovery found an invalid temp save at '{tempPath}' and is keeping the existing main save. Temp validation error: {tempCandidate.ErrorMessage}");
+                    Directory.Delete(tempPath, true);
+                    return;
+                }
+
                 var mainMeta = TryReadSaveMetadata(folderPath);
                 var tempMeta = TryReadSaveMetadata(tempPath);
                 if (tempMeta == null || string.IsNullOrEmpty(tempMeta.SaveId))
@@ -1051,6 +1090,35 @@ namespace Workes.SaveSystem
                     throw new InvalidOperationException(
                         $"Recovery failed: SaveId mismatch between main and temp (possible tampering). Main: '{mainMeta.SaveId}', temp: '{tempMeta.SaveId}'.");
                 PerformAtomicSwap(saveName);
+            }
+        }
+
+        private readonly struct RecoveryCandidateValidation
+        {
+            public RecoveryCandidateValidation(bool isValid, string? errorMessage)
+            {
+                IsValid = isValid;
+                ErrorMessage = errorMessage;
+            }
+
+            public bool IsValid { get; }
+
+            public string? ErrorMessage { get; }
+        }
+
+        private RecoveryCandidateValidation ValidateRecoveryCandidate(string folderPath)
+        {
+            try
+            {
+                ValidateMetadataFile(folderPath);
+                var serialized = LoadSerializedSnapshotFromFolder(folderPath);
+                var snapshot = DeserializeSnapshot(serialized);
+                ValidateSnapshotForRestore(snapshot);
+                return new RecoveryCandidateValidation(isValid: true, errorMessage: null);
+            }
+            catch (Exception ex)
+            {
+                return new RecoveryCandidateValidation(isValid: false, errorMessage: ex.Message);
             }
         }
 
@@ -1374,17 +1442,6 @@ namespace Workes.SaveSystem
 
             Directory.Delete(folderPath, recursive: true);
             return true;
-        }
-
-        private void ValidateTempSaveFolderFromDisk(string saveFolderPath)
-        {
-            var serializedEntries = PersistedProviders()
-                .ToDictionary(kvp => kvp.Key, kvp => new SerializedSnapshot.SerializedEntry
-                {
-                    SchemaVersion = kvp.Value.Provider.SchemaVersion,
-                    Data = string.Empty
-                });
-            ValidateTempSaveFolderSave(saveFolderPath, serializedEntries);
         }
 
         private string NormalizeSavePath(string savePath)

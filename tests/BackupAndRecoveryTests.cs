@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using Workes.SaveSystem;
 
@@ -179,6 +180,59 @@ public sealed class BackupAndRecoveryTests
     }
 
     [Test]
+    public void RecoverSave_WhenMainIsMissingAndTempIsCorrupt_RestoresValidToDeleteFolder()
+    {
+        var warnings = new List<string>();
+        var manager = CreateManager(warningSink: warnings.Add);
+        var provider = new TestProvider(new TestState { Value = 1 });
+        manager.RegisterProvider(provider);
+        SaveValue(manager, provider, "slot", 1);
+        SaveValue(manager, provider, "other", 7);
+
+        var slotPath = Path.Combine(_tempRoot, "slot");
+        var tempPath = Path.Combine(_tempRoot, "slot_tmp");
+        var toDeletePath = Path.Combine(_tempRoot, "slot_toDelete");
+        Directory.Move(Path.Combine(_tempRoot, "other"), tempPath);
+        File.WriteAllText(Path.Combine(tempPath, "player.json"), "not json");
+        Directory.Move(slotPath, toDeletePath);
+
+        var loaded = manager.LoadFromDisk("slot");
+
+        Assert.That(loaded, Is.True);
+        Assert.That(provider.Current.Value, Is.EqualTo(1));
+        Assert.That(ReadValueFromFolder(slotPath), Is.EqualTo(1));
+        Assert.That(Directory.Exists(tempPath), Is.False);
+        Assert.That(Directory.Exists(toDeletePath), Is.False);
+        Assert.That(warnings, Has.Count.EqualTo(1));
+        Assert.That(warnings[0], Does.Contain("falling back"));
+    }
+
+    [Test]
+    public void RecoverSave_WhenMainIsMissingAndNoCandidateIsValid_PreservesRecoveryArtifacts()
+    {
+        var manager = CreateManager();
+        var provider = new TestProvider(new TestState { Value = 1 });
+        manager.RegisterProvider(provider);
+        SaveValue(manager, provider, "slot", 1);
+        SaveValue(manager, provider, "other", 7);
+
+        var slotPath = Path.Combine(_tempRoot, "slot");
+        var tempPath = Path.Combine(_tempRoot, "slot_tmp");
+        var toDeletePath = Path.Combine(_tempRoot, "slot_toDelete");
+        Directory.Move(Path.Combine(_tempRoot, "other"), tempPath);
+        Directory.Move(slotPath, toDeletePath);
+        File.WriteAllText(Path.Combine(tempPath, "player.json"), "not json");
+        File.WriteAllText(Path.Combine(toDeletePath, "player.json"), "not json");
+
+        var ex = Assert.Throws<InvalidOperationException>(() => manager.RecoverSave("slot"));
+
+        Assert.That(ex!.Message, Does.Contain("Recovery failed"));
+        Assert.That(Directory.Exists(tempPath), Is.True);
+        Assert.That(Directory.Exists(toDeletePath), Is.True);
+        Assert.That(Directory.Exists(slotPath), Is.False);
+    }
+
+    [Test]
     public void RecoverSave_PromotesTempFolderWhenMainAndToDeleteAreMissing()
     {
         var manager = CreateManager();
@@ -255,9 +309,36 @@ public sealed class BackupAndRecoveryTests
         Assert.That(ex!.Message, Does.Contain("SaveId mismatch"));
     }
 
+    [Test]
+    public void RecoverSave_ValidatesTempFolderThroughMigrationPath()
+    {
+        var oldManager = CreateManager();
+        oldManager.RegisterProvider(new V1Provider(new V1State { Name = "Scout" }));
+        oldManager.ValidateRegistrations();
+        oldManager.SaveToDisk("slot");
+
+        var slotPath = Path.Combine(_tempRoot, "slot");
+        var tempPath = Path.Combine(_tempRoot, "slot_tmp");
+        Directory.Move(slotPath, tempPath);
+
+        var newProvider = new MigratingProvider(new V2State { Name = "Unset", Level = 0 });
+        var newManager = CreateManager();
+        newManager.RegisterProvider(newProvider);
+        newManager.ValidateRegistrations();
+
+        var loaded = newManager.LoadFromDisk("slot");
+
+        Assert.That(loaded, Is.True);
+        Assert.That(newProvider.Current.Name, Is.EqualTo("Scout"));
+        Assert.That(newProvider.Current.Level, Is.EqualTo(12));
+        Assert.That(Directory.Exists(slotPath), Is.True);
+        Assert.That(Directory.Exists(tempPath), Is.False);
+    }
+
     private SaveManager<string> CreateManager(
         bool enableBackupSystem = false,
-        int backupSystemMaxBackupCount = 0)
+        int backupSystemMaxBackupCount = 0,
+        Action<string>? warningSink = null)
     {
         return new SaveManager<string>(
             new SaveSystemOptions<string>(
@@ -267,7 +348,8 @@ public sealed class BackupAndRecoveryTests
                 savePathResolver: identity => identity,
                 fileNameResolver: SaveSystemOptions<string>.DefaultFileNameResolver,
                 enableBackupSystem: enableBackupSystem,
-                backupSystemMaxBackupCount: backupSystemMaxBackupCount));
+                backupSystemMaxBackupCount: backupSystemMaxBackupCount,
+                warningSink: warningSink));
     }
 
     private static void SaveValue(
@@ -334,6 +416,17 @@ public sealed class BackupAndRecoveryTests
         public int Value { get; set; }
     }
 
+    public sealed class V1State
+    {
+        public string Name { get; set; } = string.Empty;
+    }
+
+    public sealed class V2State
+    {
+        public string Name { get; set; } = string.Empty;
+        public int Level { get; set; }
+    }
+
     private sealed class TestProvider : ISaveProvider<TestState>
     {
         public TestProvider(TestState current)
@@ -355,5 +448,65 @@ public sealed class BackupAndRecoveryTests
         {
             Current = state;
         }
+    }
+
+    private sealed class V1Provider : ISaveProvider<V1State>
+    {
+        public V1Provider(V1State current)
+        {
+            Current = current;
+        }
+
+        public string SaveKey => "player";
+        public int SchemaVersion => 1;
+        public int LoadPriority => 0;
+        public V1State Current { get; set; }
+
+        public V1State CaptureState()
+        {
+            return Current;
+        }
+
+        public void RestoreState(V1State state)
+        {
+            Current = state;
+        }
+    }
+
+    private sealed class MigratingProvider : ISaveProvider<V2State>, ISaveMigratable
+    {
+        public MigratingProvider(V2State current)
+        {
+            Current = current;
+        }
+
+        public string SaveKey => "player";
+        public int SchemaVersion => 2;
+        public int LoadPriority => 0;
+        public V2State Current { get; private set; }
+
+        public V2State CaptureState()
+        {
+            return Current;
+        }
+
+        public void RestoreState(V2State state)
+        {
+            Current = state;
+        }
+
+        public ISaveMigrationSource CreateMigrationSource()
+        {
+            return new MigrationSource();
+        }
+    }
+
+    private sealed class MigrationSource : ISaveMigrationSource
+    {
+        public IReadOnlyList<SaveMigrationStep> Migrations { get; } =
+            new[]
+            {
+                SaveMigrationStep.AddIntDefault(fromVersion: 1, key: "Level", value: 12)
+            };
     }
 }
