@@ -137,6 +137,26 @@ if (metadata != null)
 
 Metadata reads return `null` when no metadata file exists and throw when a metadata file is present but invalid. The current metadata contract exposes the stable save id used for recovery validation, plus created and last-written UTC timestamps. Application-owned display metadata such as character name, playtime, difficulty, or screenshot references should live in a provider for now.
 
+Use `TryLoadFromDisk(...)` or `TryLoadBackupSlotFromDisk(...)` when a UI or repair tool needs a structured outcome instead of exceptions.
+
+```csharp
+SaveLoadResult result = manager.TryLoadFromDisk("slot-1");
+if (!result.Succeeded)
+{
+    switch (result.Status)
+    {
+        case SaveLoadStatus.NotFound:
+            break;
+        case SaveLoadStatus.CorruptData:
+        case SaveLoadStatus.MigrationFailed:
+            logger.Warn(result.Message);
+            break;
+    }
+}
+```
+
+The try-load APIs use the same load path as `LoadFromDisk(...)` and `LoadBackupSlotFromDisk(...)`. Successful loads restore providers normally. Missing saves, disabled backups, registration validation failures, missing provider files, migration failures, recovery failures, corrupt data, and other load failures are reported through `SaveLoadResult.Status`; failed error cases keep the captured exception on `SaveLoadResult.Exception`.
+
 ## Providers
 
 Each `ISaveProvider` owns one stable save key and one schema version.

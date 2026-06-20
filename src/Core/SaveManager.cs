@@ -726,6 +726,29 @@ namespace Workes.SaveSystem
         }
 
         /// <summary>
+        /// Attempts to load the saved state from disk and returns a structured result instead of throwing for load failures.
+        /// </summary>
+        /// <remarks>
+        /// This method uses the same loading path as <see cref="LoadFromDisk"/>. Failed loads preserve the captured
+        /// exception in <see cref="SaveLoadResult.Exception"/> for diagnostics.
+        /// </remarks>
+        /// <param name="identity">The identity that identifies which save slot to load from.</param>
+        /// <returns>A structured load result describing success, missing saves, validation failures, corrupt data, migration failures, and other load failures.</returns>
+        public SaveLoadResult TryLoadFromDisk(TIdentity identity)
+        {
+            try
+            {
+                return LoadFromDisk(identity)
+                    ? SaveLoadResult.Success()
+                    : SaveLoadResult.NotFound("Save was not found.");
+            }
+            catch (Exception ex)
+            {
+                return SaveLoadResult.Failure(ClassifyLoadException(ex), ex);
+            }
+        }
+
+        /// <summary>
         /// Loads a backup slot for the given identity and restores it to all registered providers.
         /// Backup slots are numbered starting from 1, where 1 is the most recent backup.
         /// </summary>
@@ -771,6 +794,34 @@ namespace Workes.SaveSystem
             RestoreSnapshot(snapshot);
 
             return true;
+        }
+
+        /// <summary>
+        /// Attempts to load a backup slot and returns a structured result instead of throwing for load failures.
+        /// </summary>
+        /// <remarks>
+        /// This method uses the same loading path as <see cref="LoadBackupSlotFromDisk"/>. Failed loads preserve the
+        /// captured exception in <see cref="SaveLoadResult.Exception"/> for diagnostics.
+        /// </remarks>
+        /// <param name="identity">The identity that identifies which save's backup to load.</param>
+        /// <param name="slotNumber">The backup slot number (1-based, e.g., 1 = _0001, 2 = _0002).</param>
+        /// <returns>A structured load result describing success, missing backups, disabled backups, validation failures, corrupt data, migration failures, and other load failures.</returns>
+        public SaveLoadResult TryLoadBackupSlotFromDisk(TIdentity identity, int slotNumber)
+        {
+            if (!_options.EnableBackupSystem)
+                return SaveLoadResult.BackupSystemDisabled(
+                    "Cannot load backup slot: Backup system is disabled. Enable backups in SaveSystemOptions to use backup slots.");
+
+            try
+            {
+                return LoadBackupSlotFromDisk(identity, slotNumber)
+                    ? SaveLoadResult.Success()
+                    : SaveLoadResult.NotFound("Backup slot was not found.");
+            }
+            catch (Exception ex)
+            {
+                return SaveLoadResult.Failure(ClassifyLoadException(ex), ex);
+            }
         }
 
         /// <summary>
@@ -1144,6 +1195,37 @@ namespace Workes.SaveSystem
         private bool HasSaveMetadata(string folderPath)
         {
             return File.Exists(GetMetadataFilePath(folderPath));
+        }
+
+        private static SaveLoadStatus ClassifyLoadException(Exception exception)
+        {
+            if (exception is ArgumentException)
+                return SaveLoadStatus.InvalidRequest;
+
+            if (!(exception is InvalidOperationException))
+                return SaveLoadStatus.LoadFailed;
+
+            var message = exception.Message;
+
+            if (message.IndexOf("ValidateRegistrations", StringComparison.Ordinal) >= 0)
+                return SaveLoadStatus.RegistrationsNotValidated;
+
+            if (message.IndexOf("Missing save file", StringComparison.Ordinal) >= 0)
+                return SaveLoadStatus.MissingProviderFile;
+
+            if (message.IndexOf("Failed to migrate save data", StringComparison.Ordinal) >= 0)
+                return SaveLoadStatus.MigrationFailed;
+
+            if (message.IndexOf("Recovery failed", StringComparison.Ordinal) >= 0)
+                return SaveLoadStatus.RecoveryFailed;
+
+            if (message.IndexOf("Failed to extract schema version", StringComparison.Ordinal) >= 0 ||
+                message.IndexOf("Failed to deserialize", StringComparison.Ordinal) >= 0 ||
+                message.IndexOf("Expected all", StringComparison.Ordinal) >= 0 ||
+                message.IndexOf("Expected ", StringComparison.Ordinal) >= 0)
+                return SaveLoadStatus.CorruptData;
+
+            return SaveLoadStatus.LoadFailed;
         }
 
         private static bool DeleteDirectoryIfExists(string folderPath)
