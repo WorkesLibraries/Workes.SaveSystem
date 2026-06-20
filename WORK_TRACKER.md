@@ -24,21 +24,16 @@ This file is the durable planning tracker for the save system work. Keep it upda
    - Recovery should validate candidate structure and provider-file integrity without mutating serialized data or relying on migration side effects.
    - Define the desired older-schema recovery behavior, update README, and adjust tests that currently expect migration-compatible recovery.
 
-5. Reject or clearly classify null deserialized provider payloads.
-   - `JsonSaveSchematic<T>.Deserialize(...)` and the binary schematic can return null payload data after a valid envelope is parsed.
-   - Null provider state should produce a clear corrupt-save/load failure rather than surfacing later as a snapshot argument error or invalid request.
-   - Add JSON and binary coverage for `"Data": null` / null payload cases.
-
-6. Add recovery/test documentation coverage for strict recovery versus partial-load skip behavior.
+5. Add recovery/test documentation coverage for strict recovery versus partial-load skip behavior.
     - Cover temp-only, main-plus-temp, and main-missing fallback cases with missing provider files under `MissingProviderFileBehavior.Skip`.
     - README should state that skip mode applies to normal loads, while recovery candidate promotion is stricter.
 
-7. Add serializer data-node ownership tests and documentation.
+6. Add serializer data-node ownership tests and documentation.
     - Cover JSON serializer rejecting nodes not produced by its compatible factory.
     - Cover binary serializer rejecting nodes produced by the JSON serializer if owner-token or separate-wrapper enforcement is chosen.
     - README and XML docs should state how custom migration-capable serializers couple `DeserializeToNode`, `SerializeFromNode`, and `NodeFactory`.
 
-8. Add migration validation edge-case tests after the new internal exception mapping is in place.
+7. Add migration validation edge-case tests after the new internal exception mapping is in place.
     - Re-check duplicate and missing migration paths once load-status classification no longer depends on exception message matching.
 
 ## Later
@@ -503,6 +498,14 @@ These points are completed for the current package migration.
 - Updated migration README guidance to mention null migration entries are rejected during registration validation.
 - Added regression coverage for null migration steps from custom migration sources.
 - `dotnet test Workes.SaveSystem.sln` passes with 155 tests.
+
+### 51. Rejected Null Deserialized Provider Payloads
+
+- Changed JSON and binary schematics to reject envelopes whose provider `Data` payload deserializes to null.
+- Wrapped provider deserialization in `SaveManager` with provider context so malformed provider payloads classify as corrupt data in try-load results.
+- Documented that valid envelopes with null provider payload data are corrupt save data because provider state must be non-null.
+- Added JSON try-load coverage for null provider payload data and binary serializer coverage for null payload data.
+- `dotnet test Workes.SaveSystem.sln` passes with 157 tests.
 
 ## Maintenance Rules
 

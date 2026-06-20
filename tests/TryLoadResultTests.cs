@@ -105,6 +105,22 @@ public sealed class TryLoadResultTests
     }
 
     [Test]
+    public void TryLoadFromDisk_ReturnsCorruptDataWhenProviderPayloadDataIsNull()
+    {
+        var manager = CreateManager();
+        var provider = new TestProvider("player", new TestState { Value = 1 });
+        manager.RegisterProvider(provider);
+        SaveValue(manager, provider, "slot", 1);
+        File.WriteAllText(Path.Combine(_tempRoot, "slot", "player.json"), """{"SchemaVersion":1,"Data":null}""");
+
+        var result = manager.TryLoadFromDisk("slot");
+
+        Assert.That(result.Status, Is.EqualTo(SaveLoadStatus.CorruptData));
+        Assert.That(result.Exception, Is.Not.Null);
+        Assert.That(result.Exception!.Message, Does.Contain("Failed to deserialize save data"));
+    }
+
+    [Test]
     public void TryLoadFromDisk_ReturnsMigrationFailed()
     {
         var oldManager = CreateManager();

@@ -60,6 +60,9 @@ namespace Workes.SaveSystem
                     );
                 }
 
+                if (payload.Data == null)
+                    throw new InvalidOperationException("Deserialized payload data was null. Provider state cannot be null.");
+
                 return payload.Data;
             }
             catch (Exception ex)

@@ -169,7 +169,7 @@ if (!result.Succeeded)
 }
 ```
 
-The try-load APIs use the same load path as `LoadFromDisk(...)` and `LoadBackupSlotFromDisk(...)`. Successful loads restore providers normally. Missing saves, disabled backups, registration validation failures, missing provider files, migration failures, recovery failures, corrupt data, and other load failures are reported through `SaveLoadResult.Status`; failed error cases keep the captured exception on `SaveLoadResult.Exception`.
+The try-load APIs use the same load path as `LoadFromDisk(...)` and `LoadBackupSlotFromDisk(...)`. Successful loads restore providers normally. Missing saves, disabled backups, registration validation failures, missing provider files, migration failures, recovery failures, corrupt data, and other load failures are reported through `SaveLoadResult.Status`; failed error cases keep the captured exception on `SaveLoadResult.Exception`. Provider payloads with a valid envelope but null `Data` are treated as corrupt data because provider state must be non-null.
 
 For `TryLoadBackupSlotFromDisk(...)`, disabled backups are reported as `SaveLoadStatus.BackupSystemDisabled` before request or registration validation. This makes backup-disabled UI checks cheap and non-throwing even when the caller has not prepared provider registrations.
 

@@ -584,6 +584,20 @@ namespace Workes.SaveSystem
             return snapshot;
         }
 
+        private object DeserializeProviderState(string saveKey, string serializedData, ISaveSchematic schematic)
+        {
+            try
+            {
+                return _options.Serializer.Deserialize(serializedData, schematic);
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException(
+                    $"Failed to deserialize save data for provider '{saveKey}'.",
+                    ex);
+            }
+        }
+
         /// <summary>
         /// Restores the state of all registered providers from a snapshot.
         /// Providers are restored in order of their load priority, then all providers receive
@@ -749,7 +763,7 @@ namespace Workes.SaveSystem
                     }
                 }
 
-                var state = _options.Serializer.Deserialize(serializedData, schematic);
+                var state = DeserializeProviderState(kvp.Key, serializedData, schematic);
 
                 snapshot.Add(
                     kvp.Key,
@@ -1288,7 +1302,7 @@ namespace Workes.SaveSystem
                 if (schematic == null)
                     continue;
 
-                var state = _options.Serializer.Deserialize(serializedData, schematic);
+                var state = DeserializeProviderState(provider.Key, serializedData, schematic);
                 if (state == null)
                 {
                     allFilesDeserialize = false;

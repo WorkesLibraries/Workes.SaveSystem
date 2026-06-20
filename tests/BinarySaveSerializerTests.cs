@@ -85,6 +85,23 @@ public sealed class BinarySaveSerializerTests
         Assert.That(ex!.Message, Does.Contain("Failed to extract schema version"));
     }
 
+    [Test]
+    public void Deserialize_RejectsNullPayloadData()
+    {
+        var serializer = new BinarySaveSerializer();
+        var schematic = serializer.CreateSchematic(typeof(TestState));
+        schematic.SchemaVersion = 1;
+        var payload = serializer.NodeFactory.CreateObject();
+        payload.Set("SchemaVersion", serializer.NodeFactory.CreateInt(1));
+        payload.Set("Data", serializer.NodeFactory.CreateNull());
+        var serialized = serializer.SerializeFromNode(payload);
+
+        var ex = Assert.Throws<InvalidOperationException>(() => serializer.Deserialize(serialized, schematic));
+
+        Assert.That(ex!.Message, Does.Contain("Failed to parse binary save payload"));
+        Assert.That(ex.InnerException!.Message, Does.Contain("payload data was null"));
+    }
+
     private SaveManager<string> CreateManager()
     {
         return new SaveManager<string>(
