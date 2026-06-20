@@ -286,6 +286,48 @@ namespace Workes.SaveSystem
                 .ToArray();
         }
 
+        /// <summary>
+        /// Checks whether a main save exists for the specified identity.
+        /// </summary>
+        /// <remarks>
+        /// This is a non-mutating raw disk check. It does not recover incomplete saves and does not require
+        /// registration validation. A save exists only when the resolved main save folder contains save metadata.
+        /// </remarks>
+        /// <param name="identity">The identity that identifies which save slot to check.</param>
+        /// <returns>True when a main save folder with save metadata exists; otherwise, false.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="identity"/> is null.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when the resolved save name is invalid.</exception>
+        public bool SaveExists(TIdentity identity)
+        {
+            var saveName = ResolveSaveName(identity);
+            return HasSaveMetadata(GetMainFolderPath(saveName));
+        }
+
+        /// <summary>
+        /// Checks whether a numbered backup slot exists for the specified identity.
+        /// </summary>
+        /// <remarks>
+        /// This is a non-mutating raw disk check. It does not require registration validation and can be used
+        /// even when backup creation is currently disabled. A backup exists only when the backup folder contains
+        /// save metadata.
+        /// </remarks>
+        /// <param name="identity">The identity that identifies which save's backup should be checked.</param>
+        /// <param name="slotNumber">The backup slot number (1-based, e.g., 1 = _0001, 2 = _0002).</param>
+        /// <returns>True when the backup folder with save metadata exists; otherwise, false.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="identity"/> is null.</exception>
+        /// <exception cref="ArgumentException">Thrown when <paramref name="slotNumber"/> is less than 1.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when the resolved save name is invalid.</exception>
+        public bool BackupSlotExists(TIdentity identity, int slotNumber)
+        {
+            var saveName = ResolveSaveName(identity);
+
+            if (slotNumber < 1)
+                throw new ArgumentException("Backup slot number must be at least 1.", nameof(slotNumber));
+
+            var backupSuffix = $"_{slotNumber:D4}";
+            return HasSaveMetadata(_backupManager.GetBackupFolderPath(saveName, backupSuffix));
+        }
+
         private void ValidateProviderSerialization(ProviderEntry providerEntry, ISaveSchematic schematic)
         {
             object state;
@@ -1020,6 +1062,11 @@ namespace Workes.SaveSystem
             if (folderName.EndsWith(ToDeleteFolderName, StringComparison.Ordinal))
                 return false;
 
+            return HasSaveMetadata(folderPath);
+        }
+
+        private bool HasSaveMetadata(string folderPath)
+        {
             return File.Exists(GetMetadataFilePath(folderPath));
         }
 

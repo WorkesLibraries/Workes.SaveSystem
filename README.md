@@ -116,6 +116,15 @@ bool backupDeleted = manager.DeleteBackupSlot("slot-1", slotNumber: 1);
 
 `DeleteSave(...)` removes the main save and any temp or to-delete artifacts for the same resolved save name. It does not remove backups. `DeleteBackupSlot(...)` removes only the numbered backup folder and can be used even when backup creation is currently disabled.
 
+Use `SaveExists(...)` and `BackupSlotExists(...)` for lightweight UI checks such as enabling load buttons or showing overwrite prompts.
+
+```csharp
+bool canLoad = manager.SaveExists("slot-1");
+bool canRestoreBackup = manager.BackupSlotExists("slot-1", slotNumber: 1);
+```
+
+Existence checks inspect the raw disk layout without loading provider data, recovering temp folders, or requiring registration validation. A save or backup exists only when its folder contains save metadata.
+
 ## Providers
 
 Each `ISaveProvider` owns one stable save key and one schema version.
