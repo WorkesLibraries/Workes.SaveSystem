@@ -37,7 +37,7 @@ namespace Workes.SaveSystem
             catch (Exception ex)
             {
                 throw new ArgumentException(
-                    $"JsonSaveSerializer cannot create a schematic for type {stateType.Name}. The type must be JSON-serializable (e.g. parameterless constructor, serializable fields).",
+                    $"JsonSaveSerializer cannot create a schematic for type {stateType.Name}.",
                     nameof(stateType),
                     ex
                 );

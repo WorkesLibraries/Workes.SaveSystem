@@ -90,6 +90,34 @@ public sealed class RegistrationValidationTests
         Assert.That(ex!.Message, Does.Contain("failed while capturing state"));
     }
 
+    [Test]
+    public void ValidateRegistrations_AllowsNewtonsoftCompatibleStateWithoutParameterlessConstructor()
+    {
+        var manager = CreateManager();
+        var provider = new ConstructorStateProvider(new ConstructorState("Rook", 5));
+        manager.RegisterProvider<ConstructorState>(provider);
+
+        manager.ValidateRegistrations();
+        manager.SaveToDisk("slot");
+        provider.Current = new ConstructorState("Changed", 1);
+        var loaded = manager.LoadFromDisk("slot");
+
+        Assert.That(loaded, Is.True);
+        Assert.That(provider.Current.Name, Is.EqualTo("Rook"));
+        Assert.That(provider.Current.Level, Is.EqualTo(5));
+    }
+
+    [Test]
+    public void ValidateRegistrations_RejectsStateThatCannotSerialize()
+    {
+        var manager = CreateManager();
+        manager.RegisterProvider<UnserializableState>(new UnserializableProvider());
+
+        var ex = Assert.Throws<InvalidOperationException>(() => manager.ValidateRegistrations());
+
+        Assert.That(ex!.Message, Does.Contain("incompatible state"));
+    }
+
     private SaveManager<string> CreateManager(
         bool enableBackupSystem = false,
         int backupSystemMaxBackupCount = 0)
@@ -108,6 +136,24 @@ public sealed class RegistrationValidationTests
     public sealed class TestState
     {
         public int Value { get; set; }
+    }
+
+    public sealed class ConstructorState
+    {
+        public ConstructorState(string name, int level)
+        {
+            Name = name;
+            Level = level;
+        }
+
+        public string Name { get; }
+
+        public int Level { get; }
+    }
+
+    public sealed class UnserializableState
+    {
+        public Stream Stream { get; } = Stream.Null;
     }
 
     private sealed class CountingProvider : ISaveProvider
@@ -129,6 +175,50 @@ public sealed class RegistrationValidationTests
                 throw new InvalidOperationException("capture failed");
 
             return new TestState { Value = 1 };
+        }
+
+        public void RestoreState(object state)
+        {
+        }
+    }
+
+    private sealed class ConstructorStateProvider : ISaveProvider
+    {
+        public ConstructorStateProvider(ConstructorState current)
+        {
+            Current = current;
+        }
+
+        public string SaveKey => "constructor";
+
+        public int SchemaVersion => 1;
+
+        public int LoadPriority => 0;
+
+        public ConstructorState Current { get; set; }
+
+        public object CaptureState()
+        {
+            return Current;
+        }
+
+        public void RestoreState(object state)
+        {
+            Current = (ConstructorState)state;
+        }
+    }
+
+    private sealed class UnserializableProvider : ISaveProvider
+    {
+        public string SaveKey => "unserializable";
+
+        public int SchemaVersion => 1;
+
+        public int LoadPriority => 0;
+
+        public object CaptureState()
+        {
+            return new UnserializableState();
         }
 
         public void RestoreState(object state)

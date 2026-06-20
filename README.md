@@ -109,6 +109,7 @@ Each `ISaveProvider` owns one stable save key and one schema version.
 Save keys are persistent identity. Changing a provider key changes the filename and breaks loading of existing provider data unless the application handles that compatibility.
 
 Provider state must be compatible with the serializer and with the type passed to `RegisterProvider<TState>()`.
+The built-in JSON serializer does not require a public parameterless constructor during registration; constructor-based DTOs are supported when Newtonsoft.Json can serialize and deserialize the real captured state.
 
 ```csharp
 manager.RegisterProvider<PlayerState>(playerProvider);
@@ -232,6 +233,8 @@ A custom serializer must provide these pieces as one coherent format:
 - schematic creation for provider state types;
 - serialization and deserialization through those schematics;
 - schema-version extraction without fully restoring provider state.
+
+Schematic creation should be lightweight where possible. Provider state compatibility is validated through real provider state during `ValidateRegistrations()` and through deserialization during load.
 
 If providers using the serializer implement `ISaveMigratable`, the serializer must also implement `ISaveMigrationCapableSerializer`. That means it must parse serialized payloads into editable `ISaveDataNode` trees, serialize edited node trees back to the payload format, and create new object, array, and primitive nodes for migration steps.
 
