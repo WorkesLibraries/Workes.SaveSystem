@@ -69,6 +69,95 @@ public sealed class ProviderLifecycleTests
     }
 
     [Test]
+    public void RestoreSnapshot_RejectsNullSnapshot()
+    {
+        var manager = new SaveManager<string>(CreateOptions());
+
+        var ex = Assert.Throws<ArgumentNullException>(() => manager.RestoreSnapshot(null!));
+
+        Assert.That(ex!.ParamName, Is.EqualTo("snapshot"));
+    }
+
+    [Test]
+    public void RestoreSnapshot_RejectsDuplicateEntriesBeforeMutatingProviders()
+    {
+        var log = new List<string>();
+        var manager = new SaveManager<string>(CreateOptions());
+        var provider = new LifecycleProvider("player", loadPriority: 0, value: 1, log);
+        manager.RegisterProvider<TestState>(provider);
+        var snapshot = new SaveSnapshot();
+        snapshot.Add("player", schemaVersion: 1, state: new TestState { Value = 10 });
+        snapshot.Add("player", schemaVersion: 1, state: new TestState { Value = 20 });
+
+        var ex = Assert.Throws<InvalidOperationException>(() => manager.RestoreSnapshot(snapshot));
+
+        Assert.That(ex!.Message, Does.Contain("multiple entries"));
+        Assert.That(provider.Current.Value, Is.EqualTo(1));
+        Assert.That(log, Is.Empty);
+    }
+
+    [Test]
+    public void RestoreSnapshot_RejectsUnknownProviderEntriesBeforeMutatingProviders()
+    {
+        var log = new List<string>();
+        var manager = new SaveManager<string>(CreateOptions());
+        var provider = new LifecycleProvider("player", loadPriority: 0, value: 1, log);
+        manager.RegisterProvider(provider);
+        var snapshot = new SaveSnapshot();
+        snapshot.Add("missing", schemaVersion: 1, state: new TestState { Value = 10 });
+
+        var ex = Assert.Throws<InvalidOperationException>(() => manager.RestoreSnapshot(snapshot));
+
+        Assert.That(ex!.Message, Does.Contain("unregistered provider"));
+        Assert.That(provider.Current.Value, Is.EqualTo(1));
+        Assert.That(log, Is.Empty);
+    }
+
+    [Test]
+    public void RestoreSnapshot_RejectsSchemaMismatchBeforeMutatingProviders()
+    {
+        var log = new List<string>();
+        var manager = new SaveManager<string>(CreateOptions());
+        var provider = new LifecycleProvider("player", loadPriority: 0, value: 1, log);
+        manager.RegisterProvider(provider);
+        var snapshot = new SaveSnapshot();
+        snapshot.Add("player", schemaVersion: 2, state: new TestState { Value = 10 });
+
+        var ex = Assert.Throws<InvalidOperationException>(() => manager.RestoreSnapshot(snapshot));
+
+        Assert.That(ex!.Message, Does.Contain("schema version"));
+        Assert.That(provider.Current.Value, Is.EqualTo(1));
+        Assert.That(log, Is.Empty);
+    }
+
+    [Test]
+    public void RestoreSnapshot_RejectsIncompatiblePersistedStateBeforeMutatingProviders()
+    {
+        var log = new List<string>();
+        var manager = new SaveManager<string>(CreateOptions());
+        var provider = new LifecycleProvider("player", loadPriority: 0, value: 1, log);
+        manager.RegisterProvider<TestState>(provider);
+        var snapshot = new SaveSnapshot();
+        snapshot.Add("player", schemaVersion: 1, state: "not test state");
+
+        var ex = Assert.Throws<InvalidOperationException>(() => manager.RestoreSnapshot(snapshot));
+
+        Assert.That(ex!.Message, Does.Contain("incompatible"));
+        Assert.That(provider.Current.Value, Is.EqualTo(1));
+        Assert.That(log, Is.Empty);
+    }
+
+    [Test]
+    public void ValidateSnapshotForRestore_AllowsMissingRegisteredProviders()
+    {
+        var manager = new SaveManager<string>(CreateOptions());
+        manager.RegisterProvider(new LifecycleProvider("player", loadPriority: 0, value: 1, new List<string>()));
+        var snapshot = new SaveSnapshot();
+
+        Assert.DoesNotThrow(() => manager.ValidateSnapshotForRestore(snapshot));
+    }
+
+    [Test]
     public void LoadFromDisk_ReturnsFalseWithoutAfterLoadCallbacksWhenSaveDoesNotExist()
     {
         var log = new List<string>();

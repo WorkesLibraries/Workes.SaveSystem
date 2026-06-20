@@ -118,6 +118,8 @@ manager.ValidateRegistrations();
 
 Providers can optionally implement `ISaveLifecycle` to receive `OnBeforeSave()` before capture and `OnAfterLoad()` after a successful restore. Providers can also be registered without a schematic through `RegisterProvider(provider)` when they should participate in snapshots but not write their state to disk.
 
+`RestoreSnapshot(...)` validates a snapshot before mutating providers. Validation rejects duplicate provider keys, unknown provider keys, schema mismatches, and persisted-provider state that does not match the registered schematic. Registered providers that are absent from the snapshot are skipped. If validation passes but a provider throws from `RestoreState(...)`, earlier providers may already have been restored.
+
 ## Backups
 
 Backups are configured through `SaveSystemOptions<TIdentity>`.

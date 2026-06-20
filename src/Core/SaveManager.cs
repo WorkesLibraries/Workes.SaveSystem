@@ -300,8 +300,16 @@ namespace Workes.SaveSystem
         /// an <see cref="ISaveLifecycle.OnAfterLoad"/> callback if they implement <see cref="ISaveLifecycle"/>.
         /// </summary>
         /// <param name="snapshot">The snapshot to restore from. Providers not present in the snapshot are skipped.</param>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="snapshot"/> is null.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when the snapshot is invalid for the current registrations.</exception>
+        /// <remarks>
+        /// This method validates the snapshot before mutating providers. If validation passes but a provider throws
+        /// from <see cref="ISaveProvider.RestoreState"/>, earlier providers may already have been restored.
+        /// </remarks>
         public void RestoreSnapshot(SaveSnapshot snapshot)
         {
+            ValidateSnapshotForRestore(snapshot);
+
             foreach (var entry in snapshot.Entries
                          .OrderBy(e => e.LoadPriority))
             {
@@ -315,6 +323,65 @@ namespace Workes.SaveSystem
             {
                 if (provider.Provider is ISaveLifecycle lifecycle)
                     lifecycle.OnAfterLoad();
+            }
+        }
+
+        /// <summary>
+        /// Validates that a snapshot can be restored by the currently registered providers.
+        /// </summary>
+        /// <remarks>
+        /// Snapshot validation rejects duplicate entries, unknown provider keys, schema mismatches, and persisted
+        /// provider states that are incompatible with their registered schematic. Registered providers that are
+        /// absent from the snapshot are allowed and will be skipped during restore.
+        /// </remarks>
+        /// <param name="snapshot">The snapshot to validate.</param>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="snapshot"/> is null.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when the snapshot cannot be restored by this manager.</exception>
+        public void ValidateSnapshotForRestore(SaveSnapshot snapshot)
+        {
+            if (snapshot == null)
+                throw new ArgumentNullException(nameof(snapshot));
+
+            var seenKeys = new HashSet<string>();
+            foreach (var entry in snapshot.Entries)
+            {
+                if (!seenKeys.Add(entry.SaveKey))
+                {
+                    throw new InvalidOperationException(
+                        $"Snapshot contains multiple entries for provider key '{entry.SaveKey}'.");
+                }
+
+                if (!_providers.TryGetValue(entry.SaveKey, out var providerEntry))
+                {
+                    throw new InvalidOperationException(
+                        $"Snapshot contains entry for unregistered provider key '{entry.SaveKey}'.");
+                }
+
+                if (entry.SchemaVersion != providerEntry.Provider.SchemaVersion)
+                {
+                    throw new InvalidOperationException(
+                        $"Snapshot entry for provider '{entry.SaveKey}' has schema version {entry.SchemaVersion}, but the registered provider expects {providerEntry.Provider.SchemaVersion}.");
+                }
+
+                ValidateSnapshotEntryState(entry, providerEntry);
+            }
+        }
+
+        private void ValidateSnapshotEntryState(SaveSnapshot.Entry entry, ProviderEntry providerEntry)
+        {
+            var schematic = providerEntry.Schematic;
+            if (schematic == null)
+                return;
+
+            try
+            {
+                _options.Serializer.Serialize(entry.State, schematic);
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException(
+                    $"Snapshot entry for provider '{entry.SaveKey}' contains state incompatible with the registered schematic.",
+                    ex);
             }
         }
 
