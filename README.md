@@ -171,6 +171,8 @@ if (!result.Succeeded)
 
 The try-load APIs use the same load path as `LoadFromDisk(...)` and `LoadBackupSlotFromDisk(...)`. Successful loads restore providers normally. Missing saves, disabled backups, registration validation failures, missing provider files, migration failures, recovery failures, corrupt data, and other load failures are reported through `SaveLoadResult.Status`; failed error cases keep the captured exception on `SaveLoadResult.Exception`.
 
+For `TryLoadBackupSlotFromDisk(...)`, disabled backups are reported as `SaveLoadStatus.BackupSystemDisabled` before request or registration validation. This makes backup-disabled UI checks cheap and non-throwing even when the caller has not prepared provider registrations.
+
 ## Scopes And Provider Sets
 
 The core package does not have a provider-group API. In the first reusable version, scope is modeled through save identities, save roots, and manager composition.

@@ -138,6 +138,32 @@ public sealed class TryLoadResultTests
     }
 
     [Test]
+    public void TryLoadBackupSlotFromDisk_WhenBackupsAreDisabled_ReturnsDisabledBeforeRequestValidation()
+    {
+        var manager = CreateManager();
+
+        var nullIdentityResult = manager.TryLoadBackupSlotFromDisk(null!, slotNumber: 1);
+        var invalidSlotResult = manager.TryLoadBackupSlotFromDisk("slot", slotNumber: 0);
+
+        Assert.That(nullIdentityResult.Status, Is.EqualTo(SaveLoadStatus.BackupSystemDisabled));
+        Assert.That(nullIdentityResult.Exception, Is.Null);
+        Assert.That(invalidSlotResult.Status, Is.EqualTo(SaveLoadStatus.BackupSystemDisabled));
+        Assert.That(invalidSlotResult.Exception, Is.Null);
+    }
+
+    [Test]
+    public void TryLoadBackupSlotFromDisk_WhenBackupsAreDisabled_ReturnsDisabledBeforeRegistrationValidation()
+    {
+        var manager = CreateManager();
+        manager.RegisterProvider(new TestProvider("player", new TestState { Value = 1 }));
+
+        var result = manager.TryLoadBackupSlotFromDisk("slot", slotNumber: 1);
+
+        Assert.That(result.Status, Is.EqualTo(SaveLoadStatus.BackupSystemDisabled));
+        Assert.That(result.Exception, Is.Null);
+    }
+
+    [Test]
     public void TryLoadBackupSlotFromDisk_ReturnsNotFoundForMissingBackup()
     {
         var manager = CreateManager(enableBackupSystem: true, backupSystemMaxBackupCount: 2);
