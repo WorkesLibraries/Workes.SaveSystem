@@ -596,6 +596,8 @@ namespace Workes.SaveSystem
         /// <exception cref="InvalidOperationException">Thrown when registrations have not been validated or saved data cannot be loaded.</exception>
         /// <remarks>
         /// Call <see cref="ValidateRegistrations"/> successfully after provider registration and before calling this method.
+        /// Registered persisted providers require matching files by default. Configure
+        /// <see cref="SaveSystemOptions{TIdentity}.MissingProviderFileBehavior"/> to intentionally skip missing provider files.
         /// </remarks>
         public bool LoadFromDisk(TIdentity identity)
         {
@@ -626,6 +628,8 @@ namespace Workes.SaveSystem
         /// <exception cref="InvalidOperationException">Thrown when registrations have not been validated or saved data cannot be loaded.</exception>
         /// <remarks>
         /// Call <see cref="ValidateRegistrations"/> successfully after provider registration and before calling this method.
+        /// Registered persisted providers require matching files by default. Configure
+        /// <see cref="SaveSystemOptions{TIdentity}.MissingProviderFileBehavior"/> to intentionally skip missing provider files.
         /// If the backup system is disabled, this method logs a warning and returns false without throwing an exception.
         /// </remarks>
         public bool LoadBackupSlotFromDisk(TIdentity identity, int slotNumber)
@@ -722,6 +726,10 @@ namespace Workes.SaveSystem
 
         private string? LoadSerializedEntryFromDisk(ProviderEntry providerEntry, string folderPath)
         {
+            var schematic = providerEntry.Schematic;
+            if (schematic == null)
+                return null;
+
             var context = new SaveFileContext(
                 providerEntry.Provider.SaveKey,
                 providerEntry.Provider.SchemaVersion,
@@ -736,9 +744,21 @@ namespace Workes.SaveSystem
             var filePath = GetProviderFilePath(folderPath, fileName);
 
             if (!File.Exists(filePath))
-                return null;
+            {
+                if (_options.MissingProviderFileBehavior == MissingProviderFileBehavior.Skip)
+                    return null;
+
+                throw new InvalidOperationException(
+                    $"Missing save file for registered provider '{providerEntry.Provider.SaveKey}' at '{filePath}'. " +
+                    $"Set {nameof(SaveSystemOptions<TIdentity>.MissingProviderFileBehavior)} to {nameof(MissingProviderFileBehavior.Skip)} to intentionally skip missing provider files.");
+            }
 
             return File.ReadAllText(filePath);
+        }
+
+        private IEnumerable<KeyValuePair<string, ProviderEntry>> PersistedProviders()
+        {
+            return _providers.Where(kvp => kvp.Value.Schematic != null);
         }
 
         private string GetSaveFolderPath(TIdentity identity)
@@ -784,8 +804,7 @@ namespace Workes.SaveSystem
             string folderPath,
             Dictionary<string, SerializedSnapshot.SerializedEntry> serializedEntries)
         {
-            IEnumerable<KeyValuePair<string, ProviderEntry>> serializableProviders =
-                _providers.Where(kvp => kvp.Value.Schematic != null);
+            IEnumerable<KeyValuePair<string, ProviderEntry>> serializableProviders = PersistedProviders();
 
             int expectedFileCount = serializableProviders.Count();
             var (allFilesExist, missingFiles) = CheckFilesExist(serializableProviders, folderPath, serializedEntries);
@@ -909,8 +928,7 @@ namespace Workes.SaveSystem
 
         private void ValidateTempSaveFolderFromDisk(string saveFolderPath)
         {
-            var serializedEntries = _providers
-                .Where(kvp => kvp.Value.Schematic != null)
+            var serializedEntries = PersistedProviders()
                 .ToDictionary(kvp => kvp.Key, kvp => new SerializedSnapshot.SerializedEntry
                 {
                     SchemaVersion = kvp.Value.Provider.SchemaVersion,
@@ -983,7 +1001,7 @@ namespace Workes.SaveSystem
         {
             var serialized = new SerializedSnapshot();
 
-            foreach (var kvp in _providers)
+            foreach (var kvp in PersistedProviders())
             {
                 var serializedEntry = LoadSerializedEntryFromDisk(kvp.Value, folderPath);
                 if (serializedEntry == null)

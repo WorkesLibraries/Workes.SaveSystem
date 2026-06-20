@@ -52,6 +52,11 @@ namespace Workes.SaveSystem
         public int BackupSystemMaxBackupCount { get; }
 
         /// <summary>
+        /// Gets how loads behave when a registered persisted provider file is missing from a save folder.
+        /// </summary>
+        public MissingProviderFileBehavior MissingProviderFileBehavior { get; }
+
+        /// <summary>
         /// Initializes a new instance of the <see cref="SaveSystemOptions{TIdentity}"/> class.
         /// </summary>
         /// <param name="saveRootPath">The root directory path where all saves are stored.</param>
@@ -61,6 +66,7 @@ namespace Workes.SaveSystem
         /// <param name="fileNameResolver">The function that resolves a file context to a file name. If null, uses <see cref="DefaultFileNameResolver"/>.</param>
         /// <param name="enableBackupSystem">Whether to enable the backup system. Defaults to false.</param>
         /// <param name="backupSystemMaxBackupCount">The maximum number of backups to keep. Must be greater than 0 if backups are enabled. Defaults to 0.</param>
+        /// <param name="missingProviderFileBehavior">How loads behave when a registered persisted provider file is missing. Defaults to <see cref="MissingProviderFileBehavior.Throw"/>.</param>
         /// <exception cref="ArgumentException">Thrown when path values are invalid, or when backups are enabled but max backup count is 0 or less.</exception>
         /// <exception cref="ArgumentNullException">Thrown when serializer or resolver delegates are null.</exception>
         public SaveSystemOptions(
@@ -70,7 +76,8 @@ namespace Workes.SaveSystem
             Func<TIdentity, string> saveNameResolver,
             Func<SaveFileContext, string>? fileNameResolver,
             bool enableBackupSystem = false,
-            int backupSystemMaxBackupCount = 0)
+            int backupSystemMaxBackupCount = 0,
+            MissingProviderFileBehavior missingProviderFileBehavior = MissingProviderFileBehavior.Throw)
         {
             if (string.IsNullOrWhiteSpace(saveRootPath))
                 throw new ArgumentException("Save root path cannot be null, empty, or whitespace.", nameof(saveRootPath));
@@ -90,6 +97,7 @@ namespace Workes.SaveSystem
             FileNameResolver = fileNameResolver ?? DefaultFileNameResolver;
             EnableBackupSystem = enableBackupSystem;
             BackupSystemMaxBackupCount = backupSystemMaxBackupCount;
+            MissingProviderFileBehavior = missingProviderFileBehavior;
             if (enableBackupSystem && backupSystemMaxBackupCount <= 0)
                 throw new ArgumentException("If the backup system is enabled, the max backup count must be greater than 0.");
         }
