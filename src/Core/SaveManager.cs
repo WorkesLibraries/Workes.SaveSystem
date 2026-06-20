@@ -328,6 +328,48 @@ namespace Workes.SaveSystem
             return HasSaveMetadata(_backupManager.GetBackupFolderPath(saveName, backupSuffix));
         }
 
+        /// <summary>
+        /// Reads metadata for the main save identified by <paramref name="identity"/>.
+        /// </summary>
+        /// <remarks>
+        /// This method reads only save-system-owned metadata. It returns null when no metadata file exists and
+        /// throws when a metadata file exists but cannot be read as valid save metadata.
+        /// </remarks>
+        /// <param name="identity">The identity that identifies which save slot metadata to read.</param>
+        /// <returns>The save metadata, or null when the save folder or metadata file does not exist.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="identity"/> is null.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when the resolved save name is invalid or the metadata file is invalid.</exception>
+        public SaveMetadataInfo? ReadSaveMetadata(TIdentity identity)
+        {
+            var saveName = ResolveSaveName(identity);
+            return ReadSaveMetadataInfo(GetMainFolderPath(saveName));
+        }
+
+        /// <summary>
+        /// Reads metadata for a numbered backup slot identified by <paramref name="identity"/> and <paramref name="slotNumber"/>.
+        /// </summary>
+        /// <remarks>
+        /// This method reads only save-system-owned metadata. It can be used even when backup creation is currently
+        /// disabled. It returns null when no metadata file exists and throws when a metadata file exists but cannot
+        /// be read as valid save metadata.
+        /// </remarks>
+        /// <param name="identity">The identity that identifies which save's backup metadata to read.</param>
+        /// <param name="slotNumber">The backup slot number (1-based, e.g., 1 = _0001, 2 = _0002).</param>
+        /// <returns>The backup metadata, or null when the backup folder or metadata file does not exist.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="identity"/> is null.</exception>
+        /// <exception cref="ArgumentException">Thrown when <paramref name="slotNumber"/> is less than 1.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when the resolved save name is invalid or the metadata file is invalid.</exception>
+        public SaveMetadataInfo? ReadBackupSlotMetadata(TIdentity identity, int slotNumber)
+        {
+            var saveName = ResolveSaveName(identity);
+
+            if (slotNumber < 1)
+                throw new ArgumentException("Backup slot number must be at least 1.", nameof(slotNumber));
+
+            var backupSuffix = $"_{slotNumber:D4}";
+            return ReadSaveMetadataInfo(_backupManager.GetBackupFolderPath(saveName, backupSuffix));
+        }
+
         private void ValidateProviderSerialization(ProviderEntry providerEntry, ISaveSchematic schematic)
         {
             object state;
@@ -634,6 +676,8 @@ namespace Workes.SaveSystem
                 {
                     metadata = SaveMetadata.CreateNewMetadata();
                 }
+
+                metadata.PrepareForWrite(DateTimeOffset.UtcNow);
 
                 File.WriteAllText(
                     metaPath,
@@ -1045,6 +1089,38 @@ namespace Workes.SaveSystem
             {
                 return null;
             }
+        }
+
+        private SaveMetadataInfo? ReadSaveMetadataInfo(string folderPath)
+        {
+            var metaPath = GetMetadataFilePath(folderPath);
+            if (!File.Exists(metaPath))
+                return null;
+
+            SaveMetadata? metadata;
+            try
+            {
+                metadata = JsonConvert.DeserializeObject<SaveMetadata>(File.ReadAllText(metaPath));
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException(
+                    $"Failed to deserialize {SaveMetadataFileName} at '{metaPath}'.",
+                    ex);
+            }
+
+            if (metadata == null)
+                throw new InvalidOperationException(
+                    $"Deserialized {SaveMetadataFileName} at '{metaPath}' resulted in null.");
+
+            if (string.IsNullOrEmpty(metadata.SaveId))
+                throw new InvalidOperationException(
+                    $"SaveId in {SaveMetadataFileName} at '{metaPath}' is null or empty.");
+
+            return new SaveMetadataInfo(
+                metadata.SaveId,
+                metadata.CreatedAtUtc,
+                metadata.LastWrittenAtUtc);
         }
 
         private bool IsSaveSlotFolder(string folderPath)

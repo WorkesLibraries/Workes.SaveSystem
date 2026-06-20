@@ -125,6 +125,18 @@ bool canRestoreBackup = manager.BackupSlotExists("slot-1", slotNumber: 1);
 
 Existence checks inspect the raw disk layout without loading provider data, recovering temp folders, or requiring registration validation. A save or backup exists only when its folder contains save metadata.
 
+Use `ReadSaveMetadata(...)` and `ReadBackupSlotMetadata(...)` when a menu or tool needs save-system-owned metadata.
+
+```csharp
+SaveMetadataInfo? metadata = manager.ReadSaveMetadata("slot-1");
+if (metadata != null)
+{
+    DateTimeOffset lastWritten = metadata.LastWrittenAtUtc;
+}
+```
+
+Metadata reads return `null` when no metadata file exists and throw when a metadata file is present but invalid. The current metadata contract exposes the stable save id used for recovery validation, plus created and last-written UTC timestamps. Application-owned display metadata such as character name, playtime, difficulty, or screenshot references should live in a provider for now.
+
 ## Providers
 
 Each `ISaveProvider` owns one stable save key and one schema version.
