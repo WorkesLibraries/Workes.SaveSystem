@@ -300,6 +300,8 @@ manager.LoadBackupSlotFromDisk("slot-1", slotNumber: 1);
 
 Recovery validates candidate save folders through the normal load-compatible path, including metadata checks, provider file checks, schema-version extraction, migrations, deserialization, and snapshot validation. This allows an interrupted save written by an older provider schema version to recover after the application updates, as long as the registered provider has a valid migration path.
 
+Recovery candidate validation is stricter than deliberate partial-load behavior. Even when `missingProviderFileBehavior: MissingProviderFileBehavior.Skip` is configured for normal loads, recovery will not promote a temp or `_toDelete` candidate that is missing a registered persisted provider file.
+
 If both a temp folder and a previous `_toDelete` folder exist while the main save is missing, the valid temp save is preferred. If the temp save is invalid but the previous save is valid, recovery falls back to the previous save and emits a warning through the configured warning sink. If neither candidate is valid, recovery fails and preserves the recovery artifacts for inspection or manual repair.
 
 ## Migration

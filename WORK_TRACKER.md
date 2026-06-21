@@ -4,26 +4,17 @@ This file is the durable planning tracker for the save system work. Keep it upda
 
 ## To-do
 
-1. Make recovery candidate validation strict about registered persisted provider files even when normal loads use `MissingProviderFileBehavior.Skip`.
-   - Recovery is deciding whether an interrupted temp or to-delete folder is valid enough to promote.
-   - Partial-load skip behavior should remain available for intentional loads, but recovery candidates should not be considered valid if any registered persisted provider file is missing.
-   - Update README recovery guidance and add regression coverage for skip-mode recovery with a missing provider file.
-
-2. Add internal load/recovery exception types for stable `TryLoad...` status classification.
+1. Add internal load/recovery exception types for stable `TryLoad...` status classification.
    - `ClassifyLoadException(...)` currently relies partly on exception messages, which is brittle as diagnostics evolve.
    - Add internal exception types or a small internal status-carrying wrapper so `SaveLoadStatus` mapping is explicit without changing the public API.
    - Update tests for important classifications.
 
-3. Stop recovery candidate validation from automatically running provider migrations.
+2. Stop recovery candidate validation from automatically running provider migrations.
    - Recovery validation currently uses the normal deserialize path, which can invoke user migration code while deciding whether a temp/to-delete candidate is valid.
    - Recovery should validate candidate structure and provider-file integrity without mutating serialized data or relying on migration side effects.
    - Define the desired older-schema recovery behavior, update README, and adjust tests that currently expect migration-compatible recovery.
 
-4. Add recovery/test documentation coverage for strict recovery versus partial-load skip behavior.
-    - Cover temp-only, main-plus-temp, and main-missing fallback cases with missing provider files under `MissingProviderFileBehavior.Skip`.
-    - README should state that skip mode applies to normal loads, while recovery candidate promotion is stricter.
-
-5. Add migration validation edge-case tests after the new internal exception mapping is in place.
+3. Add migration validation edge-case tests after the new internal exception mapping is in place.
     - Re-check duplicate and missing migration paths once load-status classification no longer depends on exception message matching.
 
 ## Later
@@ -514,6 +505,14 @@ These points are completed for the current package migration.
 - Updated serializer output examples so binary provider and metadata files demonstrate Base64-decoded readable JSON.
 - Updated README guidance and tests for serializer-specific metadata files, slot listing, and readable binary serializer output.
 - `dotnet test Workes.SaveSystem.sln` passes with 162 tests.
+
+### 54. Made Recovery Candidate Validation Strict For Missing Provider Files
+
+- Changed recovery candidate validation to require every registered persisted provider file even when normal loads are configured with `MissingProviderFileBehavior.Skip`.
+- Preserved skip behavior for ordinary loads and backup loads outside recovery.
+- Added recovery coverage for partial temp folders in main-plus-temp, temp-only, and main-missing fallback scenarios.
+- Updated README recovery guidance to state that partial-load skip behavior does not apply to recovery candidate promotion.
+- `dotnet test Workes.SaveSystem.sln` passes with 165 tests.
 
 ## Maintenance Rules
 

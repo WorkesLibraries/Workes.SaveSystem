@@ -1130,7 +1130,7 @@ namespace Workes.SaveSystem
             try
             {
                 ValidateMetadataFile(folderPath);
-                var serialized = LoadSerializedSnapshotFromFolder(folderPath);
+                var serialized = LoadSerializedSnapshotFromFolder(folderPath, allowMissingProviderFileSkip: false);
                 var snapshot = DeserializeSnapshot(serialized);
                 ValidateSnapshotForRestore(snapshot);
                 return new RecoveryCandidateValidation(isValid: true, errorMessage: null);
@@ -1159,7 +1159,10 @@ namespace Workes.SaveSystem
             File.WriteAllText(filePath, serializedData);
         }
 
-        private string? LoadSerializedEntryFromDisk(ProviderEntry providerEntry, string folderPath)
+        private string? LoadSerializedEntryFromDisk(
+            ProviderEntry providerEntry,
+            string folderPath,
+            bool allowMissingProviderFileSkip)
         {
             var schematic = providerEntry.Schematic;
             if (schematic == null)
@@ -1180,7 +1183,8 @@ namespace Workes.SaveSystem
 
             if (!File.Exists(filePath))
             {
-                if (_options.MissingProviderFileBehavior == MissingProviderFileBehavior.Skip)
+                if (allowMissingProviderFileSkip &&
+                    _options.MissingProviderFileBehavior == MissingProviderFileBehavior.Skip)
                     return null;
 
                 throw new InvalidOperationException(
@@ -1577,13 +1581,18 @@ namespace Workes.SaveSystem
         /// <summary>
         /// Loads a serialized snapshot from the specified folder by reading all provider save files.
         /// </summary>
-        private SerializedSnapshot LoadSerializedSnapshotFromFolder(string folderPath)
+        private SerializedSnapshot LoadSerializedSnapshotFromFolder(
+            string folderPath,
+            bool allowMissingProviderFileSkip = true)
         {
             var serialized = new SerializedSnapshot();
 
             foreach (var kvp in PersistedProviders())
             {
-                var serializedEntry = LoadSerializedEntryFromDisk(kvp.Value, folderPath);
+                var serializedEntry = LoadSerializedEntryFromDisk(
+                    kvp.Value,
+                    folderPath,
+                    allowMissingProviderFileSkip);
                 if (serializedEntry == null)
                     continue;
 

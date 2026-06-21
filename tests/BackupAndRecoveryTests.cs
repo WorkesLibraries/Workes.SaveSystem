@@ -208,6 +208,36 @@ public sealed class BackupAndRecoveryTests
     }
 
     [Test]
+    public void RecoverSave_WithSkipMissingProviderFiles_WhenMainIsMissingAndTempIsPartial_RestoresValidToDeleteFolder()
+    {
+        var warnings = new List<string>();
+        var manager = CreateManager(
+            missingProviderFileBehavior: MissingProviderFileBehavior.Skip,
+            warningSink: warnings.Add);
+        var provider = new TestProvider(new TestState { Value = 1 });
+        manager.RegisterProvider(provider);
+        SaveValue(manager, provider, "slot", 1);
+        SaveValue(manager, provider, "other", 7);
+
+        var slotPath = Path.Combine(_tempRoot, "slot");
+        var tempPath = Path.Combine(_tempRoot, "slot_tmp");
+        var toDeletePath = Path.Combine(_tempRoot, "slot_toDelete");
+        Directory.Move(Path.Combine(_tempRoot, "other"), tempPath);
+        File.Delete(Path.Combine(tempPath, "player.json"));
+        Directory.Move(slotPath, toDeletePath);
+
+        var loaded = manager.LoadFromDisk("slot");
+
+        Assert.That(loaded, Is.True);
+        Assert.That(provider.Current.Value, Is.EqualTo(1));
+        Assert.That(ReadValueFromFolder(slotPath), Is.EqualTo(1));
+        Assert.That(Directory.Exists(tempPath), Is.False);
+        Assert.That(Directory.Exists(toDeletePath), Is.False);
+        Assert.That(warnings, Has.Count.EqualTo(1));
+        Assert.That(warnings[0], Does.Contain("falling back"));
+    }
+
+    [Test]
     public void RecoverSave_WhenMainIsMissingAndNoCandidateIsValid_PreservesRecoveryArtifacts()
     {
         var manager = CreateManager();
@@ -253,6 +283,27 @@ public sealed class BackupAndRecoveryTests
     }
 
     [Test]
+    public void RecoverSave_WithSkipMissingProviderFiles_WhenOnlyTempExistsAndIsPartial_PreservesTempAndFails()
+    {
+        var manager = CreateManager(missingProviderFileBehavior: MissingProviderFileBehavior.Skip);
+        var provider = new TestProvider(new TestState { Value = 1 });
+        manager.RegisterProvider(provider);
+        SaveValue(manager, provider, "slot", 1);
+
+        var slotPath = Path.Combine(_tempRoot, "slot");
+        var tempPath = Path.Combine(_tempRoot, "slot_tmp");
+        Directory.Move(slotPath, tempPath);
+        File.Delete(Path.Combine(tempPath, "player.json"));
+
+        var ex = Assert.Throws<InvalidOperationException>(() => manager.LoadFromDisk("slot"));
+
+        Assert.That(ex!.Message, Does.Contain("Recovery failed"));
+        Assert.That(ex.Message, Does.Contain("Missing save file"));
+        Assert.That(Directory.Exists(slotPath), Is.False);
+        Assert.That(Directory.Exists(tempPath), Is.True);
+    }
+
+    [Test]
     public void RecoverSave_CompletesSwapWhenMainAndTempBothExist()
     {
         var manager = CreateManager();
@@ -272,6 +323,34 @@ public sealed class BackupAndRecoveryTests
         Assert.That(ReadValueFromFolder(slotPath), Is.EqualTo(2));
         Assert.That(Directory.Exists(tempPath), Is.False);
         Assert.That(Directory.Exists(Path.Combine(_tempRoot, "slot_toDelete")), Is.False);
+    }
+
+    [Test]
+    public void RecoverSave_WithSkipMissingProviderFiles_WhenMainAndPartialTempExist_KeepsMainSave()
+    {
+        var warnings = new List<string>();
+        var manager = CreateManager(
+            missingProviderFileBehavior: MissingProviderFileBehavior.Skip,
+            warningSink: warnings.Add);
+        var provider = new TestProvider(new TestState { Value = 1 });
+        manager.RegisterProvider(provider);
+        SaveValue(manager, provider, "slot", 1);
+
+        var slotPath = Path.Combine(_tempRoot, "slot");
+        var tempPath = Path.Combine(_tempRoot, "slot_tmp");
+        CopyDirectory(slotPath, tempPath);
+        WriteValueToFolder(tempPath, 2);
+        File.Delete(Path.Combine(tempPath, "player.json"));
+        provider.Current = new TestState { Value = 99 };
+
+        var loaded = manager.LoadFromDisk("slot");
+
+        Assert.That(loaded, Is.True);
+        Assert.That(provider.Current.Value, Is.EqualTo(1));
+        Assert.That(ReadValueFromFolder(slotPath), Is.EqualTo(1));
+        Assert.That(Directory.Exists(tempPath), Is.False);
+        Assert.That(warnings, Has.Count.EqualTo(1));
+        Assert.That(warnings[0], Does.Contain("keeping the existing main save"));
     }
 
     [Test]
@@ -338,7 +417,8 @@ public sealed class BackupAndRecoveryTests
     private SaveManager<string> CreateManager(
         bool enableBackupSystem = false,
         int backupSystemMaxBackupCount = 0,
-        Action<string>? warningSink = null)
+        Action<string>? warningSink = null,
+        MissingProviderFileBehavior missingProviderFileBehavior = MissingProviderFileBehavior.Throw)
     {
         return new SaveManager<string>(
             new SaveSystemOptions<string>(
@@ -349,6 +429,7 @@ public sealed class BackupAndRecoveryTests
                 fileNameResolver: SaveSystemOptions<string>.DefaultFileNameResolver,
                 enableBackupSystem: enableBackupSystem,
                 backupSystemMaxBackupCount: backupSystemMaxBackupCount,
+                missingProviderFileBehavior: missingProviderFileBehavior,
                 warningSink: warningSink));
     }
 
