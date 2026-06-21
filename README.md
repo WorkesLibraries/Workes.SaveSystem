@@ -23,7 +23,7 @@ The main project is `src/Workes.SaveSystem.csproj`. The project already includes
 That dependency is intentional for the current package shape:
 
 - `JsonSaveSerializer` is the built-in serializer.
-- `BinarySaveSerializer` is a built-in binary-token serializer that uses the same Newtonsoft-compatible object model.
+- `BinarySaveSerializer` is a built-in binary-token serializer that uses the same Newtonsoft-compatible object model while keeping its migration nodes owned by the binary serializer instance.
 - JSON schematics wrap provider state in a versioned payload.
 - migration data nodes are backed by Newtonsoft `JToken`/`JObject` values.
 - save metadata is currently read and written with Newtonsoft.
@@ -416,7 +416,7 @@ Schematic creation should be lightweight where possible. Provider state write co
 
 If providers using the serializer implement `ISaveMigratable`, the serializer must also implement `ISaveMigrationCapableSerializer`. That means it must parse serialized payloads into editable `ISaveDataNode` trees, serialize edited node trees back to the payload format, and expose a matching `NodeFactory` that creates new object, array, and primitive nodes for migration steps.
 
-The migration-capable serializer, its `NodeFactory`, and its data-node implementation are coupled. Do not mix data nodes from different serializer implementations.
+The migration-capable serializer, its `NodeFactory`, and its data-node trees are coupled. Do not mix data nodes from different serializer or factory instances. The built-in binary serializer intentionally shares the JSON-backed node implementation internally, but nodes are still owned by the serializer instance that created or parsed them.
 
 ### Data Node Contracts
 
@@ -429,9 +429,9 @@ Data-node implementations should:
 - fail clearly when callers use object operations on arrays or primitive operations on objects;
 - keep mutations local to the represented serialized tree;
 - support the primitive and null node types exposed by `ISaveDataNodeFactory`;
-- reject attempts to combine nodes created by another serializer's data-node implementation.
+- reject attempts to combine nodes created by another serializer or factory instance.
 
-For the built-in JSON serializer, data nodes wrap Newtonsoft `JToken` values.
+For the built-in JSON and binary serializers, migration data nodes wrap Newtonsoft `JToken` values and carry factory ownership so JSON and binary migration trees cannot be accidentally mixed.
 
 ## Unity And Godot
 

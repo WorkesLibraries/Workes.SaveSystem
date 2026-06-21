@@ -16,12 +16,15 @@ namespace Workes.SaveSystem
     /// </remarks>
     public sealed class BinarySaveSerializer : ISaveSerializer, ISaveMigrationCapableSerializer
     {
+        private readonly JsonSaveDataNodeFactory _nodeFactory;
+
         /// <summary>
         /// Initializes a new instance of the <see cref="BinarySaveSerializer"/> class.
         /// </summary>
         public BinarySaveSerializer()
         {
-            NodeFactory = new JsonSaveDataNodeFactory();
+            _nodeFactory = new JsonSaveDataNodeFactory();
+            NodeFactory = _nodeFactory;
         }
 
         /// <summary>
@@ -99,14 +102,13 @@ namespace Workes.SaveSystem
         /// <inheritdoc />
         public ISaveDataNode DeserializeToNode(string serializedData)
         {
-            return new JsonSaveDataNode(DeserializeTokenFromBase64(serializedData));
+            return new JsonSaveDataNode(DeserializeTokenFromBase64(serializedData), _nodeFactory.Owner);
         }
 
         /// <inheritdoc />
         public string SerializeFromNode(ISaveDataNode node)
         {
-            if (!(node is JsonSaveDataNode jsonNode))
-                throw new InvalidOperationException("Binary data nodes can only be serialized from nodes created by this serializer.");
+            var jsonNode = JsonSaveDataNode.RequireJsonNode(node, _nodeFactory.Owner);
 
             return SerializeTokenToBase64(jsonNode._token);
         }

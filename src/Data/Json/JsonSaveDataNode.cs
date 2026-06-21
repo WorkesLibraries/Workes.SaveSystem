@@ -8,10 +8,12 @@ namespace Workes.SaveSystem
     internal sealed class JsonSaveDataNode : ISaveDataNode
     {
         internal readonly JToken _token;
+        private readonly object _owner;
 
-        public JsonSaveDataNode(JToken token)
+        public JsonSaveDataNode(JToken token, object owner)
         {
             _token = token ?? throw new ArgumentNullException(nameof(token));
+            _owner = owner ?? throw new ArgumentNullException(nameof(owner));
         }
 
         public SaveDataNodeType NodeType
@@ -59,7 +61,7 @@ namespace Workes.SaveSystem
         public ISaveDataNode GetAt(int index)
         {
             if (_token is JArray array)
-                return new JsonSaveDataNode(array[index]);
+                return new JsonSaveDataNode(array[index], _owner);
             throw new InvalidOperationException("Node is not an array");
         }
 
@@ -67,7 +69,7 @@ namespace Workes.SaveSystem
         {
             if (_token is JArray array)
             {
-                array[index] = RequireJsonNode(value)._token;
+                array[index] = RequireJsonNode(value, _owner)._token;
                 return;
             }
             throw new InvalidOperationException("Node is not an array");
@@ -79,7 +81,7 @@ namespace Workes.SaveSystem
             {
                 if (index < 0 || index > array.Count)
                     return false;
-                array.Insert(index, RequireJsonNode(value)._token);
+                array.Insert(index, RequireJsonNode(value, _owner)._token);
                 return true;
             }
             return false;
@@ -101,7 +103,7 @@ namespace Workes.SaveSystem
         {
             if (_token is JArray array)
             {
-                array.Add(RequireJsonNode(value)._token);
+                array.Add(RequireJsonNode(value, _owner)._token);
                 return;
             }
             throw new InvalidOperationException("Node is not an array");
@@ -124,14 +126,14 @@ namespace Workes.SaveSystem
             if (child == null)
                 throw new InvalidOperationException($"Node does not contain key '{key}'.");
 
-            return new JsonSaveDataNode(child);
+            return new JsonSaveDataNode(child, _owner);
         }
 
         public void Set(string key, ISaveDataNode value)
         {
             if (_token is JObject obj)
             {
-                obj[key] = RequireJsonNode(value)._token;
+                obj[key] = RequireJsonNode(value, _owner)._token;
                 return;
             }
 
@@ -162,15 +164,15 @@ namespace Workes.SaveSystem
         public IEnumerable<string> Keys =>
             _token is JObject obj ? obj.Properties().Select(p => p.Name) : Enumerable.Empty<string>();
 
-        private static JsonSaveDataNode RequireJsonNode(ISaveDataNode value)
+        internal static JsonSaveDataNode RequireJsonNode(ISaveDataNode value, object owner)
         {
             if (value == null)
                 throw new ArgumentNullException(nameof(value));
 
-            if (value is JsonSaveDataNode jsonNode)
+            if (value is JsonSaveDataNode jsonNode && ReferenceEquals(jsonNode._owner, owner))
                 return jsonNode;
 
-            throw new InvalidOperationException("JSON data nodes can only be combined with nodes created by the JSON node factory.");
+            throw new InvalidOperationException("JSON data nodes can only be combined with nodes created by the same node factory.");
         }
     }
 }

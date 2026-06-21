@@ -9,31 +9,21 @@ This file is the durable planning tracker for the save system work. Keep it upda
    - Partial-load skip behavior should remain available for intentional loads, but recovery candidates should not be considered valid if any registered persisted provider file is missing.
    - Update README recovery guidance and add regression coverage for skip-mode recovery with a missing provider file.
 
-2. Tighten migration data-node ownership for the built-in serializers.
-   - `BinarySaveSerializer` currently reuses the JSON data-node implementation and factory because the binary payload is a Base64-encoded package-owned token model backed by the same `JToken` tree used for migrations.
-   - That reuse keeps migration helpers shared, but it also means nodes from `JsonSaveSerializer.NodeFactory` can look acceptable to `BinarySaveSerializer.SerializeFromNode(...)`, which conflicts with the serializer-owned `NodeFactory` contract.
-   - Decide between owner-token validation on JSON-backed nodes or a separate binary node wrapper/factory, then update README/XML docs and cross-serializer node tests.
-
-3. Add internal load/recovery exception types for stable `TryLoad...` status classification.
+2. Add internal load/recovery exception types for stable `TryLoad...` status classification.
    - `ClassifyLoadException(...)` currently relies partly on exception messages, which is brittle as diagnostics evolve.
    - Add internal exception types or a small internal status-carrying wrapper so `SaveLoadStatus` mapping is explicit without changing the public API.
    - Update tests for important classifications.
 
-4. Stop recovery candidate validation from automatically running provider migrations.
+3. Stop recovery candidate validation from automatically running provider migrations.
    - Recovery validation currently uses the normal deserialize path, which can invoke user migration code while deciding whether a temp/to-delete candidate is valid.
    - Recovery should validate candidate structure and provider-file integrity without mutating serialized data or relying on migration side effects.
    - Define the desired older-schema recovery behavior, update README, and adjust tests that currently expect migration-compatible recovery.
 
-5. Add recovery/test documentation coverage for strict recovery versus partial-load skip behavior.
+4. Add recovery/test documentation coverage for strict recovery versus partial-load skip behavior.
     - Cover temp-only, main-plus-temp, and main-missing fallback cases with missing provider files under `MissingProviderFileBehavior.Skip`.
     - README should state that skip mode applies to normal loads, while recovery candidate promotion is stricter.
 
-6. Add serializer data-node ownership tests and documentation.
-    - Cover JSON serializer rejecting nodes not produced by its compatible factory.
-    - Cover binary serializer rejecting nodes produced by the JSON serializer if owner-token or separate-wrapper enforcement is chosen.
-    - README and XML docs should state how custom migration-capable serializers couple `DeserializeToNode`, `SerializeFromNode`, and `NodeFactory`.
-
-7. Add migration validation edge-case tests after the new internal exception mapping is in place.
+5. Add migration validation edge-case tests after the new internal exception mapping is in place.
     - Re-check duplicate and missing migration paths once load-status classification no longer depends on exception message matching.
 
 ## Later
@@ -506,6 +496,15 @@ These points are completed for the current package migration.
 - Documented that valid envelopes with null provider payload data are corrupt save data because provider state must be non-null.
 - Added JSON try-load coverage for null provider payload data and binary serializer coverage for null payload data.
 - `dotnet test Workes.SaveSystem.sln` passes with 157 tests.
+
+### 52. Tightened Serializer Data-Node Ownership
+
+- Added factory ownership to JSON-backed data nodes so nodes can only be combined with nodes produced by the same node factory instance.
+- Kept the binary serializer on the shared JSON-backed migration tree while making its parsed nodes and `NodeFactory` output owned by the binary serializer instance.
+- Updated JSON and binary `SerializeFromNode(...)` paths to reject nodes produced by another serializer or factory instance.
+- Updated README and migration-capable serializer XML documentation for serializer/factory instance ownership.
+- Added regression coverage for cross-factory node mixing and JSON/binary cross-serializer node serialization.
+- `dotnet test Workes.SaveSystem.sln` passes with 159 tests.
 
 ## Maintenance Rules
 

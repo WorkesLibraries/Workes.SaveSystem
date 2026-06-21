@@ -9,12 +9,15 @@ namespace Workes.SaveSystem
     /// </summary>
     public sealed class JsonSaveSerializer : ISaveSerializer, ISaveMigrationCapableSerializer
     {
+        private readonly JsonSaveDataNodeFactory _nodeFactory;
+
         /// <summary>
         /// Initializes a new instance of the <see cref="JsonSaveSerializer"/> class.
         /// </summary>
         public JsonSaveSerializer()
         {
-            NodeFactory = new JsonSaveDataNodeFactory();
+            _nodeFactory = new JsonSaveDataNodeFactory();
+            NodeFactory = _nodeFactory;
         }
 
         /// <summary>
@@ -109,13 +112,13 @@ namespace Workes.SaveSystem
         public ISaveDataNode DeserializeToNode(string serializedData)
         {
             var root = JToken.Parse(serializedData);
-            return new JsonSaveDataNode(root);
+            return new JsonSaveDataNode(root, _nodeFactory.Owner);
         }
 
         /// <inheritdoc />
         public string SerializeFromNode(ISaveDataNode node)
         {
-            var jsonNode = (JsonSaveDataNode)node;
+            var jsonNode = JsonSaveDataNode.RequireJsonNode(node, _nodeFactory.Owner);
             return jsonNode._token.ToString(Newtonsoft.Json.Formatting.Indented);
         }
 

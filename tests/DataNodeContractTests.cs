@@ -79,6 +79,33 @@ public sealed class DataNodeContractTests
         Assert.That(ex!.Message, Does.Contain("JSON data nodes"));
     }
 
+    [Test]
+    public void JsonDataNode_RejectsNodesFromDifferentFactories()
+    {
+        var factory = new JsonSaveDataNodeFactory();
+        var otherFactory = new JsonSaveDataNodeFactory();
+        var node = factory.CreateObject();
+
+        var ex = Assert.Throws<InvalidOperationException>(() => node.Set("foreign", otherFactory.CreateString("Rook")));
+
+        Assert.That(ex!.Message, Does.Contain("same node factory"));
+    }
+
+    [Test]
+    public void MigrationCapableSerializers_RejectNodesFromOtherSerializerFactories()
+    {
+        var jsonSerializer = new JsonSaveSerializer();
+        var binarySerializer = new BinarySaveSerializer();
+        var jsonNode = jsonSerializer.NodeFactory.CreateObject();
+        var binaryNode = binarySerializer.NodeFactory.CreateObject();
+
+        var jsonEx = Assert.Throws<InvalidOperationException>(() => jsonSerializer.SerializeFromNode(binaryNode));
+        var binaryEx = Assert.Throws<InvalidOperationException>(() => binarySerializer.SerializeFromNode(jsonNode));
+
+        Assert.That(jsonEx!.Message, Does.Contain("same node factory"));
+        Assert.That(binaryEx!.Message, Does.Contain("same node factory"));
+    }
+
     private sealed class ForeignNode : ISaveDataNode
     {
         public SaveDataNodeType NodeType => SaveDataNodeType.String;

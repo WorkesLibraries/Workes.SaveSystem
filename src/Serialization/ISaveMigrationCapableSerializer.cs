@@ -4,9 +4,9 @@ namespace Workes.SaveSystem
     /// Defines serializer operations required to migrate serialized save data without fully deserializing it.
     /// </summary>
     /// <remarks>
-    /// Migration-capable serializers own the concrete <see cref="ISaveDataNode"/> implementation they produce
-    /// and expose the matching node factory through <see cref="NodeFactory"/>. Migration steps should only combine
-    /// nodes created by that factory.
+    /// Migration-capable serializers own the concrete <see cref="ISaveDataNode"/> trees they produce and expose
+    /// the matching node factory through <see cref="NodeFactory"/>. Migration steps should only combine nodes
+    /// created by the same serializer/factory instance.
     /// </remarks>
     public interface ISaveMigrationCapableSerializer
     {
