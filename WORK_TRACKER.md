@@ -4,6 +4,22 @@ This file is the durable planning tracker for the save system work. Keep it upda
 
 ## To-do
 
+1. Plan and add an explicit overwrite/repair API for corrupt existing saves or metadata.
+   - `SaveToDisk(...)` currently preserves existing metadata and fails if the existing metadata is unreadable.
+   - Design an explicit API or option for intentional overwrite/repair without silently hiding corruption in normal saves.
+   - Cover corrupt metadata, missing metadata, serializer-changed metadata, and backup interaction behavior.
+   - Update README with the intended repair workflow.
+
+2. Tighten public visibility for concrete data-node factory implementation if it is not needed.
+   - `JsonSaveDataNodeFactory` is currently public, but normal callers can access node creation through `ISaveMigrationCapableSerializer.NodeFactory`.
+   - Decide whether concrete data-node factories and related implementation types should be public first-version API or internal implementation detail.
+   - If made internal, update tests and docs to use serializer-owned `NodeFactory` instead of direct factory construction.
+
+3. Revisit binary serializer naming so the format is clear from the API.
+   - The current `BinarySaveSerializer` writes Base64-encoded UTF-8 JSON tokens with a `.bin` extension.
+   - Consider a name that communicates the actual format/intent before first release, or document the existing name more prominently if keeping it.
+   - Update README, XML docs, tests, and serializer output examples with the final naming.
+
 ## Later
 
 There are no remaining deferred implementation points in this tracker.
@@ -32,6 +48,13 @@ These points are completed for the current package migration.
 
 - Added try-load coverage for a multi-version migration where the middle migration step is missing, confirming the structured status is `SaveLoadStatus.MigrationFailed`.
 - Added try-registration coverage for duplicate migration steps, confirming the provider is not kept when validation fails.
+
+### 58. Hardened Recovery And Temp Save Validation
+
+- Required successful registration validation before direct `RecoverSave(...)` calls so standalone recovery uses the same provider-set contract as disk loads.
+- Reserved the active save metadata filename during provider file-name validation so providers cannot write `metadata.json`, `metadata.bin`, or equivalent metadata files.
+- Type-checked provider states deserialized during temp-save validation before promoting a new save.
+- Updated README/XML docs and added regression coverage for all three validation hardening cases.
 
 ### 1. Created New Package Shell
 

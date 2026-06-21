@@ -305,7 +305,7 @@ namespace Workes.SaveSystem
         /// Registration itself is intentionally lightweight. This method performs provider state capture,
         /// non-null state validation, serializer compatibility checks for persisted providers, file-name checks,
         /// and migration policy validation at the caller's chosen setup point. Call this again after registering
-        /// or unregistering providers.
+        /// or unregistering providers. Provider file names must not collide with the save-system metadata file.
         /// </remarks>
         /// <exception cref="InvalidOperationException">Thrown when any provider registration is invalid.</exception>
         public void ValidateRegistrations()
@@ -339,6 +339,9 @@ namespace Workes.SaveSystem
                     resolvedFileNames,
                     providerEntry.RegisteredSaveKey,
                     baseFileName + _options.Serializer.FileExtension);
+                ValidateProviderFileNameDoesNotUseReservedMetadataFile(
+                    providerEntry.RegisteredSaveKey,
+                    baseFileName + _options.Serializer.FileExtension);
 
                 ValidateProviderSerialization(providerEntry, schematic);
                 ValidateProviderMigration(providerEntry);
@@ -370,6 +373,17 @@ namespace Workes.SaveSystem
             }
 
             resolvedFileNames.Add(fileName, saveKey);
+        }
+
+        private void ValidateProviderFileNameDoesNotUseReservedMetadataFile(string saveKey, string fileName)
+        {
+            var metadataFileName = GetMetadataFileName();
+            if (string.Equals(fileName, metadataFileName, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    $"SaveProvider with key '{saveKey}' resolves to reserved save-system metadata file '{metadataFileName}'. " +
+                    "Provider file names must not use the reserved 'metadata' base name.");
+            }
         }
 
         /// <summary>
@@ -1038,12 +1052,16 @@ namespace Workes.SaveSystem
         /// Attempts to recover an incomplete save operation. This is automatically called by <see cref="LoadFromDisk"/>.
         /// Checks for temporary save folders and attempts to complete or restore interrupted save operations.
         /// </summary>
+        /// <remarks>
+        /// Call <see cref="ValidateRegistrations"/> successfully after provider registration and before calling this method.
+        /// </remarks>
         /// <param name="identity">The identity of the save to recover.</param>
         /// <exception cref="ArgumentNullException">Thrown when <paramref name="identity"/> is null.</exception>
-        /// <exception cref="InvalidOperationException">Thrown when recovery fails due to data corruption or tampering.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when registrations have not been validated or recovery fails due to data corruption or tampering.</exception>
         public void RecoverSave(TIdentity identity)
         {
             var saveName = ResolveSavePath(identity);
+            EnsureRegistrationsValidated();
             var folderPath = GetMainFolderPath(saveName);
             var tempPath = GetTempFolderPath(saveName, _options.TempFolderName);
             var toDeletePath = GetToDeleteFolderPath(saveName);
@@ -1338,7 +1356,7 @@ namespace Workes.SaveSystem
                     continue;
 
                 var state = DeserializeProviderState(provider.Key, serializedData, schematic);
-                if (state == null)
+                if (state == null || !provider.Value.StateType.IsInstanceOfType(state))
                 {
                     allFilesDeserialize = false;
                     failedFiles.Add(filePath);

@@ -239,6 +239,44 @@ public sealed class RegistrationValidationTests
     }
 
     [Test]
+    public void ValidateRegistrations_RejectsProviderSaveKeyThatResolvesToMetadataFile()
+    {
+        var manager = CreateManager();
+        manager.RegisterProvider(new MutableProvider("metadata", schemaVersion: 1));
+
+        var ex = Assert.Throws<InvalidOperationException>(() => manager.ValidateRegistrations());
+
+        Assert.That(ex!.Message, Does.Contain("reserved"));
+        Assert.That(ex.Message, Does.Contain("metadata.json"));
+    }
+
+    [Test]
+    public void ValidateRegistrations_RejectsCustomFileNameResolverThatResolvesToMetadataFile()
+    {
+        var manager = CreateManager(fileNameResolver: _ => "metadata");
+        manager.RegisterProvider(new MutableProvider("player", schemaVersion: 1));
+
+        var ex = Assert.Throws<InvalidOperationException>(() => manager.ValidateRegistrations());
+
+        Assert.That(ex!.Message, Does.Contain("reserved"));
+        Assert.That(ex.Message, Does.Contain("metadata.json"));
+    }
+
+    [Test]
+    public void ValidateRegistrations_RejectsBinaryProviderFileNameThatResolvesToMetadataFile()
+    {
+        var manager = CreateManager(
+            fileNameResolver: _ => "metadata",
+            serializer: new BinarySaveSerializer());
+        manager.RegisterProvider(new MutableProvider("player", schemaVersion: 1));
+
+        var ex = Assert.Throws<InvalidOperationException>(() => manager.ValidateRegistrations());
+
+        Assert.That(ex!.Message, Does.Contain("reserved"));
+        Assert.That(ex.Message, Does.Contain("metadata.bin"));
+    }
+
+    [Test]
     public void ValidateRegistrations_RejectsProviderSaveKeyChangedAfterRegistration()
     {
         var manager = CreateManager();
@@ -302,12 +340,13 @@ public sealed class RegistrationValidationTests
     private SaveManager<string> CreateManager(
         bool enableBackupSystem = false,
         int backupSystemMaxBackupCount = 0,
-        Func<SaveFileContext, string>? fileNameResolver = null)
+        Func<SaveFileContext, string>? fileNameResolver = null,
+        ISaveSerializer? serializer = null)
     {
         return new SaveManager<string>(
             new SaveSystemOptions<string>(
                 saveRootPath: _tempRoot,
-                serializer: new JsonSaveSerializer(),
+                serializer: serializer ?? new JsonSaveSerializer(),
                 tempFolderName: SaveSystemOptions<string>.DefaultTempFolderName(),
                 savePathResolver: identity => identity,
                 fileNameResolver: fileNameResolver ?? SaveSystemOptions<string>.DefaultFileNameResolver,

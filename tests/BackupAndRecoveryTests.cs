@@ -156,6 +156,17 @@ public sealed class BackupAndRecoveryTests
     }
 
     [Test]
+    public void RecoverSave_RequiresValidatedRegistrations()
+    {
+        var manager = CreateManager();
+        manager.RegisterProvider(new TestProvider(new TestState { Value = 1 }));
+
+        var ex = Assert.Throws<InvalidOperationException>(() => manager.RecoverSave("slot"));
+
+        Assert.That(ex!.Message, Does.Contain("ValidateRegistrations"));
+    }
+
+    [Test]
     public void RecoverSave_CompletesInterruptedSwapWhenMainIsMissing()
     {
         var manager = CreateManager();

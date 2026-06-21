@@ -72,13 +72,30 @@ public sealed class SaveAtomicityTests
         Assert.That(Directory.Exists(Path.Combine(_tempRoot, "slot_toDelete")), Is.False);
     }
 
+    [Test]
+    public void SaveToDisk_WhenTempValidationDeserializesWrongStateType_RemovesTempAndDoesNotPromoteSave()
+    {
+        var manager = CreateManager(serializer: new WrongStateTypeSerializer());
+        var provider = new TestProvider(new TestState { Value = 1 });
+        manager.RegisterProvider(provider);
+        manager.ValidateRegistrations();
+
+        var ex = Assert.Throws<InvalidOperationException>(() => manager.SaveToDisk("slot"));
+
+        Assert.That(ex!.Message, Does.Contain("deserialize correctly"));
+        Assert.That(Directory.Exists(Path.Combine(_tempRoot, "slot")), Is.False);
+        Assert.That(Directory.Exists(Path.Combine(_tempRoot, "slot_tmp")), Is.False);
+        Assert.That(Directory.Exists(Path.Combine(_tempRoot, "slot_toDelete")), Is.False);
+    }
+
     private SaveManager<string> CreateManager(
-        Func<SaveFileContext, string>? fileNameResolver = null)
+        Func<SaveFileContext, string>? fileNameResolver = null,
+        ISaveSerializer? serializer = null)
     {
         return new SaveManager<string>(
             new SaveSystemOptions<string>(
                 saveRootPath: _tempRoot,
-                serializer: new JsonSaveSerializer(),
+                serializer: serializer ?? new JsonSaveSerializer(),
                 tempFolderName: SaveSystemOptions<string>.DefaultTempFolderName(),
                 savePathResolver: identity => identity,
                 fileNameResolver: fileNameResolver ?? SaveSystemOptions<string>.DefaultFileNameResolver));
@@ -124,6 +141,50 @@ public sealed class SaveAtomicityTests
         public void RestoreState(TestState state)
         {
             Current = state;
+        }
+    }
+
+    private sealed class WrongState
+    {
+    }
+
+    private sealed class WrongStateTypeSerializer : ISaveSerializer
+    {
+        public string FileExtension => ".wrong";
+
+        public ISaveSchematic CreateSchematic(Type stateType)
+        {
+            return new WrongStateTypeSchematic();
+        }
+
+        public string Serialize(object data, ISaveSchematic schematic)
+        {
+            return schematic.SerializeUntyped(data);
+        }
+
+        public object Deserialize(string rawData, ISaveSchematic schematic)
+        {
+            return schematic.DeserializeUntyped(rawData);
+        }
+
+        public int ExtractSchemaVersion(string serializedData)
+        {
+            return 1;
+        }
+    }
+
+    private sealed class WrongStateTypeSchematic : ISaveSchematic
+    {
+        public int SchemaVersion { get; set; } = 1;
+
+        public string SerializeUntyped(object state)
+        {
+            return "payload";
+        }
+
+        public object DeserializeUntyped(string serialized)
+        {
+            return new WrongState();
         }
     }
 }

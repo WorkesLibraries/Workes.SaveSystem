@@ -237,7 +237,7 @@ Save keys are persistent identity. Changing a provider key changes the filename 
 
 `SaveKey` must remain stable after provider registration. `SchemaVersion` must remain stable after registration validation. The manager checks these values before disk save/load operations and throws a clear error if a provider changes its persistence contract after setup. If you intentionally change a provider schema during setup, call `ValidateRegistrations()` again before saving or loading.
 
-Custom `FileNameResolver` values must also resolve every persisted provider to a unique file name. The default resolver uses `SaveKey`, so uniqueness follows from unique provider keys. A custom resolver that maps multiple providers to the same file is rejected during registration validation.
+Custom `FileNameResolver` values must also resolve every persisted provider to a unique file name. The default resolver uses `SaveKey`, so uniqueness follows from unique provider keys. A custom resolver that maps multiple providers to the same file is rejected during registration validation. The provider file base name `metadata` is reserved for save-system metadata, so providers must not resolve to `metadata.json`, `metadata.bin`, or the active serializer's equivalent metadata file.
 
 Provider state must be non-null and compatible with the provider's `ISaveProvider<TState>` state type. Persisted providers must also be compatible with the serializer. If a provider has no data to save, return an explicit empty state object rather than `null`.
 The built-in JSON serializer does not require a public parameterless constructor during registration; constructor-based DTOs are supported when Newtonsoft.Json can serialize and deserialize the real captured state.
@@ -299,6 +299,8 @@ manager.LoadBackupSlotFromDisk("slot-1", slotNumber: 1);
 ## Recovery
 
 `LoadFromDisk(...)` automatically calls `RecoverSave(...)` before loading provider data. Recovery handles interrupted atomic save swaps involving the main save folder, the temp folder, and the to-delete folder for the same resolved save path.
+
+Direct calls to `RecoverSave(...)` require the same successful `ValidateRegistrations()` setup as disk load operations.
 
 Recovery validates candidate save folders without running provider migrations. It checks metadata, required provider files, schema-version extraction, current schema-version compatibility, and current-schema deserialization. A temp or `_toDelete` recovery candidate written with an older or newer provider schema is rejected rather than migrated during recovery; migrations still run during normal loads after a current-schema save folder has been recovered.
 
