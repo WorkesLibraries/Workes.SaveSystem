@@ -16,10 +16,28 @@ namespace Workes.SaveSystem
         /// Initializes a new instance of the <see cref="JsonSaveSerializer"/> class.
         /// </summary>
         public JsonSaveSerializer()
+            : this(JsonSaveFormatting.Pretty)
         {
+        }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="JsonSaveSerializer"/> class.
+        /// </summary>
+        /// <param name="formatting">The JSON formatting style to use when writing save payloads.</param>
+        public JsonSaveSerializer(JsonSaveFormatting formatting)
+        {
+            if (!Enum.IsDefined(typeof(JsonSaveFormatting), formatting))
+                throw new ArgumentOutOfRangeException(nameof(formatting));
+
+            Formatting = formatting;
             _nodeFactory = new JsonSaveDataNodeFactory();
             NodeFactory = _nodeFactory;
         }
+
+        /// <summary>
+        /// Gets the JSON formatting style used when writing save payloads.
+        /// </summary>
+        public JsonSaveFormatting Formatting { get; }
 
         /// <summary>
         /// Creates a <see cref="JsonSaveSchematic{T}"/> for the given state type.
@@ -32,7 +50,7 @@ namespace Workes.SaveSystem
             var schematicType = typeof(JsonSaveSchematic<>).MakeGenericType(stateType);
             try
             {
-                var schematic = Activator.CreateInstance(schematicType);
+                var schematic = Activator.CreateInstance(schematicType, Formatting);
                 if (schematic == null)
                     throw new ArgumentException($"JsonSaveSerializer could not create a schematic for type {stateType.Name}.", nameof(stateType));
 
@@ -120,9 +138,21 @@ namespace Workes.SaveSystem
         public byte[] SerializeFromNode(ISaveDataNode node)
         {
             var jsonNode = JsonSaveDataNode.RequireJsonNode(node, _nodeFactory.Owner);
-            var json = jsonNode._token.ToString(Newtonsoft.Json.Formatting.Indented);
+            var json = jsonNode._token.ToString(ToNewtonsoftFormatting(Formatting));
             return Encoding.UTF8.GetBytes(json);
         }
 
+        internal static Newtonsoft.Json.Formatting ToNewtonsoftFormatting(JsonSaveFormatting formatting)
+        {
+            switch (formatting)
+            {
+                case JsonSaveFormatting.Pretty:
+                    return Newtonsoft.Json.Formatting.Indented;
+                case JsonSaveFormatting.Compact:
+                    return Newtonsoft.Json.Formatting.None;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(formatting));
+            }
+        }
     }
 }

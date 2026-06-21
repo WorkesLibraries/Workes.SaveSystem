@@ -42,6 +42,52 @@ public sealed class SerializerMigrationTests
     }
 
     [Test]
+    public void JsonSerializer_DefaultConstructorWritesPrettyJson()
+    {
+        var serializer = new JsonSaveSerializer();
+        var schematic = serializer.CreateSchematic(typeof(V1State));
+
+        var json = Encoding.UTF8.GetString(serializer.Serialize(new V1State { Name = "Rook" }, schematic));
+
+        Assert.That(serializer.Formatting, Is.EqualTo(JsonSaveFormatting.Pretty));
+        Assert.That(json, Does.Contain(Environment.NewLine));
+        Assert.That(json, Does.Contain("  \"SchemaVersion\""));
+    }
+
+    [Test]
+    public void JsonSerializer_PrettyFormattingWritesPrettyJson()
+    {
+        var serializer = new JsonSaveSerializer(JsonSaveFormatting.Pretty);
+        var schematic = serializer.CreateSchematic(typeof(V1State));
+
+        var json = Encoding.UTF8.GetString(serializer.Serialize(new V1State { Name = "Rook" }, schematic));
+
+        Assert.That(serializer.Formatting, Is.EqualTo(JsonSaveFormatting.Pretty));
+        Assert.That(json, Does.Contain(Environment.NewLine));
+        Assert.That(json, Does.Contain("  \"SchemaVersion\""));
+    }
+
+    [Test]
+    public void JsonSerializer_CompactFormattingWritesCompactJsonAndStillDeserializes()
+    {
+        var serializer = new JsonSaveSerializer(JsonSaveFormatting.Compact);
+        var schematic = serializer.CreateSchematic(typeof(V1State));
+        schematic.SchemaVersion = 4;
+
+        var serialized = serializer.Serialize(new V1State { Name = "Rook" }, schematic);
+        var json = Encoding.UTF8.GetString(serialized);
+        var deserialized = (V1State)serializer.Deserialize(serialized, schematic);
+
+        Assert.That(serializer.Formatting, Is.EqualTo(JsonSaveFormatting.Compact));
+        Assert.That(json, Does.Not.Contain(Environment.NewLine));
+        Assert.That(json, Does.Not.Contain("  \"SchemaVersion\""));
+        Assert.That(json, Does.Contain("\"SchemaVersion\":4"));
+        Assert.That(json, Does.Contain("\"Name\":\"Rook\""));
+        Assert.That(serializer.ExtractSchemaVersion(serialized), Is.EqualTo(4));
+        Assert.That(deserialized.Name, Is.EqualTo("Rook"));
+    }
+
+    [Test]
     public void JsonSerializer_ExtractSchemaVersion_RejectsMissingEnvelopeVersion()
     {
         var serializer = new JsonSaveSerializer();
@@ -149,6 +195,24 @@ public sealed class SerializerMigrationTests
     }
 
     [Test]
+    public void JsonSerializer_CompactFormattingPreservesCompactOutputWhenSerializingMigratedNodes()
+    {
+        var serializer = new JsonSaveSerializer(JsonSaveFormatting.Compact);
+        var schematic = serializer.CreateSchematic(typeof(V1State));
+        var serialized = serializer.Serialize(new V1State { Name = "Scout" }, schematic);
+        var envelope = serializer.DeserializeToNode(serialized);
+
+        envelope.Get("Data").Set("Level", serializer.NodeFactory.CreateInt(12));
+        envelope.Get("SchemaVersion").SetInt(2);
+
+        var json = Encoding.UTF8.GetString(serializer.SerializeFromNode(envelope));
+
+        Assert.That(json, Does.Not.Contain(Environment.NewLine));
+        Assert.That(json, Does.Contain("\"SchemaVersion\":2"));
+        Assert.That(json, Does.Contain("\"Level\":12"));
+    }
+
+    [Test]
     public void LoadFromDisk_ThrowsWhenMigrationPathIsMissing()
     {
         var oldManager = new SaveManager<string>(CreateOptions());
@@ -250,11 +314,11 @@ public sealed class SerializerMigrationTests
         Assert.That(ex!.Message, Does.Contain("Failed to migrate save data"));
     }
 
-    private SaveSystemOptions<string> CreateOptions()
+    private SaveSystemOptions<string> CreateOptions(ISaveSerializer? serializer = null)
     {
         return new SaveSystemOptions<string>(
             saveRootPath: _tempRoot,
-            serializer: new JsonSaveSerializer(),
+            serializer: serializer ?? new JsonSaveSerializer(),
             tempFolderName: SaveSystemOptions<string>.DefaultTempFolderName(),
             savePathResolver: identity => identity,
             fileNameResolver: SaveSystemOptions<string>.DefaultFileNameResolver);

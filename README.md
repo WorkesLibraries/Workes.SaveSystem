@@ -99,7 +99,7 @@ var manager = new SaveManager<string>(
 
 `CreateDefault(ISaveSerializer)` is a convenience factory for plain .NET applications and writes under the current user's application data folder. Engine integrations should prefer `CreateDefault(ISaveSerializer, string)`, `SaveSystemOptions.Create(...)`, or the options constructor so the engine owns the persistent data path.
 
-Use `JsonSaveSerializer` for directly readable save files.
+Use `JsonSaveSerializer` for directly readable save files. The default constructor writes indented JSON, and `JsonSaveFormatting.Compact` writes the same `.json` payload shape without formatting whitespace.
 
 ```csharp
 var manager = new SaveManager<string>(
@@ -108,9 +108,16 @@ var manager = new SaveManager<string>(
         serializer: new JsonSaveSerializer()));
 ```
 
+```csharp
+var compactManager = new SaveManager<string>(
+    SaveSystemOptions.Create(
+        saveRootPath: "Saves",
+        serializer: new JsonSaveSerializer(JsonSaveFormatting.Compact)));
+```
+
 Save metadata uses the active serializer too. JSON saves write `metadata.json`.
 
-The test suite includes `SerializerOutputExampleTests`, which writes JSON example saves to `tests/obj/SerializerOutputExamples` for inspection.
+The test suite includes `SerializerOutputExampleTests`, which writes pretty and compact JSON example saves to `tests/obj/SerializerOutputExamples` for inspection.
 
 After registering providers, call `ValidateRegistrations()` before disk save/load operations. Registration is intentionally lightweight; validation captures provider state, checks serializer write compatibility, validates migration policy, verifies file-name behavior, and rejects provider file-name collisions at the setup point you choose. Validation is an early compatibility check, not a full future-load proof: issues that only appear while deserializing real saved data can still surface during load.
 

@@ -11,13 +11,29 @@ namespace Workes.SaveSystem
     /// <typeparam name="T">The type of state object this schematic serializes. Must be compatible with Newtonsoft.Json.</typeparam>
     public sealed class JsonSaveSchematic<T> : SaveSchematic<T>
     {
+        private readonly JsonSaveFormatting _formatting;
+
         /// <summary>
         /// Initializes a new instance of the <see cref="JsonSaveSchematic{T}"/> class.
         /// The manager will set the schema version from the provider at registration.
         /// </summary>
         public JsonSaveSchematic()
+            : this(JsonSaveFormatting.Pretty)
+        {
+        }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="JsonSaveSchematic{T}"/> class.
+        /// The manager will set the schema version from the provider at registration.
+        /// </summary>
+        /// <param name="formatting">The JSON formatting style to use when writing save payloads.</param>
+        public JsonSaveSchematic(JsonSaveFormatting formatting)
             : base(1)
         {
+            if (!Enum.IsDefined(typeof(JsonSaveFormatting), formatting))
+                throw new ArgumentOutOfRangeException(nameof(formatting));
+
+            _formatting = formatting;
         }
 
         /// <summary>
@@ -26,8 +42,23 @@ namespace Workes.SaveSystem
         /// </summary>
         /// <param name="schemaVersion">The initial schema version. Ignored after registration.</param>
         public JsonSaveSchematic(int schemaVersion)
+            : this(schemaVersion, JsonSaveFormatting.Pretty)
+        {
+        }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="JsonSaveSchematic{T}"/> class with an initial schema version.
+        /// The manager will overwrite this with the provider's schema version at registration.
+        /// </summary>
+        /// <param name="schemaVersion">The initial schema version. Ignored after registration.</param>
+        /// <param name="formatting">The JSON formatting style to use when writing save payloads.</param>
+        public JsonSaveSchematic(int schemaVersion, JsonSaveFormatting formatting)
             : base(schemaVersion)
         {
+            if (!Enum.IsDefined(typeof(JsonSaveFormatting), formatting))
+                throw new ArgumentOutOfRangeException(nameof(formatting));
+
+            _formatting = formatting;
         }
 
         /// <inheritdoc />
@@ -40,7 +71,7 @@ namespace Workes.SaveSystem
             };
             var json = JsonConvert.SerializeObject(payload, new JsonSerializerSettings
             {
-                Formatting = Formatting.Indented
+                Formatting = JsonSaveSerializer.ToNewtonsoftFormatting(_formatting)
             });
             return Encoding.UTF8.GetBytes(json);
         }
