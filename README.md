@@ -234,6 +234,8 @@ Metadata reads return `null` when no metadata file exists and throw when a metad
 
 Serializers that need format metadata can implement `ISaveSerializerMetadataHandler`. That metadata is stored inside the save-system metadata file as serializer-owned string key/value data, with both global and per-provider buckets. This is intended for serializer implementation details such as field maps or codec settings; it is not exposed through `SaveMetadataInfo` and should not be used for game/application display metadata.
 
+Advanced custom serializers must support the public `SaveMetadata` payload type because save-system metadata is serialized through the active serializer. Application code that only wants to read menu metadata should use `SaveMetadataInfo` from `ReadSaveMetadata(...)` and `ReadBackupSlotMetadata(...)`.
+
 Use `ForceSaveToDisk(...)` only when intentionally repairing or replacing a save whose existing metadata or serializer format cannot be trusted. Normal `SaveToDisk(...)` preserves readable core metadata and rotates backups when enabled. `ForceSaveToDisk(...)` writes a fresh main save with a new save id and timestamps, ignores unreadable existing metadata, does not rotate the replaced main folder into backups, and leaves existing backup folders untouched.
 
 Use `TryLoadFromDisk(...)` or `TryLoadBackupSlotFromDisk(...)` when a UI or repair tool needs a structured outcome instead of exceptions.
@@ -506,6 +508,8 @@ A custom serializer must provide these pieces as one coherent format:
 Schematic creation should be lightweight where possible. Provider state write compatibility is validated through real provider state during `ValidateRegistrations()`. Read compatibility is validated when real save data is deserialized during load, so custom serializers should still fail clearly for deserialize-only problems.
 
 If the serializer needs metadata stored with a save, implement `ISaveSerializerMetadataHandler` and return it from `ISaveSerializer.Metadata`. The manager calls `WriteMetadata(...)` before writing the metadata file and `ValidateMetadata(...)` when temp-save and recovery-candidate metadata is validated. Missing serializer metadata is treated as empty metadata for compatibility with older saves.
+
+Custom serializers must also be able to create a schematic for the public `SaveMetadata` type. Existing metadata files that deserialize to `null` or to another type are treated as corrupt; use `ForceSaveToDisk(...)` when intentionally replacing a corrupt or incompatible save.
 
 Use `TransformedSaveSerializer` with `ISavePayloadTransform` when an existing serializer format should be encoded after serialization and decoded before deserialization. The decorator composes file extensions, so wrapping JSON with a transform whose suffix is `.enc` writes provider and metadata files such as `player.json.enc` and `metadata.json.enc`. Migration is routed through the decorator by decoding before `DeserializeToNode(...)` and encoding after `SerializeFromNode(...)`. Serializer metadata is delegated from the inner serializer.
 

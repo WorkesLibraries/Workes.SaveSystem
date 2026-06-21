@@ -116,4 +116,22 @@ public sealed class PublicApiShapeTests
         Assert.That(exportedTypeNames, Does.Not.Contain("Base64JsonSaveSerializer"));
         Assert.That(exportedTypeNames, Does.Not.Contain("Base64JsonSaveSchematic`1"));
     }
+
+    [Test]
+    public void SaveMetadata_IsPublicSerializerFacingContract()
+    {
+        var exportedTypeNames = typeof(SaveManager<>).Assembly
+            .GetExportedTypes()
+            .Select(type => type.Name)
+            .ToArray();
+
+        Assert.That(exportedTypeNames, Does.Contain(nameof(SaveMetadata)));
+
+        var saveMetadataInfoProperties = typeof(SaveMetadataInfo)
+            .GetProperties()
+            .Select(property => property.Name)
+            .ToArray();
+
+        Assert.That(saveMetadataInfoProperties, Does.Not.Contain(nameof(SaveMetadata.SerializerMetadata)));
+    }
 }

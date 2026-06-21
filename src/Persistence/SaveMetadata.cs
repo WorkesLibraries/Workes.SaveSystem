@@ -2,14 +2,43 @@ using System;
 
 namespace Workes.SaveSystem
 {
+    /// <summary>
+    /// Serializer-facing metadata payload written by the save system for each save folder.
+    /// </summary>
+    /// <remarks>
+    /// Serializers must be able to serialize and deserialize this type because save metadata is written
+    /// through the active <see cref="ISaveSerializer"/>. Application display metadata such as character
+    /// name, playtime, difficulty, or screenshots should live in normal save providers, not in this type.
+    /// Use <see cref="SaveMetadataInfo"/> for menu/read APIs that only need core save metadata.
+    /// </remarks>
     [Serializable]
-    internal sealed class SaveMetadata
+    public sealed class SaveMetadata
     {
+        /// <summary>
+        /// Gets or sets the stable save identifier used by the save system to validate recovery operations.
+        /// </summary>
         public string SaveId = string.Empty;
+
+        /// <summary>
+        /// Gets or sets the UTC timestamp when this save metadata was first created.
+        /// </summary>
         public DateTimeOffset CreatedAtUtc;
+
+        /// <summary>
+        /// Gets or sets the UTC timestamp when this save metadata was last written.
+        /// </summary>
         public DateTimeOffset LastWrittenAtUtc;
+
+        /// <summary>
+        /// Gets or sets serializer-owned metadata for advanced serializer format details.
+        /// </summary>
         public SaveSerializerMetadata SerializerMetadata = new SaveSerializerMetadata();
 
+        /// <summary>
+        /// Creates a new metadata payload with a new save id and initialized timestamps.
+        /// </summary>
+        /// <param name="timestampUtc">Optional UTC timestamp to use for both created and last-written time.</param>
+        /// <returns>A new save metadata payload.</returns>
         public static SaveMetadata CreateNewMetadata(DateTimeOffset? timestampUtc = null)
         {
             var timestamp = timestampUtc ?? DateTimeOffset.UtcNow;
@@ -21,6 +50,10 @@ namespace Workes.SaveSystem
             };
         }
 
+        /// <summary>
+        /// Ensures required metadata fields are initialized before writing.
+        /// </summary>
+        /// <param name="timestampUtc">The UTC timestamp to store as the last-written time.</param>
         public void PrepareForWrite(DateTimeOffset timestampUtc)
         {
             if (string.IsNullOrEmpty(SaveId))

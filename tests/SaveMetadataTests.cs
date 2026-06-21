@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading;
 using Newtonsoft.Json.Linq;
 using Workes.SaveSystem;
@@ -289,6 +290,85 @@ public sealed class SaveMetadataTests
     }
 
     [Test]
+    public void SaveMetadata_IsUsableAsPublicSerializerContract()
+    {
+        var serializer = new JsonSaveSerializer();
+        var schematic = serializer.CreateSchematic(typeof(SaveMetadata));
+
+        Assert.That(schematic, Is.Not.Null);
+    }
+
+    [Test]
+    public void SaveToDisk_ThrowsWhenExistingMetadataDeserializesToNull()
+    {
+        var serializer = new InvalidMetadataJsonSerializer();
+        var manager = CreateManager(serializer: serializer);
+        var provider = new TestProvider(new TestState { Value = 1 });
+        manager.RegisterProvider(provider);
+        manager.ValidateRegistrations();
+        manager.SaveToDisk("slot");
+        WriteInvalidMetadataMarker("slot", InvalidMetadataMode.Null);
+        provider.Current = new TestState { Value = 2 };
+
+        var ex = Assert.Throws<InvalidOperationException>(() => manager.SaveToDisk("slot"));
+
+        Assert.That(ex!.Message, Does.Contain("did not produce a SaveMetadata payload"));
+        Assert.That(ReadValueFromFolder(Path.Combine(_tempRoot, "slot")), Is.EqualTo(1));
+    }
+
+    [Test]
+    public void SaveToDisk_ThrowsWhenExistingMetadataDeserializesToWrongType()
+    {
+        var serializer = new InvalidMetadataJsonSerializer();
+        var manager = CreateManager(serializer: serializer);
+        var provider = new TestProvider(new TestState { Value = 1 });
+        manager.RegisterProvider(provider);
+        manager.ValidateRegistrations();
+        manager.SaveToDisk("slot");
+        WriteInvalidMetadataMarker("slot", InvalidMetadataMode.WrongType);
+        provider.Current = new TestState { Value = 2 };
+
+        var ex = Assert.Throws<InvalidOperationException>(() => manager.SaveToDisk("slot"));
+
+        Assert.That(ex!.Message, Does.Contain("did not produce a SaveMetadata payload"));
+        Assert.That(ReadValueFromFolder(Path.Combine(_tempRoot, "slot")), Is.EqualTo(1));
+    }
+
+    [Test]
+    public void ForceSaveToDisk_RepairsMetadataDeserializesToNull()
+    {
+        var serializer = new InvalidMetadataJsonSerializer();
+        var manager = CreateManager(serializer: serializer);
+        var provider = new TestProvider(new TestState { Value = 1 });
+        manager.RegisterProvider(provider);
+        manager.ValidateRegistrations();
+        manager.SaveToDisk("slot");
+        WriteInvalidMetadataMarker("slot", InvalidMetadataMode.Null);
+        provider.Current = new TestState { Value = 2 };
+
+        manager.ForceSaveToDisk("slot");
+
+        Assert.That(ReadValueFromFolder(Path.Combine(_tempRoot, "slot")), Is.EqualTo(2));
+    }
+
+    [Test]
+    public void ForceSaveToDisk_RepairsMetadataDeserializesToWrongType()
+    {
+        var serializer = new InvalidMetadataJsonSerializer();
+        var manager = CreateManager(serializer: serializer);
+        var provider = new TestProvider(new TestState { Value = 1 });
+        manager.RegisterProvider(provider);
+        manager.ValidateRegistrations();
+        manager.SaveToDisk("slot");
+        WriteInvalidMetadataMarker("slot", InvalidMetadataMode.WrongType);
+        provider.Current = new TestState { Value = 2 };
+
+        manager.ForceSaveToDisk("slot");
+
+        Assert.That(ReadValueFromFolder(Path.Combine(_tempRoot, "slot")), Is.EqualTo(2));
+    }
+
+    [Test]
     public void ReadBackupSlotMetadata_ReturnsNullWhenBackupMetadataDoesNotExist()
     {
         var manager = CreateManager();
@@ -384,6 +464,14 @@ public sealed class SaveMetadataTests
         File.WriteAllText(metadataPath, envelope.ToString());
     }
 
+    private void WriteInvalidMetadataMarker(string slot, InvalidMetadataMode mode)
+    {
+        var marker = mode == InvalidMetadataMode.Null
+            ? InvalidMetadataJsonSerializer.NullMetadataMarker
+            : InvalidMetadataJsonSerializer.WrongTypeMetadataMarker;
+        File.WriteAllText(Path.Combine(_tempRoot, slot, "metadata.json"), marker);
+    }
+
     private static void CopyDirectory(string sourcePath, string destinationPath)
     {
         Directory.CreateDirectory(destinationPath);
@@ -473,6 +561,57 @@ public sealed class SaveMetadataTests
 
             if (format != "metadata-aware-json")
                 throw new InvalidOperationException("Serializer metadata format is invalid.");
+        }
+    }
+
+    private enum InvalidMetadataMode
+    {
+        Null,
+        WrongType
+    }
+
+    private sealed class InvalidMetadataJsonSerializer : ISaveSerializer
+    {
+        public const string NullMetadataMarker = "invalid-metadata-null";
+        public const string WrongTypeMetadataMarker = "invalid-metadata-wrong-type";
+
+        private readonly JsonSaveSerializer _inner = new JsonSaveSerializer();
+
+        public string FileExtension => _inner.FileExtension;
+
+        public ISaveMigrationCapableSerializer? Migration => _inner.Migration;
+
+        public ISaveSerializerMetadataHandler? Metadata => null;
+
+        public ISaveSchematic CreateSchematic(Type stateType)
+        {
+            return _inner.CreateSchematic(stateType);
+        }
+
+        public byte[] Serialize(object data, ISaveSchematic schematic)
+        {
+            return _inner.Serialize(data, schematic);
+        }
+
+        public object Deserialize(byte[] rawData, ISaveSchematic schematic)
+        {
+            if (schematic.GetType().IsGenericType &&
+                schematic.GetType().GetGenericArguments()[0] == typeof(SaveMetadata))
+            {
+                var text = Encoding.UTF8.GetString(rawData);
+                if (text.Contains(NullMetadataMarker))
+                    return null!;
+
+                if (text.Contains(WrongTypeMetadataMarker))
+                    return new TestState { Value = 99 };
+            }
+
+            return _inner.Deserialize(rawData, schematic);
+        }
+
+        public int ExtractSchemaVersion(byte[] serializedData)
+        {
+            return _inner.ExtractSchemaVersion(serializedData);
         }
     }
 }

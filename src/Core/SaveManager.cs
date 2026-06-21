@@ -1517,8 +1517,13 @@ namespace Workes.SaveSystem
         private SaveMetadata? ReadSaveMetadataFromFile(string metaPath)
         {
             var metadata = _options.Serializer.Deserialize(File.ReadAllBytes(metaPath), CreateMetadataSchematic());
-            var saveMetadata = metadata as SaveMetadata;
-            saveMetadata?.SerializerMetadata.Normalize();
+            if (!(metadata is SaveMetadata saveMetadata))
+            {
+                throw new InvalidOperationException(
+                    $"Deserialized {Path.GetFileName(metaPath)} at '{metaPath}' did not produce a {nameof(SaveMetadata)} payload.");
+            }
+
+            saveMetadata.SerializerMetadata.Normalize();
             return saveMetadata;
         }
 
@@ -1528,7 +1533,7 @@ namespace Workes.SaveSystem
             if (!File.Exists(existingMetaPath))
                 return SaveMetadata.CreateNewMetadata();
 
-            return ReadSaveMetadataFromFile(existingMetaPath) ?? SaveMetadata.CreateNewMetadata();
+            return ReadSaveMetadataFromFile(existingMetaPath)!;
         }
 
         private void WriteSaveMetadataToFile(string metaPath, SaveMetadata metadata)
