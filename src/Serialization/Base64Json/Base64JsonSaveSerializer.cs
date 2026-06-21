@@ -13,21 +13,21 @@ namespace Workes.SaveSystem
     /// UTF-8 JSON token payload, so decoding the file content with ordinary Base64 tools produces readable structured
     /// JSON while preserving a distinct serializer/file extension.
     /// </remarks>
-    public sealed class BinarySaveSerializer : ISaveSerializer, ISaveMigrationCapableSerializer
+    public sealed class Base64JsonSaveSerializer : ISaveSerializer, ISaveMigrationCapableSerializer
     {
         private readonly JsonSaveDataNodeFactory _nodeFactory;
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="BinarySaveSerializer"/> class.
+        /// Initializes a new instance of the <see cref="Base64JsonSaveSerializer"/> class.
         /// </summary>
-        public BinarySaveSerializer()
+        public Base64JsonSaveSerializer()
         {
             _nodeFactory = new JsonSaveDataNodeFactory();
             NodeFactory = _nodeFactory;
         }
 
         /// <summary>
-        /// Gets the file extension used for binary save files: ".bin".
+        /// Gets the file extension used for Base64 JSON save files: ".bin".
         /// </summary>
         public string FileExtension => ".bin";
 
@@ -35,26 +35,26 @@ namespace Workes.SaveSystem
         public ISaveDataNodeFactory NodeFactory { get; }
 
         /// <summary>
-        /// Creates a <see cref="BinarySaveSchematic{T}"/> for the given state type.
+        /// Creates a <see cref="Base64JsonSaveSchematic{T}"/> for the given state type.
         /// </summary>
         public ISaveSchematic CreateSchematic(Type stateType)
         {
             if (stateType == null)
                 throw new ArgumentNullException(nameof(stateType));
 
-            var schematicType = typeof(BinarySaveSchematic<>).MakeGenericType(stateType);
+            var schematicType = typeof(Base64JsonSaveSchematic<>).MakeGenericType(stateType);
             try
             {
                 var schematic = Activator.CreateInstance(schematicType);
                 if (schematic == null)
-                    throw new ArgumentException($"BinarySaveSerializer could not create a schematic for type {stateType.Name}.", nameof(stateType));
+                    throw new ArgumentException($"Base64JsonSaveSerializer could not create a schematic for type {stateType.Name}.", nameof(stateType));
 
                 return (ISaveSchematic)schematic;
             }
             catch (Exception ex)
             {
                 throw new ArgumentException(
-                    $"BinarySaveSerializer cannot create a schematic for type {stateType.Name}.",
+                    $"Base64JsonSaveSerializer cannot create a schematic for type {stateType.Name}.",
                     nameof(stateType),
                     ex
                 );
@@ -83,7 +83,7 @@ namespace Workes.SaveSystem
                 if (schemaVersionToken == null || schemaVersionToken.Type != JTokenType.Integer)
                 {
                     throw new InvalidOperationException(
-                        "Serialized binary save data does not contain a valid integer 'SchemaVersion' field."
+                        "Serialized Base64 JSON save data does not contain a valid integer 'SchemaVersion' field."
                     );
                 }
 
@@ -92,7 +92,7 @@ namespace Workes.SaveSystem
             catch (Exception ex)
             {
                 throw new InvalidOperationException(
-                    "Failed to extract schema version from binary save data.",
+                    "Failed to extract schema version from Base64 JSON save data.",
                     ex
                 );
             }
@@ -128,7 +128,7 @@ namespace Workes.SaveSystem
 
         private static JToken DeserializeTokenFromBase64(string serializedData)
         {
-            return BinarySaveBase64JsonCodec.Decode(serializedData);
+            return Base64JsonSaveCodec.Decode(serializedData);
         }
 
         private static string SerializeTokenToBase64(JToken token)
@@ -136,11 +136,11 @@ namespace Workes.SaveSystem
             if (token == null)
                 throw new ArgumentNullException(nameof(token));
 
-            return BinarySaveBase64JsonCodec.Encode(token);
+            return Base64JsonSaveCodec.Encode(token);
         }
     }
 
-    internal static class BinarySaveBase64JsonCodec
+    internal static class Base64JsonSaveCodec
     {
         public static string Encode(JToken token)
         {
@@ -154,7 +154,7 @@ namespace Workes.SaveSystem
         public static JToken Decode(string serializedData)
         {
             if (string.IsNullOrWhiteSpace(serializedData))
-                throw new InvalidOperationException("Serialized binary save data cannot be null, empty, or whitespace.");
+                throw new InvalidOperationException("Serialized Base64 JSON save data cannot be null, empty, or whitespace.");
 
             byte[] bytes;
             try
@@ -163,7 +163,7 @@ namespace Workes.SaveSystem
             }
             catch (FormatException ex)
             {
-                throw new InvalidOperationException("Serialized binary save data is not valid Base64.", ex);
+                throw new InvalidOperationException("Serialized Base64 JSON save data is not valid Base64.", ex);
             }
 
             try
@@ -173,7 +173,7 @@ namespace Workes.SaveSystem
             }
             catch (Exception ex)
             {
-                throw new InvalidOperationException("Serialized binary save data does not contain readable JSON after Base64 decoding.", ex);
+                throw new InvalidOperationException("Serialized Base64 JSON save data does not contain readable JSON after Base64 decoding.", ex);
             }
         }
     }

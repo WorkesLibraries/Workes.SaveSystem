@@ -5,7 +5,7 @@ using Workes.SaveSystem;
 
 namespace Workes.SaveSystem.Tests;
 
-public sealed class BinarySaveSerializerTests
+public sealed class Base64JsonSaveSerializerTests
 {
     private string _tempRoot = string.Empty;
 
@@ -26,7 +26,7 @@ public sealed class BinarySaveSerializerTests
     [Test]
     public void Serialize_ProducesBase64JsonPayloadAndExtractsSchemaVersion()
     {
-        var serializer = new BinarySaveSerializer();
+        var serializer = new Base64JsonSaveSerializer();
         var schematic = serializer.CreateSchematic(typeof(TestState));
         schematic.SchemaVersion = 3;
 
@@ -41,7 +41,7 @@ public sealed class BinarySaveSerializerTests
     }
 
     [Test]
-    public void SaveManager_WithBinarySerializer_SavesAndLoadsProviderState()
+    public void SaveManager_WithBase64JsonSerializer_SavesAndLoadsProviderState()
     {
         var manager = CreateManager();
         var provider = new TestProvider(new TestState { Name = "Scout", Level = 12 });
@@ -61,7 +61,7 @@ public sealed class BinarySaveSerializerTests
     }
 
     [Test]
-    public void LoadFromDisk_WithBinarySerializer_AppliesMigrationHelpers()
+    public void LoadFromDisk_WithBase64JsonSerializer_AppliesMigrationHelpers()
     {
         var oldManager = CreateManager();
         oldManager.RegisterProvider(new V1Provider(new V1State { Name = "Scout" }));
@@ -81,9 +81,9 @@ public sealed class BinarySaveSerializerTests
     }
 
     [Test]
-    public void ExtractSchemaVersion_RejectsInvalidBinaryPayload()
+    public void ExtractSchemaVersion_RejectsInvalidBase64JsonPayload()
     {
-        var serializer = new BinarySaveSerializer();
+        var serializer = new Base64JsonSaveSerializer();
 
         var ex = Assert.Throws<InvalidOperationException>(() => serializer.ExtractSchemaVersion("not-base64"));
 
@@ -93,7 +93,7 @@ public sealed class BinarySaveSerializerTests
     [Test]
     public void Deserialize_RejectsNullPayloadData()
     {
-        var serializer = new BinarySaveSerializer();
+        var serializer = new Base64JsonSaveSerializer();
         var schematic = serializer.CreateSchematic(typeof(TestState));
         schematic.SchemaVersion = 1;
         var payload = serializer.NodeFactory.CreateObject();
@@ -103,7 +103,7 @@ public sealed class BinarySaveSerializerTests
 
         var ex = Assert.Throws<InvalidOperationException>(() => serializer.Deserialize(serialized, schematic));
 
-        Assert.That(ex!.Message, Does.Contain("Failed to parse binary save payload"));
+        Assert.That(ex!.Message, Does.Contain("Failed to parse Base64 JSON save payload"));
         Assert.That(ex.InnerException!.Message, Does.Contain("payload data was null"));
     }
 
@@ -112,7 +112,7 @@ public sealed class BinarySaveSerializerTests
         return new SaveManager<string>(
             SaveSystemOptions.Create(
                 saveRootPath: _tempRoot,
-                serializer: new BinarySaveSerializer()));
+                serializer: new Base64JsonSaveSerializer()));
     }
 
     public sealed class TestState

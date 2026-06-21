@@ -69,14 +69,14 @@ public sealed class PublicApiShapeTests
     public void MigrationCapableSerializers_ExposeNodeCreationThroughNodeFactoryOnly()
     {
         var jsonSerializer = new JsonSaveSerializer();
-        var binarySerializer = new BinarySaveSerializer();
+        var base64JsonSerializer = new Base64JsonSaveSerializer();
 
         Assert.That(jsonSerializer, Is.InstanceOf<ISaveMigrationCapableSerializer>());
-        Assert.That(binarySerializer, Is.InstanceOf<ISaveMigrationCapableSerializer>());
+        Assert.That(base64JsonSerializer, Is.InstanceOf<ISaveMigrationCapableSerializer>());
         Assert.That(jsonSerializer, Is.Not.InstanceOf<ISaveDataNodeFactory>());
-        Assert.That(binarySerializer, Is.Not.InstanceOf<ISaveDataNodeFactory>());
+        Assert.That(base64JsonSerializer, Is.Not.InstanceOf<ISaveDataNodeFactory>());
         Assert.That(((ISaveMigrationCapableSerializer)jsonSerializer).NodeFactory, Is.InstanceOf<ISaveDataNodeFactory>());
-        Assert.That(((ISaveMigrationCapableSerializer)binarySerializer).NodeFactory, Is.InstanceOf<ISaveDataNodeFactory>());
+        Assert.That(((ISaveMigrationCapableSerializer)base64JsonSerializer).NodeFactory, Is.InstanceOf<ISaveDataNodeFactory>());
     }
 
     [Test]
@@ -89,5 +89,19 @@ public sealed class PublicApiShapeTests
 
         Assert.That(exportedTypeNames, Does.Not.Contain("JsonSaveDataNode"));
         Assert.That(exportedTypeNames, Does.Not.Contain("JsonSaveDataNodeFactory"));
+    }
+
+    [Test]
+    public void OldBinarySerializerNames_AreNotPublicApi()
+    {
+        var exportedTypeNames = typeof(SaveManager<>).Assembly
+            .GetExportedTypes()
+            .Select(type => type.Name)
+            .ToArray();
+
+        Assert.That(exportedTypeNames, Does.Contain("Base64JsonSaveSerializer"));
+        Assert.That(exportedTypeNames, Does.Contain("Base64JsonSaveSchematic`1"));
+        Assert.That(exportedTypeNames, Does.Not.Contain("BinarySaveSerializer"));
+        Assert.That(exportedTypeNames, Does.Not.Contain("BinarySaveSchematic`1"));
     }
 }

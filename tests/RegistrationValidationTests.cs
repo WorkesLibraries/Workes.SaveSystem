@@ -263,11 +263,11 @@ public sealed class RegistrationValidationTests
     }
 
     [Test]
-    public void ValidateRegistrations_RejectsBinaryProviderFileNameThatResolvesToMetadataFile()
+    public void ValidateRegistrations_RejectsBase64JsonProviderFileNameThatResolvesToMetadataFile()
     {
         var manager = CreateManager(
             fileNameResolver: _ => "metadata",
-            serializer: new BinarySaveSerializer());
+            serializer: new Base64JsonSaveSerializer());
         manager.RegisterProvider(new MutableProvider("player", schemaVersion: 1));
 
         var ex = Assert.Throws<InvalidOperationException>(() => manager.ValidateRegistrations());

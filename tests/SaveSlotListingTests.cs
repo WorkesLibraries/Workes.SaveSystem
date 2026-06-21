@@ -107,9 +107,9 @@ public sealed class SaveSlotListingTests
     }
 
     [Test]
-    public void ListSaveSlots_WithBinarySerializerUsesBinaryMetadataFile()
+    public void ListSaveSlots_WithBase64JsonSerializerUsesBinMetadataFile()
     {
-        var manager = CreateManager(_tempRoot, new BinarySaveSerializer());
+        var manager = CreateManager(_tempRoot, new Base64JsonSaveSerializer());
         var provider = new TestProvider(new TestState { Value = 1 });
         manager.RegisterProvider(provider);
         manager.ValidateRegistrations();

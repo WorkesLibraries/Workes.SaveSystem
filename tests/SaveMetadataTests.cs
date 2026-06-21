@@ -115,12 +115,12 @@ public sealed class SaveMetadataTests
         jsonManager.RegisterProvider(provider);
         SaveValue(jsonManager, provider, "slot", 1);
 
-        var binaryManager = CreateManager(serializer: new BinarySaveSerializer());
-        binaryManager.RegisterProvider(provider);
-        binaryManager.ValidateRegistrations();
+        var base64JsonManager = CreateManager(serializer: new Base64JsonSaveSerializer());
+        base64JsonManager.RegisterProvider(provider);
+        base64JsonManager.ValidateRegistrations();
         provider.Current = new TestState { Value = 2 };
 
-        binaryManager.ForceSaveToDisk("slot");
+        base64JsonManager.ForceSaveToDisk("slot");
 
         Assert.That(File.Exists(Path.Combine(_tempRoot, "slot", "metadata.bin")), Is.True);
         Assert.That(File.Exists(Path.Combine(_tempRoot, "slot", "player.bin")), Is.True);
@@ -165,9 +165,9 @@ public sealed class SaveMetadataTests
     }
 
     [Test]
-    public void ReadSaveMetadata_WithBinarySerializerUsesBinaryMetadataFile()
+    public void ReadSaveMetadata_WithBase64JsonSerializerUsesBinMetadataFile()
     {
-        var manager = CreateManager(serializer: new BinarySaveSerializer());
+        var manager = CreateManager(serializer: new Base64JsonSaveSerializer());
         var provider = new TestProvider(new TestState { Value = 1 });
         manager.RegisterProvider(provider);
         SaveValue(manager, provider, "slot", 1);

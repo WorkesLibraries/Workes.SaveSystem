@@ -4,10 +4,7 @@ This file is the durable planning tracker for the save system work. Keep it upda
 
 ## To-do
 
-1. Revisit binary serializer naming so the format is clear from the API.
-   - The current `BinarySaveSerializer` writes Base64-encoded UTF-8 JSON tokens with a `.bin` extension.
-   - Consider a name that communicates the actual format/intent before first release, or document the existing name more prominently if keeping it.
-   - Update README, XML docs, tests, and serializer output examples with the final naming.
+There are no remaining to-do points in this tracker.
 
 ## Later
 
@@ -60,6 +57,14 @@ These points are completed for the current package migration.
 - Kept serializer-owned node creation available through `ISaveMigrationCapableSerializer.NodeFactory`.
 - Updated tests and README guidance so callers use serializer-owned factories instead of direct built-in factory construction.
 - Added public API shape coverage confirming built-in data-node implementation types are not exported.
+
+### 61. Renamed Binary Serializer To Base64Json
+
+- Renamed the public `BinarySaveSerializer` API to `Base64JsonSaveSerializer`.
+- Renamed `BinarySaveSchematic<T>` to `Base64JsonSaveSchematic<T>`.
+- Kept the on-disk `.bin` extension and Base64-encoded UTF-8 JSON payload format unchanged.
+- Updated README, XML docs, tests, package metadata, and serializer output examples to use the Base64 JSON name.
+- Updated serializer output examples to write the encoded example under `base64-json`.
 
 ### 1. Created New Package Shell
 
@@ -398,8 +403,8 @@ These points are completed for the current package migration.
 
 ### 38. Added Default Binary Serializer
 
-- Added `BinarySaveSerializer` as a built-in serializer that writes `.bin` provider files.
-- Added `BinarySaveSchematic<T>` to wrap provider state in the same versioned payload shape as the JSON serializer.
+- Added `Base64JsonSaveSerializer` as a built-in serializer that writes `.bin` provider files.
+- Added `Base64JsonSaveSchematic<T>` to wrap provider state in the same versioned payload shape as the JSON serializer.
 - Implemented a package-owned binary token codec over the existing migration data-node model instead of using unsafe `BinaryFormatter` or adding another dependency.
 - Kept migration support by implementing `ISaveMigrationCapableSerializer` and reusing the JSON data-node factory internally.
 - Documented that the current serializer contract stores provider payloads as strings, so binary payloads are Base64-encoded on disk rather than written as raw bytes.
@@ -456,7 +461,7 @@ These points are completed for the current package migration.
 
 ### 44. Clarified Binary Serializer And Non-Null Provider State Contracts
 
-- Updated `BinarySaveSerializer` and `BinarySaveSchematic` XML documentation to describe the package-owned binary token codec instead of BSON.
+- Updated `Base64JsonSaveSerializer` and `Base64JsonSaveSchematic` XML documentation to describe the package-owned binary token codec instead of BSON.
 - Documented that provider `CaptureState()` must return a non-null state object and that empty state should be represented by an explicit DTO.
 - Added registration validation for null provider state so persisted providers fail during `ValidateRegistrations()` rather than during first save.
 - Updated README provider contract guidance for non-null captured state.
@@ -535,7 +540,7 @@ These points are completed for the current package migration.
 
 ### 53. Made Binary Output Readable After Base64 Decode And Serialized Metadata Through Active Serializer
 
-- Changed `BinarySaveSerializer` output from a custom binary token byte stream to Base64-encoded UTF-8 JSON, so common Base64 tools decode `.bin` provider files into readable structured text.
+- Changed `Base64JsonSaveSerializer` output from a custom binary token byte stream to Base64-encoded UTF-8 JSON, so common Base64 tools decode `.bin` provider files into readable structured text.
 - Serialized save metadata through the active serializer instead of always using direct Newtonsoft JSON metadata writes.
 - Changed metadata filenames to `metadata.json` for JSON saves and `metadata.bin` for binary saves.
 - Updated serializer output examples so binary provider and metadata files demonstrate Base64-decoded readable JSON.

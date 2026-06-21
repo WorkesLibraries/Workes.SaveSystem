@@ -11,7 +11,7 @@
     <Authors>Workes</Authors>
     <Company>Workes</Company>
     <Product>Workes.SaveSystem</Product>
-    <Description>Engine-neutral .NET save system with provider registration, snapshots, backups, migrations, and JSON/binary serializers.</Description>
+    <Description>Engine-neutral .NET save system with provider registration, snapshots, backups, migrations, and JSON/Base64Json serializers.</Description>
     <PackageTags>save;save-system;serialization;backup;migration;game-development</PackageTags>
     <PackageProjectUrl>https://github.com/WorkesLibraries/Workes.SaveSystem</PackageProjectUrl>
     <RepositoryUrl>https://github.com/WorkesLibraries/Workes.SaveSystem.git</RepositoryUrl>
