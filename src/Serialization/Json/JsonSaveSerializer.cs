@@ -107,7 +107,7 @@ namespace Workes.SaveSystem
         /// from the VersionedPayload structure without fully deserializing the data.
         /// </summary>
         /// <param name="serializedData">The serialized UTF-8 JSON bytes to extract the schema version from.</param>
-        /// <returns>The schema version if found, or null if it cannot be determined.</returns>
+        /// <returns>The schema version extracted from the serialized data.</returns>
         public int ExtractSchemaVersion(byte[] serializedData)
         {
             try

@@ -4,13 +4,24 @@ This file is the durable planning tracker for the save system work. Keep it upda
 
 ## To-do
 
-1. Add realistic cross-package serializer size comparison examples after MessagePack is available as a package.
+1. Add a public/custom serializer metadata contract that does not require serializers to handle internal core metadata types.
+   - Replace or wrap the internal `SaveMetadata` serializer path with a public serializer-facing metadata DTO/contract.
+   - Keep `SaveMetadataInfo` focused on public read APIs and avoid exposing serializer-owned metadata through menu/read metadata.
+   - Preserve old metadata compatibility where possible, especially JSON saves written by the current package shape.
+   - Add `MESSAGE_PACK.md` documenting how this core change affects `Workes.SaveSystem.MessagePack`, including required serializer/schematic updates and any package migration steps.
+
+2. Make existing metadata deserialization fail strict when the metadata file exists but deserializes to null or the wrong type.
+   - Normal `SaveToDisk(...)` should not silently create fresh metadata when an existing metadata file is unreadable or returns an incompatible object.
+   - Keep `ForceSaveToDisk(...)` as the explicit repair path for intentionally replacing corrupt or incompatible metadata.
+   - Add tests for null/wrong-type metadata deserialization preserving strict save behavior.
+
+3. Add realistic cross-package serializer size comparison examples after MessagePack is available as a package.
    - Generate small, medium typical, large repetitive, and large varied/random-ish save examples.
    - Compare pretty JSON, compact JSON, compressed compact JSON, and MessagePack output sizes.
    - Include generated README summaries with byte counts and percentages.
    - Use the results to document realistic compression/MessagePack expectations instead of relying on the current best-case repetitive GZip example.
 
-2. Sync README MessagePack examples after `Workes.SaveSystem.MessagePack` is published.
+4. Sync README MessagePack examples after `Workes.SaveSystem.MessagePack` is published.
    - Replace conceptual package-reference examples with the published package version.
    - Link to the companion package README/repository once the URL is final.
    - Keep this core package free of a MessagePack package reference.
