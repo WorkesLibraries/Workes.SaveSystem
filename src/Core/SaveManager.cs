@@ -866,6 +866,7 @@ namespace Workes.SaveSystem
 
                 var metadata = createMetadata();
                 metadata.PrepareForWrite(DateTimeOffset.UtcNow);
+                WriteSerializerMetadata(metadata);
 
                 WriteSaveMetadataToFile(metaPath, metadata);
 
@@ -1454,6 +1455,8 @@ namespace Workes.SaveSystem
                 throw new InvalidOperationException(
                     $"SaveId in {metadataFileName} from temp save folder at '{metaPath}' is null or empty."
                 );
+
+            ValidateSerializerMetadata(metadata);
         }
 
         private SaveMetadata? TryReadSaveMetadata(string folderPath)
@@ -1514,7 +1517,9 @@ namespace Workes.SaveSystem
         private SaveMetadata? ReadSaveMetadataFromFile(string metaPath)
         {
             var metadata = _options.Serializer.Deserialize(File.ReadAllBytes(metaPath), CreateMetadataSchematic());
-            return metadata as SaveMetadata;
+            var saveMetadata = metadata as SaveMetadata;
+            saveMetadata?.SerializerMetadata.Normalize();
+            return saveMetadata;
         }
 
         private SaveMetadata ReadExistingMetadataOrCreateNew(string folderPath)
@@ -1529,6 +1534,57 @@ namespace Workes.SaveSystem
         private void WriteSaveMetadataToFile(string metaPath, SaveMetadata metadata)
         {
             File.WriteAllBytes(metaPath, _options.Serializer.Serialize(metadata, CreateMetadataSchematic()));
+        }
+
+        private void WriteSerializerMetadata(SaveMetadata metadata)
+        {
+            metadata.SerializerMetadata ??= new SaveSerializerMetadata();
+            metadata.SerializerMetadata.Normalize();
+
+            if (!(_options.Serializer is ISaveSerializerMetadataHandler metadataHandler))
+                return;
+
+            metadataHandler.WriteMetadata(
+                new SaveSerializerMetadataWriteContext(
+                    metadata.SerializerMetadata,
+                    CreateSerializerProviderInfos()));
+
+            metadata.SerializerMetadata.Normalize();
+        }
+
+        private void ValidateSerializerMetadata(SaveMetadata metadata)
+        {
+            metadata.SerializerMetadata ??= new SaveSerializerMetadata();
+            metadata.SerializerMetadata.Normalize();
+
+            if (!(_options.Serializer is ISaveSerializerMetadataHandler metadataHandler))
+                return;
+
+            metadataHandler.ValidateMetadata(
+                new SaveSerializerMetadataValidationContext(
+                    metadata.SerializerMetadata,
+                    CreateSerializerProviderInfos()));
+        }
+
+        private IReadOnlyList<SaveSerializerProviderInfo> CreateSerializerProviderInfos()
+        {
+            var providers = new List<SaveSerializerProviderInfo>();
+
+            foreach (var kvp in PersistedProviders())
+            {
+                var providerEntry = kvp.Value;
+                var schematic = providerEntry.Schematic;
+                if (schematic == null)
+                    continue;
+
+                providers.Add(new SaveSerializerProviderInfo(
+                    providerEntry.RegisteredSaveKey,
+                    providerEntry.ValidatedSchemaVersion ?? providerEntry.Provider.SchemaVersion,
+                    providerEntry.StateType,
+                    schematic));
+            }
+
+            return providers;
         }
 
         private bool IsSaveSlotFolder(string folderPath)

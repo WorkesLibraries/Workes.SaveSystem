@@ -8,6 +8,7 @@ namespace Workes.SaveSystem
         public string SaveId = string.Empty;
         public DateTimeOffset CreatedAtUtc;
         public DateTimeOffset LastWrittenAtUtc;
+        public SaveSerializerMetadata SerializerMetadata = new SaveSerializerMetadata();
 
         public static SaveMetadata CreateNewMetadata(DateTimeOffset? timestampUtc = null)
         {
@@ -29,6 +30,8 @@ namespace Workes.SaveSystem
                 CreatedAtUtc = timestampUtc;
 
             LastWrittenAtUtc = timestampUtc;
+            SerializerMetadata ??= new SaveSerializerMetadata();
+            SerializerMetadata.Normalize();
         }
     }
 }

@@ -4,33 +4,26 @@ This file is the durable planning tracker for the save system work. Keep it upda
 
 ## To-do
 
-1. Add serializer metadata support to save metadata.
-   - Add optional system-owned serializer metadata storage to `SaveMetadata`.
-   - Let serializers ignore metadata when they do not need it.
-   - Provide serializer-facing context for reading/writing per-save or per-provider serializer metadata without creating extra sidecar files.
-   - Keep public `SaveMetadataInfo` focused on core metadata unless a public projection is deliberately needed.
-   - Validate serializer metadata during temp-save and recovery checks when a serializer requires it.
-
-2. Add payload transform/decorator support.
+1. Add payload transform/decorator support.
    - Add an abstraction such as `ISavePayloadTransform` for byte-to-byte transforms with a file-extension suffix.
    - Add a serializer wrapper that delegates all serializer behavior to an inner serializer while encoding/decoding bytes around it.
    - Preserve migration support when the inner serializer supports migration by decoding before `DeserializeToNode` and encoding after `SerializeFromNode`.
    - Document this as the extension point for custom obfuscation or encryption.
 
-3. Add a compressed serializer wrapper.
+2. Add a compressed serializer wrapper.
    - Provide a convenient built-in compression wrapper, likely backed by GZip.
    - Compose file extensions from the inner serializer and compression suffix, such as `.json.gz`.
    - Add tests for save/load, metadata, migration, recovery validation, and serializer output examples using compressed compact JSON.
    - Document recommended usage as `new CompressedSaveSerializer(new JsonSaveSerializer(JsonSaveFormatting.Compact))`.
 
-4. Prototype and add MessagePack dependency and compact payload support.
+3. Prototype and add MessagePack dependency and compact payload support.
    - Add the MessagePack package dependency if it remains compatible with the package targets.
    - Add `MessagePackSaveSerializer` and `MessagePackSaveSchematic<T>`.
    - Write compact indexed/array-style MessagePack provider payloads using stable field indexes.
    - Keep provider files and metadata under a clear extension such as `.msgpack`.
    - Add size comparison tests or serializer output examples against pretty JSON, compact JSON, and compressed compact JSON.
 
-5. Make MessagePack migration-friendly through serializer metadata.
+4. Make MessagePack migration-friendly through serializer metadata.
    - Store the field index/name map used by each MessagePack provider in serializer metadata when a save is written.
    - During migration, decode compact MessagePack bytes plus saved metadata into named `ISaveDataNode` trees.
    - Apply normal `SaveMigrationStep` migrations to the named tree, then encode back to compact current-schema MessagePack.
@@ -44,6 +37,16 @@ There are no remaining deferred implementation points in this tracker.
 ## Completed
 
 These points are completed for the current package migration.
+
+### 60. Added Serializer Metadata Support
+
+- Added optional `ISaveSerializerMetadataHandler` callbacks for serializers that need save-level or provider-level format metadata.
+- Added public serializer metadata context/provider-info types and string key/value metadata buckets for global and per-provider serializer data.
+- Extended internal save metadata while keeping `SaveMetadataInfo` focused on core save-system metadata.
+- Normalized missing serializer metadata as empty metadata for older-save compatibility.
+- Invoked serializer metadata writes before metadata files are persisted and metadata validation during temp-save and recovery-candidate validation.
+- Documented serializer metadata as an advanced serializer extension point, not application display metadata.
+- `dotnet test Workes.SaveSystem.sln` passes with 184 tests.
 
 ### 59. Introduced Format-Neutral Save Data Nodes
 

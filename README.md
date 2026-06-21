@@ -24,10 +24,10 @@ That dependency is intentional for the current package shape:
 
 - `JsonSaveSerializer` is the built-in serializer.
 - JSON schematics wrap provider state in a versioned payload.
-- migration data nodes are backed by Newtonsoft `JToken`/`JObject` values.
+- JSON migration support parses and writes JSON through Newtonsoft while exposing package-owned migration data nodes.
 - save metadata is serialized through the active serializer.
 
-`System.Text.Json` is not part of the core package for the first reusable version. Under the current `netstandard2.1` target, using it requires an additional package reference, so adding a parallel `System.Text.Json` serializer would not make the package dependency-free. Replacing Newtonsoft would also require replacing the migration data-node model, the JSON serializer, and metadata persistence together. For now, consumers should treat Newtonsoft as part of the package contract.
+`System.Text.Json` is not part of the core package for the first reusable version. Under the current `netstandard2.1` target, using it requires an additional package reference, so adding a parallel `System.Text.Json` serializer would not make the package dependency-free. Replacing Newtonsoft would still require replacing the built-in JSON serializer and metadata persistence behavior together. For now, consumers should treat Newtonsoft as part of the package contract.
 
 A future `System.Text.Json` adapter is still possible, especially for applications that do not need migration data nodes or that target newer frameworks directly. Treat it as a separate compatibility decision rather than a drop-in replacement for existing saves.
 
@@ -160,6 +160,8 @@ if (metadata != null)
 ```
 
 Metadata reads return `null` when no metadata file exists and throw when a metadata file is present but invalid. The current metadata contract exposes the stable save id used for recovery validation, plus created and last-written UTC timestamps. Application-owned display metadata such as character name, playtime, difficulty, or screenshot references should live in a provider for now.
+
+Serializers that need format metadata can implement `ISaveSerializerMetadataHandler`. That metadata is stored inside the save-system metadata file as serializer-owned string key/value data, with both global and per-provider buckets. This is intended for serializer implementation details such as field maps or codec settings; it is not exposed through `SaveMetadataInfo` and should not be used for game/application display metadata.
 
 Use `ForceSaveToDisk(...)` only when intentionally repairing or replacing a save whose existing metadata or serializer format cannot be trusted. Normal `SaveToDisk(...)` preserves readable core metadata and rotates backups when enabled. `ForceSaveToDisk(...)` writes a fresh main save with a new save id and timestamps, ignores unreadable existing metadata, does not rotate the replaced main folder into backups, and leaves existing backup folders untouched.
 
@@ -431,6 +433,8 @@ A custom serializer must provide these pieces as one coherent format:
 - schema-version extraction without fully restoring provider state.
 
 Schematic creation should be lightweight where possible. Provider state write compatibility is validated through real provider state during `ValidateRegistrations()`. Read compatibility is validated when real save data is deserialized during load, so custom serializers should still fail clearly for deserialize-only problems.
+
+If the serializer needs metadata stored with a save, implement `ISaveSerializerMetadataHandler`. The manager calls `WriteMetadata(...)` before writing the metadata file and `ValidateMetadata(...)` when temp-save and recovery-candidate metadata is validated. Missing serializer metadata is treated as empty metadata for compatibility with older saves.
 
 If providers using the serializer implement `ISaveMigratable`, the serializer must also implement `ISaveMigrationCapableSerializer`. That means it must parse serialized payloads into editable `ISaveDataNode` trees, serialize edited node trees back to the payload format, and expose a matching `NodeFactory` that creates new object, array, and primitive nodes for migration steps.
 
