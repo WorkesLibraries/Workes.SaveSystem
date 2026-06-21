@@ -4,40 +4,33 @@ This file is the durable planning tracker for the save system work. Keep it upda
 
 ## To-do
 
-1. Replace JSON-backed migration data nodes with package-owned format-neutral data nodes.
-   - Introduce an internal package-owned `SaveDataNode` implementation that does not wrap Newtonsoft `JToken`.
-   - Keep `ISaveDataNode` and `ISaveDataNodeFactory` as the public migration edit surface.
-   - Update JSON serialization to convert JSON bytes to/from the package-owned data-node tree for migrations.
-   - Preserve node ownership checks so nodes from different serializer/factory instances cannot be mixed.
-   - Update migration/data-node tests to cover the format-neutral implementation.
-
-2. Add serializer metadata support to save metadata.
+1. Add serializer metadata support to save metadata.
    - Add optional system-owned serializer metadata storage to `SaveMetadata`.
    - Let serializers ignore metadata when they do not need it.
    - Provide serializer-facing context for reading/writing per-save or per-provider serializer metadata without creating extra sidecar files.
    - Keep public `SaveMetadataInfo` focused on core metadata unless a public projection is deliberately needed.
    - Validate serializer metadata during temp-save and recovery checks when a serializer requires it.
 
-3. Add payload transform/decorator support.
+2. Add payload transform/decorator support.
    - Add an abstraction such as `ISavePayloadTransform` for byte-to-byte transforms with a file-extension suffix.
    - Add a serializer wrapper that delegates all serializer behavior to an inner serializer while encoding/decoding bytes around it.
    - Preserve migration support when the inner serializer supports migration by decoding before `DeserializeToNode` and encoding after `SerializeFromNode`.
    - Document this as the extension point for custom obfuscation or encryption.
 
-4. Add a compressed serializer wrapper.
+3. Add a compressed serializer wrapper.
    - Provide a convenient built-in compression wrapper, likely backed by GZip.
    - Compose file extensions from the inner serializer and compression suffix, such as `.json.gz`.
    - Add tests for save/load, metadata, migration, recovery validation, and serializer output examples using compressed compact JSON.
    - Document recommended usage as `new CompressedSaveSerializer(new JsonSaveSerializer(JsonSaveFormatting.Compact))`.
 
-5. Prototype and add MessagePack dependency and compact payload support.
+4. Prototype and add MessagePack dependency and compact payload support.
    - Add the MessagePack package dependency if it remains compatible with the package targets.
    - Add `MessagePackSaveSerializer` and `MessagePackSaveSchematic<T>`.
    - Write compact indexed/array-style MessagePack provider payloads using stable field indexes.
    - Keep provider files and metadata under a clear extension such as `.msgpack`.
    - Add size comparison tests or serializer output examples against pretty JSON, compact JSON, and compressed compact JSON.
 
-6. Make MessagePack migration-friendly through serializer metadata.
+5. Make MessagePack migration-friendly through serializer metadata.
    - Store the field index/name map used by each MessagePack provider in serializer metadata when a save is written.
    - During migration, decode compact MessagePack bytes plus saved metadata into named `ISaveDataNode` trees.
    - Apply normal `SaveMigrationStep` migrations to the named tree, then encode back to compact current-schema MessagePack.
@@ -51,6 +44,15 @@ There are no remaining deferred implementation points in this tracker.
 ## Completed
 
 These points are completed for the current package migration.
+
+### 59. Introduced Format-Neutral Save Data Nodes
+
+- Replaced the JSON-backed migration node implementation with package-owned internal save data nodes and a package-owned internal node factory.
+- Kept `ISaveDataNode` and `ISaveDataNodeFactory` as the public migration edit surface while removing Newtonsoft `JToken` from the migration node backing model.
+- Updated `JsonSaveSerializer` migration support to convert UTF-8 JSON bytes to package-owned nodes before migration and convert nodes back to formatted JSON afterward.
+- Preserved serializer/factory ownership checks so nodes from different factories or serializer instances cannot be mixed.
+- Updated data-node tests, public API shape coverage, README guidance, and XML documentation for the format-neutral node model.
+- `dotnet test Workes.SaveSystem.sln` passes with 179 tests.
 
 ### 55. Added Internal Load Status Exceptions
 

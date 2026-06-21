@@ -7,9 +7,9 @@ namespace Workes.SaveSystem.Tests;
 public sealed class DataNodeContractTests
 {
     [Test]
-    public void JsonNodeFactory_CreateNullCreatesNullNode()
+    public void SaveDataNodeFactory_CreateNullCreatesNullNode()
     {
-        var factory = CreateJsonFactory();
+        var factory = CreateFactory();
 
         var node = factory.CreateNull();
 
@@ -20,9 +20,9 @@ public sealed class DataNodeContractTests
     }
 
     [Test]
-    public void JsonObjectNode_SupportsObjectOperations()
+    public void SaveDataObjectNode_SupportsObjectOperations()
     {
-        var factory = CreateJsonFactory();
+        var factory = CreateFactory();
         var node = factory.CreateObject();
 
         node.Set("name", factory.CreateString("Rook"));
@@ -38,9 +38,9 @@ public sealed class DataNodeContractTests
     }
 
     [Test]
-    public void JsonArrayNode_SupportsArrayOperations()
+    public void SaveDataArrayNode_SupportsArrayOperations()
     {
-        var factory = CreateJsonFactory();
+        var factory = CreateFactory();
         var node = factory.CreateArray();
 
         node.Add(factory.CreateString("first"));
@@ -55,9 +55,9 @@ public sealed class DataNodeContractTests
     }
 
     [Test]
-    public void JsonDataNode_ThrowsClearlyForWrongShapeOperations()
+    public void SaveDataNode_ThrowsClearlyForWrongShapeOperations()
     {
-        var factory = CreateJsonFactory();
+        var factory = CreateFactory();
         var obj = factory.CreateObject();
         var array = factory.CreateArray();
         var primitive = factory.CreateInt(1);
@@ -69,21 +69,21 @@ public sealed class DataNodeContractTests
     }
 
     [Test]
-    public void JsonDataNode_RejectsNodesFromOtherImplementations()
+    public void SaveDataNode_RejectsNodesFromOtherImplementations()
     {
-        var factory = CreateJsonFactory();
+        var factory = CreateFactory();
         var node = factory.CreateObject();
 
         var ex = Assert.Throws<InvalidOperationException>(() => node.Set("foreign", new ForeignNode()));
 
-        Assert.That(ex!.Message, Does.Contain("JSON data nodes"));
+        Assert.That(ex!.Message, Does.Contain("Save data nodes"));
     }
 
     [Test]
-    public void JsonDataNode_RejectsNodesFromDifferentFactories()
+    public void SaveDataNode_RejectsNodesFromDifferentFactories()
     {
-        var factory = CreateJsonFactory();
-        var otherFactory = CreateJsonFactory();
+        var factory = CreateFactory();
+        var otherFactory = CreateFactory();
         var node = factory.CreateObject();
 
         var ex = Assert.Throws<InvalidOperationException>(() => node.Set("foreign", otherFactory.CreateString("Rook")));
@@ -106,7 +106,7 @@ public sealed class DataNodeContractTests
         Assert.That(otherJsonEx!.Message, Does.Contain("same node factory"));
     }
 
-    private static ISaveDataNodeFactory CreateJsonFactory()
+    private static ISaveDataNodeFactory CreateFactory()
     {
         return new JsonSaveSerializer().NodeFactory;
     }

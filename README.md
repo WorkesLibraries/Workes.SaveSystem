@@ -451,7 +451,7 @@ Data-node implementations should:
 - support the primitive and null node types exposed by `ISaveDataNodeFactory`;
 - reject attempts to combine nodes created by another serializer or factory instance.
 
-For the built-in JSON serializer, migration data nodes wrap Newtonsoft `JToken` values and carry factory ownership so nodes from different serializer instances cannot be accidentally mixed.
+For the built-in JSON serializer, JSON payloads are converted into package-owned migration nodes before migration steps run, then converted back to JSON after migration. The Newtonsoft JSON model remains an implementation detail of JSON parsing and writing, not the migration edit surface.
 
 ## Unity And Godot
 

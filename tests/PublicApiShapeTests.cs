@@ -85,6 +85,8 @@ public sealed class PublicApiShapeTests
 
         Assert.That(exportedTypeNames, Does.Not.Contain("JsonSaveDataNode"));
         Assert.That(exportedTypeNames, Does.Not.Contain("JsonSaveDataNodeFactory"));
+        Assert.That(exportedTypeNames, Does.Not.Contain("SaveDataNode"));
+        Assert.That(exportedTypeNames, Does.Not.Contain("SaveDataNodeFactory"));
     }
 
     [Test]

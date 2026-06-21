@@ -10,7 +10,7 @@ namespace Workes.SaveSystem
     /// </summary>
     public sealed class JsonSaveSerializer : ISaveSerializer, ISaveMigrationCapableSerializer
     {
-        private readonly JsonSaveDataNodeFactory _nodeFactory;
+        private readonly SaveDataNodeFactory _nodeFactory;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="JsonSaveSerializer"/> class.
@@ -30,7 +30,7 @@ namespace Workes.SaveSystem
                 throw new ArgumentOutOfRangeException(nameof(formatting));
 
             Formatting = formatting;
-            _nodeFactory = new JsonSaveDataNodeFactory();
+            _nodeFactory = new SaveDataNodeFactory();
             NodeFactory = _nodeFactory;
         }
 
@@ -131,15 +131,112 @@ namespace Workes.SaveSystem
         public ISaveDataNode DeserializeToNode(byte[] serializedData)
         {
             var root = JToken.Parse(Encoding.UTF8.GetString(serializedData));
-            return new JsonSaveDataNode(root, _nodeFactory.Owner);
+            return ConvertFromJson(root, _nodeFactory.Owner);
         }
 
         /// <inheritdoc />
         public byte[] SerializeFromNode(ISaveDataNode node)
         {
-            var jsonNode = JsonSaveDataNode.RequireJsonNode(node, _nodeFactory.Owner);
-            var json = jsonNode._token.ToString(ToNewtonsoftFormatting(Formatting));
+            var saveDataNode = SaveDataNode.RequireSaveDataNode(node, _nodeFactory.Owner);
+            var json = ConvertToJson(saveDataNode).ToString(ToNewtonsoftFormatting(Formatting));
             return Encoding.UTF8.GetBytes(json);
+        }
+
+        private static SaveDataNode ConvertFromJson(JToken token, object owner)
+        {
+            switch (token.Type)
+            {
+                case JTokenType.Object:
+                    var objectNode = SaveDataNode.CreateObject(owner);
+                    foreach (var property in ((JObject)token).Properties())
+                    {
+                        objectNode.Set(property.Name, ConvertFromJson(property.Value, owner));
+                    }
+
+                    return objectNode;
+
+                case JTokenType.Array:
+                    var arrayNode = SaveDataNode.CreateArray(owner);
+                    foreach (var child in (JArray)token)
+                    {
+                        arrayNode.Add(ConvertFromJson(child, owner));
+                    }
+
+                    return arrayNode;
+
+                case JTokenType.Integer:
+                    try
+                    {
+                        return SaveDataNode.CreateInt(token.Value<int>(), owner);
+                    }
+                    catch (Exception ex)
+                    {
+                        throw new InvalidOperationException("JSON integer value is outside the supported save data node range.", ex);
+                    }
+
+                case JTokenType.Float:
+                    return SaveDataNode.CreateFloat(token.Value<float>(), owner);
+
+                case JTokenType.String:
+                    var stringValue = token.Value<string>();
+                    if (stringValue == null)
+                        throw new InvalidOperationException("JSON string token did not contain a string value.");
+
+                    return SaveDataNode.CreateString(stringValue, owner);
+
+                case JTokenType.Boolean:
+                    return SaveDataNode.CreateBool(token.Value<bool>(), owner);
+
+                case JTokenType.Null:
+                    return SaveDataNode.CreateNull(owner);
+
+                default:
+                    throw new InvalidOperationException(
+                        $"JSON token type '{token.Type}' cannot be represented by the save data node migration model."
+                    );
+            }
+        }
+
+        private static JToken ConvertToJson(SaveDataNode node)
+        {
+            switch (node.NodeType)
+            {
+                case SaveDataNodeType.Object:
+                    var obj = new JObject();
+                    foreach (var key in node.Keys)
+                    {
+                        obj[key] = ConvertToJson((SaveDataNode)node.Get(key));
+                    }
+
+                    return obj;
+
+                case SaveDataNodeType.Array:
+                    var array = new JArray();
+                    for (var i = 0; i < node.Count; i++)
+                    {
+                        array.Add(ConvertToJson((SaveDataNode)node.GetAt(i)));
+                    }
+
+                    return array;
+
+                case SaveDataNodeType.Int:
+                    return new JValue(node.AsInt());
+
+                case SaveDataNodeType.Float:
+                    return new JValue(node.AsFloat());
+
+                case SaveDataNodeType.String:
+                    return new JValue(node.AsString());
+
+                case SaveDataNodeType.Bool:
+                    return new JValue(node.AsBool());
+
+                case SaveDataNodeType.Null:
+                    return JValue.CreateNull();
+
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(node));
+            }
         }
 
         internal static Newtonsoft.Json.Formatting ToNewtonsoftFormatting(JsonSaveFormatting formatting)

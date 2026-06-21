@@ -6,8 +6,9 @@ namespace Workes.SaveSystem
     /// Provides a format-neutral editable view over serialized save data during migrations.
     /// </summary>
     /// <remarks>
-    /// Implementations are serializer-specific. Migration steps use this contract to inspect and
-    /// mutate persisted payload data without depending on the serializer's native object model.
+    /// Migration steps use this contract to inspect and mutate persisted payload data without depending
+    /// on the serializer's native object model. Nodes are owned by the serializer/factory instance that
+    /// created them and should not be mixed with nodes from another instance.
     /// </remarks>
     public interface ISaveDataNode
     {

@@ -5,7 +5,7 @@ namespace Workes.SaveSystem
     /// Used by migration-capable serializers to create nodes during migration operations.
     /// </summary>
     /// <remarks>
-    /// Nodes should be combined only with other nodes created by the same serializer/factory implementation.
+    /// Nodes should be combined only with other nodes created by the same serializer/factory instance.
     /// </remarks>
     public interface ISaveDataNodeFactory
     {
