@@ -58,6 +58,113 @@ public sealed class SaveMetadataTests
     }
 
     [Test]
+    public void SaveToDisk_ThrowsWhenExistingMetadataIsCorrupt()
+    {
+        var manager = CreateManager();
+        var provider = new TestProvider(new TestState { Value = 1 });
+        manager.RegisterProvider(provider);
+        SaveValue(manager, provider, "slot", 1);
+        File.WriteAllText(Path.Combine(_tempRoot, "slot", "metadata.json"), "{}");
+        provider.Current = new TestState { Value = 2 };
+
+        var ex = Assert.Throws<InvalidOperationException>(() => manager.SaveToDisk("slot"));
+
+        Assert.That(ex!.Message, Does.Contain("Failed to parse JSON save payload"));
+        Assert.That(ReadValueFromFolder(Path.Combine(_tempRoot, "slot")), Is.EqualTo(1));
+    }
+
+    [Test]
+    public void ForceSaveToDisk_OverwritesSaveWithCorruptMetadata()
+    {
+        var manager = CreateManager();
+        var provider = new TestProvider(new TestState { Value = 1 });
+        manager.RegisterProvider(provider);
+        SaveValue(manager, provider, "slot", 1);
+        File.WriteAllText(Path.Combine(_tempRoot, "slot", "metadata.json"), "{}");
+        provider.Current = new TestState { Value = 2 };
+
+        manager.ForceSaveToDisk("slot");
+
+        var metadata = manager.ReadSaveMetadata("slot");
+        Assert.That(metadata, Is.Not.Null);
+        Assert.That(ReadValueFromFolder(Path.Combine(_tempRoot, "slot")), Is.EqualTo(2));
+    }
+
+    [Test]
+    public void ForceSaveToDisk_OverwritesSaveWithMissingMetadata()
+    {
+        var manager = CreateManager();
+        var provider = new TestProvider(new TestState { Value = 1 });
+        manager.RegisterProvider(provider);
+        SaveValue(manager, provider, "slot", 1);
+        File.Delete(Path.Combine(_tempRoot, "slot", "metadata.json"));
+        provider.Current = new TestState { Value = 2 };
+
+        manager.ForceSaveToDisk("slot");
+
+        var metadata = manager.ReadSaveMetadata("slot");
+        Assert.That(metadata, Is.Not.Null);
+        Assert.That(ReadValueFromFolder(Path.Combine(_tempRoot, "slot")), Is.EqualTo(2));
+    }
+
+    [Test]
+    public void ForceSaveToDisk_ReplacesOldSerializerFilesWithActiveSerializerFiles()
+    {
+        var jsonManager = CreateManager();
+        var provider = new TestProvider(new TestState { Value = 1 });
+        jsonManager.RegisterProvider(provider);
+        SaveValue(jsonManager, provider, "slot", 1);
+
+        var binaryManager = CreateManager(serializer: new BinarySaveSerializer());
+        binaryManager.RegisterProvider(provider);
+        binaryManager.ValidateRegistrations();
+        provider.Current = new TestState { Value = 2 };
+
+        binaryManager.ForceSaveToDisk("slot");
+
+        Assert.That(File.Exists(Path.Combine(_tempRoot, "slot", "metadata.bin")), Is.True);
+        Assert.That(File.Exists(Path.Combine(_tempRoot, "slot", "player.bin")), Is.True);
+        Assert.That(File.Exists(Path.Combine(_tempRoot, "slot", "metadata.json")), Is.False);
+        Assert.That(File.Exists(Path.Combine(_tempRoot, "slot", "player.json")), Is.False);
+    }
+
+    [Test]
+    public void ForceSaveToDisk_CreatesNewMetadataIdentity()
+    {
+        var manager = CreateManager();
+        var provider = new TestProvider(new TestState { Value = 1 });
+        manager.RegisterProvider(provider);
+        SaveValue(manager, provider, "slot", 1);
+        var firstMetadata = manager.ReadSaveMetadata("slot")!;
+        Thread.Sleep(20);
+        provider.Current = new TestState { Value = 2 };
+
+        manager.ForceSaveToDisk("slot");
+
+        var secondMetadata = manager.ReadSaveMetadata("slot")!;
+        Assert.That(secondMetadata.SaveId, Is.Not.EqualTo(firstMetadata.SaveId));
+        Assert.That(secondMetadata.CreatedAtUtc, Is.GreaterThan(firstMetadata.CreatedAtUtc));
+    }
+
+    [Test]
+    public void ForceSaveToDisk_WithBackupsEnabled_LeavesExistingBackupsUntouched()
+    {
+        var manager = CreateManager(enableBackupSystem: true, backupSystemMaxBackupCount: 2);
+        var provider = new TestProvider(new TestState { Value = 1 });
+        manager.RegisterProvider(provider);
+        SaveValue(manager, provider, "slot", 1);
+        SaveValue(manager, provider, "slot", 2);
+        File.WriteAllText(Path.Combine(_tempRoot, "slot", "metadata.json"), "{}");
+        provider.Current = new TestState { Value = 3 };
+
+        manager.ForceSaveToDisk("slot");
+
+        Assert.That(ReadValueFromFolder(Path.Combine(_tempRoot, "slot")), Is.EqualTo(3));
+        Assert.That(ReadValueFromFolder(Path.Combine(_tempRoot, "_backup", "slot_0001")), Is.EqualTo(1));
+        Assert.That(Directory.Exists(Path.Combine(_tempRoot, "_backup", "slot_0002")), Is.False);
+    }
+
+    [Test]
     public void ReadSaveMetadata_WithBinarySerializerUsesBinaryMetadataFile()
     {
         var manager = CreateManager(serializer: new BinarySaveSerializer());
@@ -160,6 +267,22 @@ public sealed class SaveMetadataTests
         provider.Current = new TestState { Value = value };
         manager.ValidateRegistrations();
         manager.SaveToDisk(slot);
+    }
+
+    private static int ReadValueFromFolder(string folderPath)
+    {
+        var json = File.ReadAllText(Path.Combine(folderPath, "player.json"));
+        var valueMarker = "\"Value\": ";
+        var valueIndex = json.IndexOf(valueMarker, StringComparison.Ordinal);
+        if (valueIndex < 0)
+            throw new InvalidOperationException("Saved value was not found.");
+
+        valueIndex += valueMarker.Length;
+        var valueEnd = json.IndexOfAny(new[] { '\r', '\n', ',' }, valueIndex);
+        if (valueEnd < 0)
+            valueEnd = json.Length;
+
+        return int.Parse(json.Substring(valueIndex, valueEnd - valueIndex).Trim());
     }
 
     public sealed class TestState

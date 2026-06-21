@@ -157,6 +157,8 @@ if (metadata != null)
 
 Metadata reads return `null` when no metadata file exists and throw when a metadata file is present but invalid. The current metadata contract exposes the stable save id used for recovery validation, plus created and last-written UTC timestamps. Application-owned display metadata such as character name, playtime, difficulty, or screenshot references should live in a provider for now.
 
+Use `ForceSaveToDisk(...)` only when intentionally repairing or replacing a save whose existing metadata or serializer format cannot be trusted. Normal `SaveToDisk(...)` preserves readable core metadata and rotates backups when enabled. `ForceSaveToDisk(...)` writes a fresh main save with a new save id and timestamps, ignores unreadable existing metadata, does not rotate the replaced main folder into backups, and leaves existing backup folders untouched.
+
 Use `TryLoadFromDisk(...)` or `TryLoadBackupSlotFromDisk(...)` when a UI or repair tool needs a structured outcome instead of exceptions.
 
 ```csharp

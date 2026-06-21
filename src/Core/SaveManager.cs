@@ -811,7 +811,33 @@ namespace Workes.SaveSystem
         {
             var saveName = ResolveSavePath(identity);
             EnsureRegistrationsValidated();
-            var folderPath = GetMainFolderPath(saveName);
+            WriteTempSave(saveName, () => ReadExistingMetadataOrCreateNew(GetMainFolderPath(saveName)));
+            PerformAtomicSwap(saveName);
+        }
+
+        /// <summary>
+        /// Saves the current state to disk while intentionally replacing any existing main save metadata and provider files.
+        /// Existing backups for the same identity are left untouched.
+        /// </summary>
+        /// <remarks>
+        /// Use this method only when explicitly repairing or replacing a save whose existing metadata or format
+        /// cannot be trusted. Normal saves should use <see cref="SaveToDisk"/> so readable metadata is preserved
+        /// and backups rotate normally.
+        /// Call <see cref="ValidateRegistrations"/> successfully after provider registration and before calling this method.
+        /// </remarks>
+        /// <param name="identity">The identity that identifies which save slot to write to.</param>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="identity"/> is null.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when validation fails.</exception>
+        public void ForceSaveToDisk(TIdentity identity)
+        {
+            var saveName = ResolveSavePath(identity);
+            EnsureRegistrationsValidated();
+            WriteTempSave(saveName, () => SaveMetadata.CreateNewMetadata());
+            PerformForceReplaceMainSave(saveName);
+        }
+
+        private void WriteTempSave(string saveName, Func<SaveMetadata> createMetadata)
+        {
             var tempPath = GetTempFolderPath(saveName, _options.TempFolderName);
             var metaPath = GetMetadataFilePath(tempPath);
 
@@ -838,15 +864,7 @@ namespace Workes.SaveSystem
                         tempPath);
                 }
 
-                SaveMetadata? metadata;
-
-                var existingMetaPath = GetMetadataFilePath(folderPath);
-                metadata = File.Exists(existingMetaPath)
-                    ? ReadSaveMetadataFromFile(existingMetaPath)
-                    : SaveMetadata.CreateNewMetadata();
-                if (metadata == null)
-                    metadata = SaveMetadata.CreateNewMetadata();
-
+                var metadata = createMetadata();
                 metadata.PrepareForWrite(DateTimeOffset.UtcNow);
 
                 WriteSaveMetadataToFile(metaPath, metadata);
@@ -859,8 +877,6 @@ namespace Workes.SaveSystem
                     Directory.Delete(tempPath, true);
                 throw;
             }
-
-            PerformAtomicSwap(saveName);
         }
 
         /// <summary>
@@ -1288,6 +1304,46 @@ namespace Workes.SaveSystem
             _backupManager.CleanupAfterSwap(toDeletePath, excessiveBackupPath);
         }
 
+        private void PerformForceReplaceMainSave(string savePath)
+        {
+            var folderPath = GetMainFolderPath(savePath);
+            var tempPath = GetTempFolderPath(savePath, _options.TempFolderName);
+            var toDeletePath = GetToDeleteFolderPath(savePath);
+            var movedExistingMain = false;
+
+            if (Directory.Exists(toDeletePath))
+                Directory.Delete(toDeletePath, true);
+
+            try
+            {
+                if (Directory.Exists(folderPath))
+                {
+                    Directory.Move(folderPath, toDeletePath);
+                    movedExistingMain = true;
+                }
+
+                Directory.Move(tempPath, folderPath);
+
+                if (Directory.Exists(toDeletePath))
+                    Directory.Delete(toDeletePath, true);
+            }
+            catch
+            {
+                if (!Directory.Exists(folderPath) && movedExistingMain && Directory.Exists(toDeletePath))
+                {
+                    try
+                    {
+                        Directory.Move(toDeletePath, folderPath);
+                    }
+                    catch
+                    {
+                    }
+                }
+
+                throw;
+            }
+        }
+
 
         private void ValidateTempSaveFolderSave(
             string folderPath,
@@ -1459,6 +1515,15 @@ namespace Workes.SaveSystem
         {
             var metadata = _options.Serializer.Deserialize(File.ReadAllText(metaPath), CreateMetadataSchematic());
             return metadata as SaveMetadata;
+        }
+
+        private SaveMetadata ReadExistingMetadataOrCreateNew(string folderPath)
+        {
+            var existingMetaPath = GetMetadataFilePath(folderPath);
+            if (!File.Exists(existingMetaPath))
+                return SaveMetadata.CreateNewMetadata();
+
+            return ReadSaveMetadataFromFile(existingMetaPath) ?? SaveMetadata.CreateNewMetadata();
         }
 
         private void WriteSaveMetadataToFile(string metaPath, SaveMetadata metadata)

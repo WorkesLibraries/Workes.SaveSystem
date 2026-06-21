@@ -88,6 +88,40 @@ public sealed class SaveAtomicityTests
         Assert.That(Directory.Exists(Path.Combine(_tempRoot, "slot_toDelete")), Is.False);
     }
 
+    [Test]
+    public void ForceSaveToDisk_WhenProviderCaptureThrows_LeavesExistingSaveLoadableAndRemovesTempFolder()
+    {
+        var manager = CreateManager();
+        var provider = new TestProvider(new TestState { Value = 1 });
+        manager.RegisterProvider(provider);
+        SaveValue(manager, provider, "slot", 1);
+        provider.Current = new TestState { Value = 2 };
+        provider.ThrowOnCapture = true;
+
+        var ex = Assert.Throws<InvalidOperationException>(() => manager.ForceSaveToDisk("slot"));
+
+        provider.ThrowOnCapture = false;
+        provider.Current = new TestState { Value = 99 };
+        var loaded = manager.LoadFromDisk("slot");
+
+        Assert.That(ex!.Message, Does.Contain("capture failed"));
+        Assert.That(loaded, Is.True);
+        Assert.That(provider.Current.Value, Is.EqualTo(1));
+        Assert.That(Directory.Exists(Path.Combine(_tempRoot, "slot_tmp")), Is.False);
+        Assert.That(Directory.Exists(Path.Combine(_tempRoot, "slot_toDelete")), Is.False);
+    }
+
+    [Test]
+    public void ForceSaveToDisk_RequiresValidatedRegistrations()
+    {
+        var manager = CreateManager();
+        manager.RegisterProvider(new TestProvider(new TestState { Value = 1 }));
+
+        var ex = Assert.Throws<InvalidOperationException>(() => manager.ForceSaveToDisk("slot"));
+
+        Assert.That(ex!.Message, Does.Contain("ValidateRegistrations"));
+    }
+
     private SaveManager<string> CreateManager(
         Func<SaveFileContext, string>? fileNameResolver = null,
         ISaveSerializer? serializer = null)
