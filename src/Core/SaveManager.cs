@@ -1138,13 +1138,39 @@ namespace Workes.SaveSystem
             {
                 ValidateMetadataFile(folderPath);
                 var serialized = LoadSerializedSnapshotFromFolder(folderPath, allowMissingProviderFileSkip: false);
-                var snapshot = DeserializeSnapshot(serialized);
-                ValidateSnapshotForRestore(snapshot);
+                ValidateSerializedSnapshotForRecovery(serialized);
                 return new RecoveryCandidateValidation(isValid: true, errorMessage: null);
             }
             catch (Exception ex)
             {
                 return new RecoveryCandidateValidation(isValid: false, errorMessage: ex.Message);
+            }
+        }
+
+        private void ValidateSerializedSnapshotForRecovery(SerializedSnapshot serialized)
+        {
+            foreach (var kvp in serialized.Data)
+            {
+                if (!_providers.TryGetValue(kvp.Key, out var providerEntry))
+                    continue;
+
+                var expectedSchemaVersion = providerEntry.ValidatedSchemaVersion ?? providerEntry.Provider.SchemaVersion;
+                if (kvp.Value.SchemaVersion != expectedSchemaVersion)
+                {
+                    throw new InvalidOperationException(
+                        $"Recovery candidate entry for provider '{kvp.Key}' has schema version {kvp.Value.SchemaVersion}, but the registered provider expects {expectedSchemaVersion}. Recovery validation does not run migrations.");
+                }
+
+                var schematic = providerEntry.Schematic;
+                if (schematic == null)
+                    continue;
+
+                var state = DeserializeProviderState(kvp.Key, kvp.Value.Data, schematic);
+                if (!providerEntry.StateType.IsInstanceOfType(state))
+                {
+                    throw new InvalidOperationException(
+                        $"Recovery candidate entry for provider '{kvp.Key}' contains state incompatible with the registered provider state type.");
+                }
             }
         }
 

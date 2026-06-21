@@ -389,7 +389,7 @@ public sealed class BackupAndRecoveryTests
     }
 
     [Test]
-    public void RecoverSave_ValidatesTempFolderThroughMigrationPath()
+    public void RecoverSave_RejectsTempFolderWithOlderSchemaInsteadOfRunningMigration()
     {
         var oldManager = CreateManager();
         oldManager.RegisterProvider(new V1Provider(new V1State { Name = "Scout" }));
@@ -405,13 +405,14 @@ public sealed class BackupAndRecoveryTests
         newManager.RegisterProvider(newProvider);
         newManager.ValidateRegistrations();
 
-        var loaded = newManager.LoadFromDisk("slot");
+        var ex = Assert.Throws<InvalidOperationException>(() => newManager.RecoverSave("slot"));
 
-        Assert.That(loaded, Is.True);
-        Assert.That(newProvider.Current.Name, Is.EqualTo("Scout"));
-        Assert.That(newProvider.Current.Level, Is.EqualTo(12));
-        Assert.That(Directory.Exists(slotPath), Is.True);
-        Assert.That(Directory.Exists(tempPath), Is.False);
+        Assert.That(ex!.Message, Does.Contain("Recovery failed"));
+        Assert.That(ex.Message, Does.Contain("does not run migrations"));
+        Assert.That(newProvider.Current.Name, Is.EqualTo("Unset"));
+        Assert.That(newProvider.Current.Level, Is.EqualTo(0));
+        Assert.That(Directory.Exists(slotPath), Is.False);
+        Assert.That(Directory.Exists(tempPath), Is.True);
     }
 
     private SaveManager<string> CreateManager(

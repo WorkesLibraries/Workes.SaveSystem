@@ -4,12 +4,7 @@ This file is the durable planning tracker for the save system work. Keep it upda
 
 ## To-do
 
-1. Stop recovery candidate validation from automatically running provider migrations.
-   - Recovery validation currently uses the normal deserialize path, which can invoke user migration code while deciding whether a temp/to-delete candidate is valid.
-   - Recovery should validate candidate structure and provider-file integrity without mutating serialized data or relying on migration side effects.
-   - Define the desired older-schema recovery behavior, update README, and adjust tests that currently expect migration-compatible recovery.
-
-2. Add migration validation edge-case tests after the new internal exception mapping is in place.
+1. Add migration validation edge-case tests after the new internal exception mapping is in place.
     - Re-check duplicate and missing migration paths once load-status classification no longer depends on exception message matching.
 
 ## Later
@@ -27,6 +22,14 @@ These points are completed for the current package migration.
 - Kept throwing APIs on the existing `InvalidOperationException` shape by nesting the internal status marker inside it.
 - Added recovery-failure try-load coverage.
 - Clarified in the README that try-load statuses are stable, while exception messages are diagnostic text.
+
+### 56. Kept Recovery Validation Migration-Free
+
+- Changed recovery candidate validation so temp and `_toDelete` folders are checked without running provider migrations.
+- Recovery candidates now require their provider files to already match the currently validated provider schema versions before they can be promoted.
+- Kept normal load migration behavior unchanged after a valid current-schema save folder is available.
+- Updated recovery tests so older-schema temp saves are rejected and preserved instead of migrated during recovery.
+- Updated the README recovery section to document that recovery validation is structural/current-schema validation, not a migration path.
 
 ### 1. Created New Package Shell
 

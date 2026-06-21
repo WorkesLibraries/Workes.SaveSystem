@@ -300,7 +300,7 @@ manager.LoadBackupSlotFromDisk("slot-1", slotNumber: 1);
 
 `LoadFromDisk(...)` automatically calls `RecoverSave(...)` before loading provider data. Recovery handles interrupted atomic save swaps involving the main save folder, the temp folder, and the to-delete folder for the same resolved save path.
 
-Recovery validates candidate save folders through the normal load-compatible path, including metadata checks, provider file checks, schema-version extraction, migrations, deserialization, and snapshot validation. This allows an interrupted save written by an older provider schema version to recover after the application updates, as long as the registered provider has a valid migration path.
+Recovery validates candidate save folders without running provider migrations. It checks metadata, required provider files, schema-version extraction, current schema-version compatibility, and current-schema deserialization. A temp or `_toDelete` recovery candidate written with an older or newer provider schema is rejected rather than migrated during recovery; migrations still run during normal loads after a current-schema save folder has been recovered.
 
 Recovery candidate validation is stricter than deliberate partial-load behavior. Even when `missingProviderFileBehavior: MissingProviderFileBehavior.Skip` is configured for normal loads, recovery will not promote a temp or `_toDelete` candidate that is missing a registered persisted provider file.
 
