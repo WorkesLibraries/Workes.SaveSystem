@@ -31,6 +31,31 @@ That dependency is intentional for the current package shape:
 
 A future `System.Text.Json` adapter is still possible, especially for applications that do not need migration data nodes or that target newer frameworks directly. Treat it as a separate compatibility decision rather than a drop-in replacement for existing saves.
 
+GZip compression is available through the .NET platform libraries and does not require another NuGet dependency. MessagePack support is expected to live in a separate package because it brings its own serializer dependency. The intended optional package shape is:
+
+```text
+Workes.SaveSystem
+Workes.SaveSystem.MessagePack
+```
+
+When MessagePack support is available, usage should look like normal serializer usage:
+
+```csharp
+var serializer = new MessagePackSaveSerializer();
+var manager = SaveManager<string>.CreateDefault(
+    serializer,
+    saveRootPath: "Saves");
+```
+
+or, for compressed JSON using only the core package and platform compression:
+
+```csharp
+var serializer = new CompressedSaveSerializer(
+    new JsonSaveSerializer(JsonSaveFormatting.Compact));
+```
+
+MessagePack is intended for compact production saves. JSON remains the built-in readable serializer and the recommended default while the package is still converging.
+
 ## Quick Start
 
 Create a save manager, register providers, then save and load a slot.
@@ -120,7 +145,7 @@ Save metadata uses the active serializer too. JSON saves write `metadata.json`.
 Payload transforms wrap any serializer with reversible byte encoding. Use this extension point for custom obfuscation or encryption; built-in compression is planned separately.
 
 ```csharp
-var transformedSerializer = SaveSerializerTransforms.Wrap(
+var transformedSerializer = new TransformedSaveSerializer(
     new JsonSaveSerializer(JsonSaveFormatting.Compact),
     new XorToyTransform());
 ```
@@ -460,11 +485,22 @@ A custom serializer must provide these pieces as one coherent format:
 
 Schematic creation should be lightweight where possible. Provider state write compatibility is validated through real provider state during `ValidateRegistrations()`. Read compatibility is validated when real save data is deserialized during load, so custom serializers should still fail clearly for deserialize-only problems.
 
-If the serializer needs metadata stored with a save, implement `ISaveSerializerMetadataHandler`. The manager calls `WriteMetadata(...)` before writing the metadata file and `ValidateMetadata(...)` when temp-save and recovery-candidate metadata is validated. Missing serializer metadata is treated as empty metadata for compatibility with older saves.
+If the serializer needs metadata stored with a save, implement `ISaveSerializerMetadataHandler` and return it from `ISaveSerializer.Metadata`. The manager calls `WriteMetadata(...)` before writing the metadata file and `ValidateMetadata(...)` when temp-save and recovery-candidate metadata is validated. Missing serializer metadata is treated as empty metadata for compatibility with older saves.
 
-Use `ISavePayloadTransform` with `SaveSerializerTransforms.Wrap(...)` when an existing serializer format should be encoded after serialization and decoded before deserialization. The wrapper composes file extensions, so wrapping JSON with a transform whose suffix is `.enc` writes provider and metadata files such as `player.json.enc` and `metadata.json.enc`. Migration and serializer-metadata support are preserved only when the wrapped serializer supports those extension contracts.
+Use `TransformedSaveSerializer` with `ISavePayloadTransform` when an existing serializer format should be encoded after serialization and decoded before deserialization. The decorator composes file extensions, so wrapping JSON with a transform whose suffix is `.enc` writes provider and metadata files such as `player.json.enc` and `metadata.json.enc`. Migration is routed through the decorator by decoding before `DeserializeToNode(...)` and encoding after `SerializeFromNode(...)`. Serializer metadata is delegated from the inner serializer.
 
-If providers using the serializer implement `ISaveMigratable`, the serializer must also implement `ISaveMigrationCapableSerializer`. That means it must parse serialized payloads into editable `ISaveDataNode` trees, serialize edited node trees back to the payload format, and expose a matching `NodeFactory` that creates new object, array, and primitive nodes for migration steps.
+`CompressedSaveSerializer` is the intended public compression API. Its internal compression transform should remain an implementation detail unless a concrete use case appears for exposing GZip as a standalone payload transform.
+
+MessagePack support is planned as an optional companion serializer package for dependency reasons. Once installed, it should be usable anywhere an `ISaveSerializer` is accepted:
+
+```csharp
+var manager = new SaveManager<string>(
+    SaveSystemOptions.Create(
+        saveRootPath: "Saves",
+        serializer: new MessagePackSaveSerializer()));
+```
+
+If providers using the serializer implement `ISaveMigratable`, the serializer must return an `ISaveMigrationCapableSerializer` from `ISaveSerializer.Migration`. That adapter must parse serialized payloads into editable `ISaveDataNode` trees, serialize edited node trees back to the payload format, and expose a matching `NodeFactory` that creates new object, array, and primitive nodes for migration steps.
 
 The migration-capable serializer, its `NodeFactory`, and its data-node trees are coupled. Do not mix data nodes from different serializer or factory instances.
 

@@ -72,6 +72,12 @@ namespace Workes.SaveSystem
         public string FileExtension => ".json";
 
         /// <inheritdoc />
+        public ISaveMigrationCapableSerializer Migration => this;
+
+        /// <inheritdoc />
+        public ISaveSerializerMetadataHandler? Metadata => null;
+
+        /// <inheritdoc />
         public ISaveDataNodeFactory NodeFactory { get; }
 
         /// <summary>

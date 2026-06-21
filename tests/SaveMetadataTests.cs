@@ -430,6 +430,10 @@ public sealed class SaveMetadataTests
 
         public string FileExtension => _inner.FileExtension;
 
+        public ISaveMigrationCapableSerializer? Migration => _inner.Migration;
+
+        public ISaveSerializerMetadataHandler? Metadata => this;
+
         public ISaveSchematic CreateSchematic(Type stateType)
         {
             return _inner.CreateSchematic(stateType);

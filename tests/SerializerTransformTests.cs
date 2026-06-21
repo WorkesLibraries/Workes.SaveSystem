@@ -24,9 +24,9 @@ public sealed class SerializerTransformTests
     }
 
     [Test]
-    public void Wrap_ComposesFileExtensionAndTransformsProviderAndMetadataFiles()
+    public void TransformedSaveSerializer_ComposesFileExtensionAndTransformsProviderAndMetadataFiles()
     {
-        var serializer = SaveSerializerTransforms.Wrap(new JsonSaveSerializer(), new XorTransform());
+        var serializer = new TransformedSaveSerializer(new JsonSaveSerializer(), new XorTransform());
         var manager = CreateManager(serializer);
         manager.RegisterProvider(new TestProvider(new TestState { Value = 7 }));
         manager.ValidateRegistrations();
@@ -42,9 +42,9 @@ public sealed class SerializerTransformTests
     }
 
     [Test]
-    public void Wrap_RoundTripsSaveAndLoad()
+    public void TransformedSaveSerializer_RoundTripsSaveAndLoad()
     {
-        var serializer = SaveSerializerTransforms.Wrap(new JsonSaveSerializer(), new XorTransform());
+        var serializer = new TransformedSaveSerializer(new JsonSaveSerializer(), new XorTransform());
         var writer = CreateManager(serializer);
         writer.RegisterProvider(new TestProvider(new TestState { Value = 7 }));
         writer.ValidateRegistrations();
@@ -62,9 +62,9 @@ public sealed class SerializerTransformTests
     }
 
     [Test]
-    public void Wrap_ExtractSchemaVersion_DecodesBeforeDelegating()
+    public void TransformedSaveSerializer_ExtractSchemaVersion_DecodesBeforeDelegating()
     {
-        var serializer = SaveSerializerTransforms.Wrap(new JsonSaveSerializer(), new XorTransform());
+        var serializer = new TransformedSaveSerializer(new JsonSaveSerializer(), new XorTransform());
         var schematic = serializer.CreateSchematic(typeof(TestState));
         schematic.SchemaVersion = 3;
         var serialized = serializer.Serialize(new TestState { Value = 7 }, schematic);
@@ -76,25 +76,25 @@ public sealed class SerializerTransformTests
     }
 
     [Test]
-    public void Wrap_WhenInnerIsMigrationCapable_ReturnsMigrationCapableSerializer()
+    public void TransformedSaveSerializer_WhenInnerIsMigrationCapable_ExposesMigration()
     {
-        var serializer = SaveSerializerTransforms.Wrap(new JsonSaveSerializer(), new XorTransform());
+        var serializer = new TransformedSaveSerializer(new JsonSaveSerializer(), new XorTransform());
 
-        Assert.That(serializer, Is.InstanceOf<ISaveMigrationCapableSerializer>());
+        Assert.That(serializer.Migration, Is.Not.Null);
     }
 
     [Test]
-    public void Wrap_WhenInnerIsNotMigrationCapable_DoesNotReturnMigrationCapableSerializer()
+    public void TransformedSaveSerializer_WhenInnerIsNotMigrationCapable_HasNoMigration()
     {
-        var serializer = SaveSerializerTransforms.Wrap(new NonMigrationJsonSerializer(), new XorTransform());
+        var serializer = new TransformedSaveSerializer(new NonMigrationJsonSerializer(), new XorTransform());
 
-        Assert.That(serializer, Is.Not.InstanceOf<ISaveMigrationCapableSerializer>());
+        Assert.That(serializer.Migration, Is.Null);
     }
 
     [Test]
     public void LoadFromDisk_WithTransformedMigrationCapableSerializer_AppliesMigrations()
     {
-        var serializer = SaveSerializerTransforms.Wrap(new JsonSaveSerializer(), new XorTransform());
+        var serializer = new TransformedSaveSerializer(new JsonSaveSerializer(), new XorTransform());
         var oldManager = CreateManager(serializer);
         oldManager.RegisterProvider(new V1Provider(new V1State { Name = "Scout" }));
         oldManager.ValidateRegistrations();
@@ -118,9 +118,9 @@ public sealed class SerializerTransformTests
     }
 
     [Test]
-    public void Wrap_WhenInnerSupportsMetadata_DelegatesMetadataCallbacks()
+    public void TransformedSaveSerializer_WhenInnerSupportsMetadata_DelegatesMetadataCallbacks()
     {
-        var serializer = SaveSerializerTransforms.Wrap(new MetadataJsonSerializer(), new XorTransform());
+        var serializer = new TransformedSaveSerializer(new MetadataJsonSerializer(), new XorTransform());
         var manager = CreateManager(serializer);
         manager.RegisterProvider(new TestProvider(new TestState { Value = 7 }));
         manager.ValidateRegistrations();
@@ -129,23 +129,23 @@ public sealed class SerializerTransformTests
 
         var metadataBytes = File.ReadAllBytes(Path.Combine(_tempRoot, "slot", "metadata.json.xor"));
         var decodedMetadata = Encoding.UTF8.GetString(new XorTransform().Decode(metadataBytes));
-        Assert.That(serializer, Is.InstanceOf<ISaveSerializerMetadataHandler>());
+        Assert.That(serializer.Metadata, Is.Not.Null);
         Assert.That(decodedMetadata, Does.Contain("\"transform-metadata\""));
     }
 
     [Test]
-    public void Wrap_WhenInnerDoesNotSupportMetadata_DoesNotReturnMetadataHandler()
+    public void TransformedSaveSerializer_WhenInnerDoesNotSupportMetadata_HasNoMetadata()
     {
-        var serializer = SaveSerializerTransforms.Wrap(new JsonSaveSerializer(), new XorTransform());
+        var serializer = new TransformedSaveSerializer(new JsonSaveSerializer(), new XorTransform());
 
-        Assert.That(serializer, Is.Not.InstanceOf<ISaveSerializerMetadataHandler>());
+        Assert.That(serializer.Metadata, Is.Null);
     }
 
     [Test]
-    public void Wrap_RejectsInvalidTransformSuffix()
+    public void TransformedSaveSerializer_RejectsInvalidTransformSuffix()
     {
         var ex = Assert.Throws<ArgumentException>(() =>
-            SaveSerializerTransforms.Wrap(new JsonSaveSerializer(), new InvalidSuffixTransform()));
+            new TransformedSaveSerializer(new JsonSaveSerializer(), new InvalidSuffixTransform()));
 
         Assert.That(ex!.Message, Does.Contain("must start with"));
     }
@@ -153,7 +153,7 @@ public sealed class SerializerTransformTests
     [Test]
     public void LoadFromDisk_WhenTransformDecodeFails_Throws()
     {
-        var serializer = SaveSerializerTransforms.Wrap(new JsonSaveSerializer(), new ThrowingDecodeTransform());
+        var serializer = new TransformedSaveSerializer(new JsonSaveSerializer(), new ThrowingDecodeTransform());
         var manager = CreateManager(serializer);
         manager.RegisterProvider(new TestProvider(new TestState { Value = 7 }));
         manager.ValidateRegistrations();
@@ -288,6 +288,11 @@ public sealed class SerializerTransformTests
         private readonly JsonSaveSerializer _inner = new JsonSaveSerializer();
 
         public string FileExtension => _inner.FileExtension;
+
+        public ISaveMigrationCapableSerializer? Migration => null;
+
+        public ISaveSerializerMetadataHandler? Metadata => null;
+
         public ISaveSchematic CreateSchematic(Type stateType) => _inner.CreateSchematic(stateType);
         public byte[] Serialize(object data, ISaveSchematic schematic) => _inner.Serialize(data, schematic);
         public object Deserialize(byte[] rawData, ISaveSchematic schematic) => _inner.Deserialize(rawData, schematic);
@@ -299,6 +304,11 @@ public sealed class SerializerTransformTests
         private readonly JsonSaveSerializer _inner = new JsonSaveSerializer();
 
         public string FileExtension => _inner.FileExtension;
+
+        public ISaveMigrationCapableSerializer? Migration => null;
+
+        public ISaveSerializerMetadataHandler? Metadata => this;
+
         public ISaveSchematic CreateSchematic(Type stateType) => _inner.CreateSchematic(stateType);
         public byte[] Serialize(object data, ISaveSchematic schematic) => _inner.Serialize(data, schematic);
         public object Deserialize(byte[] rawData, ISaveSchematic schematic) => _inner.Deserialize(rawData, schematic);

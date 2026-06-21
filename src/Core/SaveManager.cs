@@ -539,11 +539,11 @@ namespace Workes.SaveSystem
             if (!(providerEntry.Provider is ISaveMigratable migratable))
                 return;
 
-            if (!(_options.Serializer is ISaveMigrationCapableSerializer))
+            if (_options.Serializer.Migration == null)
             {
                 throw new InvalidOperationException(
-                    $"SaveProvider with key '{providerEntry.Provider.SaveKey}' implements ISaveMigratable but the serializer ({_options.Serializer.GetType().Name}) does not implement ISaveMigrationCapableSerializer. " +
-                    "Migration-capable providers require migration-capable serializers.");
+                    $"SaveProvider with key '{providerEntry.Provider.SaveKey}' implements ISaveMigratable but the serializer ({_options.Serializer.GetType().Name}) does not provide migration support. " +
+                    "Migration-capable providers require serializers with migration support.");
             }
 
             var migrationSource = migratable.CreateMigrationSource();
@@ -1541,7 +1541,8 @@ namespace Workes.SaveSystem
             metadata.SerializerMetadata ??= new SaveSerializerMetadata();
             metadata.SerializerMetadata.Normalize();
 
-            if (!(_options.Serializer is ISaveSerializerMetadataHandler metadataHandler))
+            var metadataHandler = _options.Serializer.Metadata;
+            if (metadataHandler == null)
                 return;
 
             metadataHandler.WriteMetadata(
@@ -1557,7 +1558,8 @@ namespace Workes.SaveSystem
             metadata.SerializerMetadata ??= new SaveSerializerMetadata();
             metadata.SerializerMetadata.Normalize();
 
-            if (!(_options.Serializer is ISaveSerializerMetadataHandler metadataHandler))
+            var metadataHandler = _options.Serializer.Metadata;
+            if (metadataHandler == null)
                 return;
 
             metadataHandler.ValidateMetadata(

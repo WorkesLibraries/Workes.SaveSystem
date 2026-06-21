@@ -70,9 +70,21 @@ public sealed class PublicApiShapeTests
     {
         var jsonSerializer = new JsonSaveSerializer();
 
-        Assert.That(jsonSerializer, Is.InstanceOf<ISaveMigrationCapableSerializer>());
+        Assert.That(jsonSerializer.Migration, Is.Not.Null);
         Assert.That(jsonSerializer, Is.Not.InstanceOf<ISaveDataNodeFactory>());
-        Assert.That(((ISaveMigrationCapableSerializer)jsonSerializer).NodeFactory, Is.InstanceOf<ISaveDataNodeFactory>());
+        Assert.That(jsonSerializer.Migration!.NodeFactory, Is.InstanceOf<ISaveDataNodeFactory>());
+    }
+
+    [Test]
+    public void TransformFactory_IsNotPublicApi()
+    {
+        var exportedTypeNames = typeof(SaveManager<>).Assembly
+            .GetExportedTypes()
+            .Select(type => type.Name)
+            .ToArray();
+
+        Assert.That(exportedTypeNames, Does.Not.Contain("SaveSerializerTransforms"));
+        Assert.That(exportedTypeNames, Does.Contain("TransformedSaveSerializer"));
     }
 
     [Test]

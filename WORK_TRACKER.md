@@ -35,12 +35,13 @@ These points are completed for the current package migration.
 ### 61. Added Payload Transform Serializer Wrapper
 
 - Added `ISavePayloadTransform` for reversible byte-to-byte serializer payload transforms.
-- Added `SaveSerializerTransforms.Wrap(...)` as the public composition API.
+- Replaced the transform factory API with the public `TransformedSaveSerializer` decorator constructor.
+- Added nullable `Migration` and `Metadata` capability properties to `ISaveSerializer`.
 - Composed file extensions from the inner serializer and transform suffix, such as `.json.xor`.
-- Preserved migration capability only when the wrapped serializer implements `ISaveMigrationCapableSerializer`.
-- Preserved serializer metadata callbacks only when the wrapped serializer implements `ISaveSerializerMetadataHandler`.
+- Routed migration through the decorator by decoding before node deserialization and encoding after node serialization.
+- Delegated serializer metadata through the inner serializer's `Metadata` capability.
 - Documented payload transforms as the extension point for custom obfuscation, encryption, and other byte encodings.
-- `dotnet test Workes.SaveSystem.sln` passes with 194 tests.
+- `dotnet test Workes.SaveSystem.sln` passes with 195 tests.
 
 ### 60. Added Serializer Metadata Support
 

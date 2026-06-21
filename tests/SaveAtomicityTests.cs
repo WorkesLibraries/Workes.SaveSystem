@@ -186,6 +186,10 @@ public sealed class SaveAtomicityTests
     {
         public string FileExtension => ".wrong";
 
+        public ISaveMigrationCapableSerializer? Migration => null;
+
+        public ISaveSerializerMetadataHandler? Metadata => null;
+
         public ISaveSchematic CreateSchematic(Type stateType)
         {
             return new WrongStateTypeSchematic();

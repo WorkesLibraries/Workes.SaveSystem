@@ -15,6 +15,16 @@ namespace Workes.SaveSystem
         string FileExtension { get; }
 
         /// <summary>
+        /// Gets the optional migration support adapter for this serializer.
+        /// </summary>
+        ISaveMigrationCapableSerializer? Migration { get; }
+
+        /// <summary>
+        /// Gets the optional serializer metadata handler for this serializer.
+        /// </summary>
+        ISaveSerializerMetadataHandler? Metadata { get; }
+
+        /// <summary>
         /// Creates a schematic for the given state type. The schematic is used to serialize and deserialize
         /// provider state; the manager sets its schema version from the provider at registration.
         /// </summary>

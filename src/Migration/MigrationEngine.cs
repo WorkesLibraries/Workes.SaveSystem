@@ -108,12 +108,12 @@ namespace Workes.SaveSystem
             }
 
             // Get the migration-capable serializer
-            var migrationSerializer = _serializer as ISaveMigrationCapableSerializer;
+            var migrationSerializer = _serializer.Migration;
             if (migrationSerializer == null)
             {
                 // This should have been caught during registration, but handle gracefully
                 _diagnostics.LogWarning(
-                    $"Cannot migrate save data for provider '{saveKey}': serializer ({_serializer.GetType().Name}) does not implement ISaveMigrationCapableSerializer. " +
+                    $"Cannot migrate save data for provider '{saveKey}': serializer ({_serializer.GetType().Name}) does not provide migration support. " +
                     "This should have been caught during provider registration. Deserialization will fail."
                 );
                 return false;
