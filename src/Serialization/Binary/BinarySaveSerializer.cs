@@ -1,5 +1,4 @@
 using System;
-using System.IO;
 using System.Text;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -7,12 +6,12 @@ using Newtonsoft.Json.Linq;
 namespace Workes.SaveSystem
 {
     /// <summary>
-    /// A binary-token serializer for save files.
+    /// A Base64 JSON-token serializer for save files.
     /// </summary>
     /// <remarks>
-    /// The current save serializer contract stores provider data as strings. This serializer writes a package-owned
-    /// binary token payload encoded as Base64, preserving a binary payload format while staying compatible with the
-    /// package's text-based persistence contract.
+    /// The current save serializer contract stores provider data as strings. This serializer writes a Base64-encoded
+    /// UTF-8 JSON token payload, so decoding the file content with ordinary Base64 tools produces readable structured
+    /// JSON while preserving a distinct serializer/file extension.
     /// </remarks>
     public sealed class BinarySaveSerializer : ISaveSerializer, ISaveMigrationCapableSerializer
     {
@@ -84,7 +83,7 @@ namespace Workes.SaveSystem
                 if (schemaVersionToken == null || schemaVersionToken.Type != JTokenType.Integer)
                 {
                     throw new InvalidOperationException(
-                        "Serialized binary data does not contain a valid integer 'SchemaVersion' field."
+                        "Serialized binary save data does not contain a valid integer 'SchemaVersion' field."
                     );
                 }
 
@@ -129,7 +128,7 @@ namespace Workes.SaveSystem
 
         private static JToken DeserializeTokenFromBase64(string serializedData)
         {
-            return BinarySaveTokenCodec.Decode(serializedData);
+            return BinarySaveBase64JsonCodec.Decode(serializedData);
         }
 
         private static string SerializeTokenToBase64(JToken token)
@@ -137,27 +136,19 @@ namespace Workes.SaveSystem
             if (token == null)
                 throw new ArgumentNullException(nameof(token));
 
-            return BinarySaveTokenCodec.Encode(token);
+            return BinarySaveBase64JsonCodec.Encode(token);
         }
     }
 
-    internal static class BinarySaveTokenCodec
+    internal static class BinarySaveBase64JsonCodec
     {
-        private static readonly byte[] Magic = Encoding.ASCII.GetBytes("WSSB1");
-
         public static string Encode(JToken token)
         {
             if (token == null)
                 throw new ArgumentNullException(nameof(token));
 
-            using (var stream = new MemoryStream())
-            using (var writer = new BinaryWriter(stream, Encoding.UTF8))
-            {
-                writer.Write(Magic);
-                WriteToken(writer, token);
-                writer.Flush();
-                return Convert.ToBase64String(stream.ToArray());
-            }
+            var json = token.ToString(Newtonsoft.Json.Formatting.Indented);
+            return Convert.ToBase64String(Encoding.UTF8.GetBytes(json));
         }
 
         public static JToken Decode(string serializedData)
@@ -175,126 +166,15 @@ namespace Workes.SaveSystem
                 throw new InvalidOperationException("Serialized binary save data is not valid Base64.", ex);
             }
 
-            using (var stream = new MemoryStream(bytes))
-            using (var reader = new BinaryReader(stream, Encoding.UTF8))
+            try
             {
-                var magic = reader.ReadBytes(Magic.Length);
-                if (magic.Length != Magic.Length || !BytesEqual(magic, Magic))
-                    throw new InvalidOperationException("Serialized binary save data has an invalid format header.");
-
-                return ReadToken(reader);
+                var json = Encoding.UTF8.GetString(bytes);
+                return JToken.Parse(json);
             }
-        }
-
-        private static void WriteToken(BinaryWriter writer, JToken token)
-        {
-            switch (token.Type)
+            catch (Exception ex)
             {
-                case JTokenType.Object:
-                    writer.Write((byte)1);
-                    var obj = (JObject)token;
-                    writer.Write(obj.Count);
-                    foreach (var property in obj.Properties())
-                    {
-                        writer.Write(property.Name);
-                        WriteToken(writer, property.Value);
-                    }
-                    return;
-
-                case JTokenType.Array:
-                    writer.Write((byte)2);
-                    var array = (JArray)token;
-                    writer.Write(array.Count);
-                    foreach (var item in array)
-                        WriteToken(writer, item);
-                    return;
-
-                case JTokenType.Integer:
-                    writer.Write((byte)3);
-                    writer.Write(token.Value<long>());
-                    return;
-
-                case JTokenType.Float:
-                    writer.Write((byte)4);
-                    writer.Write(token.Value<double>());
-                    return;
-
-                case JTokenType.String:
-                    writer.Write((byte)5);
-                    writer.Write(token.Value<string>() ?? string.Empty);
-                    return;
-
-                case JTokenType.Boolean:
-                    writer.Write((byte)6);
-                    writer.Write(token.Value<bool>());
-                    return;
-
-                case JTokenType.Null:
-                case JTokenType.Undefined:
-                    writer.Write((byte)7);
-                    return;
-
-                default:
-                    writer.Write((byte)5);
-                    writer.Write(token.ToString());
-                    return;
+                throw new InvalidOperationException("Serialized binary save data does not contain readable JSON after Base64 decoding.", ex);
             }
-        }
-
-        private static JToken ReadToken(BinaryReader reader)
-        {
-            var tokenType = reader.ReadByte();
-            switch (tokenType)
-            {
-                case 1:
-                    var obj = new JObject();
-                    var propertyCount = reader.ReadInt32();
-                    for (int i = 0; i < propertyCount; i++)
-                    {
-                        var propertyName = reader.ReadString();
-                        obj[propertyName] = ReadToken(reader);
-                    }
-                    return obj;
-
-                case 2:
-                    var array = new JArray();
-                    var itemCount = reader.ReadInt32();
-                    for (int i = 0; i < itemCount; i++)
-                        array.Add(ReadToken(reader));
-                    return array;
-
-                case 3:
-                    return new JValue(reader.ReadInt64());
-
-                case 4:
-                    return new JValue(reader.ReadDouble());
-
-                case 5:
-                    return new JValue(reader.ReadString());
-
-                case 6:
-                    return new JValue(reader.ReadBoolean());
-
-                case 7:
-                    return JValue.CreateNull();
-
-                default:
-                    throw new InvalidOperationException($"Serialized binary save data contains an unknown token type '{tokenType}'.");
-            }
-        }
-
-        private static bool BytesEqual(byte[] left, byte[] right)
-        {
-            if (left.Length != right.Length)
-                return false;
-
-            for (int i = 0; i < left.Length; i++)
-            {
-                if (left[i] != right[i])
-                    return false;
-            }
-
-            return true;
         }
     }
 }

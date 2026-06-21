@@ -97,7 +97,7 @@ public sealed class SaveExistenceTests
     {
         var backupPath = Path.Combine(_tempRoot, "_backup", "slot_0001");
         Directory.CreateDirectory(backupPath);
-        File.WriteAllText(Path.Combine(backupPath, "savemetadata.json"), "{}");
+        File.WriteAllText(Path.Combine(backupPath, "metadata.json"), "{}");
         var manager = CreateManager();
 
         Assert.That(manager.BackupSlotExists("slot", slotNumber: 1), Is.True);

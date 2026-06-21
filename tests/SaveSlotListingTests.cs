@@ -106,19 +106,34 @@ public sealed class SaveSlotListingTests
         Assert.That(slots, Is.EqualTo(new[] { "profile-a-slot-1" }));
     }
 
+    [Test]
+    public void ListSaveSlots_WithBinarySerializerUsesBinaryMetadataFile()
+    {
+        var manager = CreateManager(_tempRoot, new BinarySaveSerializer());
+        var provider = new TestProvider(new TestState { Value = 1 });
+        manager.RegisterProvider(provider);
+        manager.ValidateRegistrations();
+        manager.SaveToDisk("slot");
+
+        var slots = manager.ListSaveSlots();
+
+        Assert.That(slots, Is.EqualTo(new[] { "slot" }));
+        Assert.That(File.Exists(Path.Combine(_tempRoot, "slot", "metadata.bin")), Is.True);
+    }
+
     private void CreateFolderWithMetadata(string folderName)
     {
         var folderPath = Path.Combine(_tempRoot, folderName);
         Directory.CreateDirectory(folderPath);
-        File.WriteAllText(Path.Combine(folderPath, "savemetadata.json"), "{}");
+        File.WriteAllText(Path.Combine(folderPath, "metadata.json"), "{}");
     }
 
-    private static SaveManager<string> CreateManager(string saveRootPath)
+    private static SaveManager<string> CreateManager(string saveRootPath, ISaveSerializer? serializer = null)
     {
         return new SaveManager<string>(
             SaveSystemOptions.Create(
                 saveRootPath: saveRootPath,
-                serializer: new JsonSaveSerializer()));
+                serializer: serializer ?? new JsonSaveSerializer()));
     }
 
     private readonly struct ProfileSlotIdentity

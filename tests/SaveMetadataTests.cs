@@ -58,6 +58,24 @@ public sealed class SaveMetadataTests
     }
 
     [Test]
+    public void ReadSaveMetadata_WithBinarySerializerUsesBinaryMetadataFile()
+    {
+        var manager = CreateManager(serializer: new BinarySaveSerializer());
+        var provider = new TestProvider(new TestState { Value = 1 });
+        manager.RegisterProvider(provider);
+        SaveValue(manager, provider, "slot", 1);
+
+        var metadata = manager.ReadSaveMetadata("slot");
+        var metadataPath = Path.Combine(_tempRoot, "slot", "metadata.bin");
+        var decodedMetadata = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(File.ReadAllText(metadataPath)));
+
+        Assert.That(metadata, Is.Not.Null);
+        Assert.That(File.Exists(metadataPath), Is.True);
+        Assert.That(File.Exists(Path.Combine(_tempRoot, "slot", "metadata.json")), Is.False);
+        Assert.That(decodedMetadata, Does.Contain("\"SaveId\""));
+    }
+
+    [Test]
     public void ReadSaveMetadata_ReturnsNullWhenMetadataDoesNotExist()
     {
         var manager = CreateManager();
@@ -73,11 +91,11 @@ public sealed class SaveMetadataTests
         var manager = CreateManager();
         var slotPath = Path.Combine(_tempRoot, "slot");
         Directory.CreateDirectory(slotPath);
-        File.WriteAllText(Path.Combine(slotPath, "savemetadata.json"), "{}");
+        File.WriteAllText(Path.Combine(slotPath, "metadata.json"), "{}");
 
         var ex = Assert.Throws<InvalidOperationException>(() => manager.ReadSaveMetadata("slot"));
 
-        Assert.That(ex!.Message, Does.Contain("SaveId"));
+        Assert.That(ex!.Message, Does.Contain("Failed to deserialize metadata.json"));
     }
 
     [Test]
@@ -119,12 +137,13 @@ public sealed class SaveMetadataTests
 
     private SaveManager<string> CreateManager(
         bool enableBackupSystem = false,
-        int backupSystemMaxBackupCount = 0)
+        int backupSystemMaxBackupCount = 0,
+        ISaveSerializer? serializer = null)
     {
         return new SaveManager<string>(
             new SaveSystemOptions<string>(
                 saveRootPath: _tempRoot,
-                serializer: new JsonSaveSerializer(),
+                serializer: serializer ?? new JsonSaveSerializer(),
                 tempFolderName: SaveSystemOptions<string>.DefaultTempFolderName(),
                 savePathResolver: identity => identity,
                 fileNameResolver: SaveSystemOptions<string>.DefaultFileNameResolver,

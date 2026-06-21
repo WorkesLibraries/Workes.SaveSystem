@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using Newtonsoft.Json;
 
 namespace Workes.SaveSystem
 {
@@ -24,7 +23,8 @@ namespace Workes.SaveSystem
             public Action<object> RestoreState = null!;
         }
 
-        private const string SaveMetadataFileName = "savemetadata.json";
+        private const string SaveMetadataBaseName = "metadata";
+        private const int SaveMetadataSchemaVersion = 1;
         private const string BackupFolderName = "_backup";
         private const string ToDeleteFolderName = "_toDelete";
 
@@ -37,8 +37,11 @@ namespace Workes.SaveSystem
         private string GetToDeleteFolderPath(string savePath) =>
             Path.Combine(_options.SaveRootPath, savePath + ToDeleteFolderName);
 
+        private string GetMetadataFileName() =>
+            SaveMetadataBaseName + _options.Serializer.FileExtension;
+
         private string GetMetadataFilePath(string folderPath) =>
-            Path.Combine(folderPath, SaveMetadataFileName);
+            Path.Combine(folderPath, GetMetadataFileName());
 
         private string GetProviderFilePath(string folderPath, string fileName) =>
             Path.Combine(folderPath, fileName);
@@ -383,7 +386,7 @@ namespace Workes.SaveSystem
             if (!Directory.Exists(_options.SaveRootPath))
                 return Array.Empty<string>();
 
-            return Directory.EnumerateFiles(_options.SaveRootPath, SaveMetadataFileName, SearchOption.AllDirectories)
+            return Directory.EnumerateFiles(_options.SaveRootPath, GetMetadataFileName(), SearchOption.AllDirectories)
                 .Select(Path.GetDirectoryName)
                 .Where(path => !string.IsNullOrEmpty(path))
                 .Select(path => path!)
@@ -821,21 +824,15 @@ namespace Workes.SaveSystem
                 SaveMetadata? metadata;
 
                 var existingMetaPath = GetMetadataFilePath(folderPath);
-                if (File.Exists(existingMetaPath))
-                {
-                    metadata = JsonConvert.DeserializeObject<SaveMetadata>(
-                        File.ReadAllText(existingMetaPath)) ?? SaveMetadata.CreateNewMetadata();
-                }
-                else
-                {
+                metadata = File.Exists(existingMetaPath)
+                    ? ReadSaveMetadataFromFile(existingMetaPath)
+                    : SaveMetadata.CreateNewMetadata();
+                if (metadata == null)
                     metadata = SaveMetadata.CreateNewMetadata();
-                }
 
                 metadata.PrepareForWrite(DateTimeOffset.UtcNow);
 
-                File.WriteAllText(
-                    metaPath,
-                    JsonConvert.SerializeObject(metadata, Formatting.Indented));
+                WriteSaveMetadataToFile(metaPath, metadata);
 
                 ValidateTempSaveFolderSave(tempPath, serialized.Data);
             }
@@ -1107,7 +1104,7 @@ namespace Workes.SaveSystem
                 var tempMeta = TryReadSaveMetadata(tempPath);
                 if (tempMeta == null || string.IsNullOrEmpty(tempMeta.SaveId))
                     throw new InvalidOperationException(
-                        $"Recovery failed: temp save at '{tempPath}' has no valid SaveId in {SaveMetadataFileName}.");
+                        $"Recovery failed: temp save at '{tempPath}' has no valid SaveId in {GetMetadataFileName()}.");
                 if (mainMeta != null && mainMeta.SaveId != tempMeta.SaveId)
                     throw new InvalidOperationException(
                         $"Recovery failed: SaveId mismatch between main and temp (possible tampering). Main: '{mainMeta.SaveId}', temp: '{tempMeta.SaveId}'.");
@@ -1316,34 +1313,34 @@ namespace Workes.SaveSystem
         private void ValidateMetadataFile(string pathContainingMetadata)
         {
             var metaPath = GetMetadataFilePath(pathContainingMetadata);
+            var metadataFileName = GetMetadataFileName();
 
             if (!File.Exists(metaPath))
                 throw new InvalidOperationException(
-                    $"No {SaveMetadataFileName} found in the temp save folder at '{metaPath}'."
+                    $"No {metadataFileName} found in the temp save folder at '{metaPath}'."
                 );
 
             SaveMetadata? metadata;
             try
             {
-                var jsonContent = File.ReadAllText(metaPath);
-                metadata = JsonConvert.DeserializeObject<SaveMetadata>(jsonContent);
+                metadata = ReadSaveMetadataFromFile(metaPath);
             }
             catch (Exception ex)
             {
                 throw new InvalidOperationException(
-                    $"Failed to deserialize {SaveMetadataFileName} from temp save folder at '{metaPath}'",
+                    $"Failed to deserialize {metadataFileName} from temp save folder at '{metaPath}'",
                     ex
                 );
             }
 
             if (metadata == null)
                 throw new InvalidOperationException(
-                    $"Deserialized {SaveMetadataFileName} from temp save folder at '{metaPath}' resulted in null."
+                    $"Deserialized {metadataFileName} from temp save folder at '{metaPath}' resulted in null."
                 );
 
             if (string.IsNullOrEmpty(metadata.SaveId))
                 throw new InvalidOperationException(
-                    $"SaveId in {SaveMetadataFileName} from temp save folder at '{metaPath}' is null or empty."
+                    $"SaveId in {metadataFileName} from temp save folder at '{metaPath}' is null or empty."
                 );
         }
 
@@ -1354,7 +1351,7 @@ namespace Workes.SaveSystem
                 return null;
             try
             {
-                return JsonConvert.DeserializeObject<SaveMetadata>(File.ReadAllText(metaPath));
+                return ReadSaveMetadataFromFile(metaPath);
             }
             catch
             {
@@ -1369,29 +1366,48 @@ namespace Workes.SaveSystem
                 return null;
 
             SaveMetadata? metadata;
+            var metadataFileName = GetMetadataFileName();
             try
             {
-                metadata = JsonConvert.DeserializeObject<SaveMetadata>(File.ReadAllText(metaPath));
+                metadata = ReadSaveMetadataFromFile(metaPath);
             }
             catch (Exception ex)
             {
                 throw new InvalidOperationException(
-                    $"Failed to deserialize {SaveMetadataFileName} at '{metaPath}'.",
+                    $"Failed to deserialize {metadataFileName} at '{metaPath}'.",
                     ex);
             }
 
             if (metadata == null)
                 throw new InvalidOperationException(
-                    $"Deserialized {SaveMetadataFileName} at '{metaPath}' resulted in null.");
+                    $"Deserialized {metadataFileName} at '{metaPath}' resulted in null.");
 
             if (string.IsNullOrEmpty(metadata.SaveId))
                 throw new InvalidOperationException(
-                    $"SaveId in {SaveMetadataFileName} at '{metaPath}' is null or empty.");
+                    $"SaveId in {metadataFileName} at '{metaPath}' is null or empty.");
 
             return new SaveMetadataInfo(
                 metadata.SaveId,
                 metadata.CreatedAtUtc,
                 metadata.LastWrittenAtUtc);
+        }
+
+        private ISaveSchematic CreateMetadataSchematic()
+        {
+            var schematic = _options.Serializer.CreateSchematic(typeof(SaveMetadata));
+            schematic.SchemaVersion = SaveMetadataSchemaVersion;
+            return schematic;
+        }
+
+        private SaveMetadata? ReadSaveMetadataFromFile(string metaPath)
+        {
+            var metadata = _options.Serializer.Deserialize(File.ReadAllText(metaPath), CreateMetadataSchematic());
+            return metadata as SaveMetadata;
+        }
+
+        private void WriteSaveMetadataToFile(string metaPath, SaveMetadata metadata)
+        {
+            File.WriteAllText(metaPath, _options.Serializer.Serialize(metadata, CreateMetadataSchematic()));
         }
 
         private bool IsSaveSlotFolder(string folderPath)

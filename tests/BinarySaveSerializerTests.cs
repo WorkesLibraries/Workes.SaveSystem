@@ -24,16 +24,19 @@ public sealed class BinarySaveSerializerTests
     }
 
     [Test]
-    public void Serialize_ProducesBase64BinaryPayloadAndExtractsSchemaVersion()
+    public void Serialize_ProducesBase64JsonPayloadAndExtractsSchemaVersion()
     {
         var serializer = new BinarySaveSerializer();
         var schematic = serializer.CreateSchematic(typeof(TestState));
         schematic.SchemaVersion = 3;
 
         var serialized = serializer.Serialize(new TestState { Name = "Scout", Level = 12 }, schematic);
+        var decoded = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(serialized));
 
         Assert.That(serialized, Does.Not.StartWith("{"));
-        Assert.DoesNotThrow(() => Convert.FromBase64String(serialized));
+        Assert.That(decoded.TrimStart(), Does.StartWith("{"));
+        Assert.That(decoded, Does.Contain("\"SchemaVersion\": 3"));
+        Assert.That(decoded, Does.Contain("\"Name\": \"Scout\""));
         Assert.That(serializer.ExtractSchemaVersion(serialized), Is.EqualTo(3));
     }
 
@@ -53,6 +56,8 @@ public sealed class BinarySaveSerializerTests
         Assert.That(provider.Current.Name, Is.EqualTo("Scout"));
         Assert.That(provider.Current.Level, Is.EqualTo(12));
         Assert.That(File.Exists(Path.Combine(_tempRoot, "slot", "player.bin")), Is.True);
+        Assert.That(File.Exists(Path.Combine(_tempRoot, "slot", "metadata.bin")), Is.True);
+        Assert.That(File.Exists(Path.Combine(_tempRoot, "slot", "metadata.json")), Is.False);
     }
 
     [Test]

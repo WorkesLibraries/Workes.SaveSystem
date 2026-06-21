@@ -23,12 +23,12 @@ The main project is `src/Workes.SaveSystem.csproj`. The project already includes
 That dependency is intentional for the current package shape:
 
 - `JsonSaveSerializer` is the built-in serializer.
-- `BinarySaveSerializer` is a built-in binary-token serializer that uses the same Newtonsoft-compatible object model while keeping its migration nodes owned by the binary serializer instance.
+- `BinarySaveSerializer` is a built-in Base64 JSON-token serializer that uses the same Newtonsoft-compatible object model while keeping its migration nodes owned by the binary serializer instance.
 - JSON schematics wrap provider state in a versioned payload.
 - migration data nodes are backed by Newtonsoft `JToken`/`JObject` values.
-- save metadata is currently read and written with Newtonsoft.
+- save metadata is serialized through the active serializer.
 
-`System.Text.Json` is not part of the core package for the first reusable version. Under the current `netstandard2.1` target, using it requires an additional package reference, so adding a parallel `System.Text.Json` serializer would not make the package dependency-free. Replacing Newtonsoft would also require replacing the migration data-node model, the JSON serializer, the binary serializer's token model, and metadata persistence together. For now, consumers should treat Newtonsoft as part of the package contract.
+`System.Text.Json` is not part of the core package for the first reusable version. Under the current `netstandard2.1` target, using it requires an additional package reference, so adding a parallel `System.Text.Json` serializer would not make the package dependency-free. Replacing Newtonsoft would also require replacing the migration data-node model, the JSON serializer, the binary serializer's Newtonsoft-backed payload model, and metadata persistence together. For now, consumers should treat Newtonsoft as part of the package contract.
 
 A future `System.Text.Json` adapter is still possible, especially for applications that do not need migration data nodes or that target newer frameworks directly. Treat it as a separate compatibility decision rather than a drop-in replacement for existing saves.
 
@@ -109,7 +109,9 @@ var manager = new SaveManager<string>(
         serializer: new BinarySaveSerializer()));
 ```
 
-`BinarySaveSerializer` writes `.bin` provider files. The current serializer contract stores provider payloads as strings, so the binary token payload is Base64-encoded on disk rather than written as raw bytes.
+`BinarySaveSerializer` writes `.bin` provider files. The current serializer contract stores provider payloads as strings, so binary serializer output is Base64 text. Decoding that Base64 with ordinary tools produces readable JSON.
+
+Save metadata uses the active serializer too: JSON saves write `metadata.json`, while binary saves write `metadata.bin`.
 
 The test suite includes `SerializerOutputExampleTests`, which writes JSON and binary example saves to `tests/obj/SerializerOutputExamples` for inspection.
 
