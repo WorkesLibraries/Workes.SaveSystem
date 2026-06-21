@@ -6,7 +6,7 @@ namespace Workes.SaveSystem
     /// Factory for creating JSON-backed save data nodes.
     /// Produces nodes backed by Newtonsoft JSON tokens.
     /// </summary>
-    public sealed class JsonSaveDataNodeFactory : ISaveDataNodeFactory
+    internal sealed class JsonSaveDataNodeFactory : ISaveDataNodeFactory
     {
         internal object Owner { get; } = new object();
 

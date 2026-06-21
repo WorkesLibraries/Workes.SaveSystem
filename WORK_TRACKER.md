@@ -4,12 +4,7 @@ This file is the durable planning tracker for the save system work. Keep it upda
 
 ## To-do
 
-1. Tighten public visibility for concrete data-node factory implementation if it is not needed.
-   - `JsonSaveDataNodeFactory` is currently public, but normal callers can access node creation through `ISaveMigrationCapableSerializer.NodeFactory`.
-   - Decide whether concrete data-node factories and related implementation types should be public first-version API or internal implementation detail.
-   - If made internal, update tests and docs to use serializer-owned `NodeFactory` instead of direct factory construction.
-
-2. Revisit binary serializer naming so the format is clear from the API.
+1. Revisit binary serializer naming so the format is clear from the API.
    - The current `BinarySaveSerializer` writes Base64-encoded UTF-8 JSON tokens with a `.bin` extension.
    - Consider a name that communicates the actual format/intent before first release, or document the existing name more prominently if keeping it.
    - Update README, XML docs, tests, and serializer output examples with the final naming.
@@ -57,6 +52,14 @@ These points are completed for the current package migration.
 - Force-save writes fresh core metadata, replaces the main save without rotating it into backups, and leaves existing backups untouched.
 - Shared temp-save writing and validation between normal saves and force saves.
 - Documented the repair workflow and added repair, backup, serializer-swap, validation, and atomicity coverage.
+
+### 60. Internalized JSON Data-Node Factory
+
+- Made the concrete JSON data-node factory an internal implementation detail.
+- Kept `ISaveDataNodeFactory` public as the migration extension contract.
+- Kept serializer-owned node creation available through `ISaveMigrationCapableSerializer.NodeFactory`.
+- Updated tests and README guidance so callers use serializer-owned factories instead of direct built-in factory construction.
+- Added public API shape coverage confirming built-in data-node implementation types are not exported.
 
 ### 1. Created New Package Shell
 

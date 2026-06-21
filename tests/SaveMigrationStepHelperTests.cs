@@ -8,7 +8,7 @@ public sealed class SaveMigrationStepHelperTests
     [Test]
     public void AddDefault_AddsOnlyWhenFieldIsMissing()
     {
-        var factory = new JsonSaveDataNodeFactory();
+        var factory = CreateJsonFactory();
         var data = factory.CreateObject();
         data.Set("Level", factory.CreateInt(3));
         var addExisting = SaveMigrationStep.AddIntDefault(1, "Level", 12);
@@ -24,7 +24,7 @@ public sealed class SaveMigrationStepHelperTests
     [Test]
     public void From_RunsMigrationActionsInOrder()
     {
-        var factory = new JsonSaveDataNodeFactory();
+        var factory = CreateJsonFactory();
         var data = factory.CreateObject();
         data.Set("XP", factory.CreateInt(10));
 
@@ -43,7 +43,7 @@ public sealed class SaveMigrationStepHelperTests
     [Test]
     public void SetHelpers_ReplacePrimitiveValues()
     {
-        var factory = new JsonSaveDataNodeFactory();
+        var factory = CreateJsonFactory();
         var data = factory.CreateObject();
         data.Set("Level", factory.CreateInt(3));
         data.Set("Name", factory.CreateString("Scout"));
@@ -62,7 +62,7 @@ public sealed class SaveMigrationStepHelperTests
     [Test]
     public void Remove_RemovesFieldWhenPresent()
     {
-        var factory = new JsonSaveDataNodeFactory();
+        var factory = CreateJsonFactory();
         var data = factory.CreateObject();
         data.Set("LegacyName", factory.CreateString("Scout"));
 
@@ -74,7 +74,7 @@ public sealed class SaveMigrationStepHelperTests
     [Test]
     public void Rename_MovesExistingField()
     {
-        var factory = new JsonSaveDataNodeFactory();
+        var factory = CreateJsonFactory();
         var data = factory.CreateObject();
         data.Set("XP", factory.CreateInt(42));
 
@@ -87,7 +87,7 @@ public sealed class SaveMigrationStepHelperTests
     [Test]
     public void Rename_RejectsExistingTargetUnlessOverwriteIsEnabled()
     {
-        var factory = new JsonSaveDataNodeFactory();
+        var factory = CreateJsonFactory();
         var data = factory.CreateObject();
         data.Set("XP", factory.CreateInt(42));
         data.Set("Experience", factory.CreateInt(10));
@@ -109,5 +109,10 @@ public sealed class SaveMigrationStepHelperTests
         Assert.Throws<ArgumentException>(() => SaveMigrationStep.SetInt(1, " ", 1));
         Assert.Throws<ArgumentNullException>(() => SaveMigrationStep.Set(1, "Level", null!));
         Assert.Throws<ArgumentException>(() => SaveMigrationStep.From(1));
+    }
+
+    private static ISaveDataNodeFactory CreateJsonFactory()
+    {
+        return new JsonSaveSerializer().NodeFactory;
     }
 }

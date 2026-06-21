@@ -79,4 +79,15 @@ public sealed class PublicApiShapeTests
         Assert.That(((ISaveMigrationCapableSerializer)binarySerializer).NodeFactory, Is.InstanceOf<ISaveDataNodeFactory>());
     }
 
+    [Test]
+    public void BuiltInDataNodeImplementations_AreNotPublicApi()
+    {
+        var exportedTypeNames = typeof(SaveManager<>).Assembly
+            .GetExportedTypes()
+            .Select(type => type.Name)
+            .ToArray();
+
+        Assert.That(exportedTypeNames, Does.Not.Contain("JsonSaveDataNode"));
+        Assert.That(exportedTypeNames, Does.Not.Contain("JsonSaveDataNodeFactory"));
+    }
 }

@@ -436,6 +436,8 @@ The migration-capable serializer, its `NodeFactory`, and its data-node trees are
 
 `ISaveDataNode` is the format-neutral edit surface used by migrations. Normal application code should not need to implement or manipulate data nodes outside migration steps.
 
+Concrete data-node implementations and built-in data-node factories are implementation details. Migration code should use the `ISaveMigrationCapableSerializer.NodeFactory` supplied by the serializer that is reading or writing the migrated payload.
+
 Data-node implementations should:
 
 - report node type consistently;
