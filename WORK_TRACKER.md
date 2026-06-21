@@ -18,6 +18,12 @@ This file is the durable planning tracker for the save system work. Keep it upda
    - Validate missing or incompatible MessagePack serializer metadata with clear errors/statuses.
    - Document stable field-index rules: append fields, do not reorder indexes, and do not reuse removed indexes for new meanings.
 
+3. Add realistic serializer size comparison examples after MessagePack exists.
+   - Generate small, medium typical, large repetitive, and large varied/random-ish save examples.
+   - Compare pretty JSON, compact JSON, compressed compact JSON, and MessagePack output sizes.
+   - Include generated README summaries with byte counts and percentages.
+   - Use the results to document realistic compression/MessagePack expectations instead of relying on the current best-case repetitive GZip example.
+
 ## Later
 
 There are no remaining deferred implementation points in this tracker.
