@@ -31,14 +31,22 @@ That dependency is intentional for the current package shape:
 
 A future `System.Text.Json` adapter is still possible, especially for applications that do not need migration data nodes or that target newer frameworks directly. Treat it as a separate compatibility decision rather than a drop-in replacement for existing saves.
 
-GZip compression is available through the .NET platform libraries and does not require another NuGet dependency. MessagePack support is expected to live in a separate package because it brings its own serializer dependency. The intended optional package shape is:
+GZip compression is available through the .NET platform libraries and does not require another NuGet dependency. MessagePack support is intended to be provided by the optional `Workes.SaveSystem.MessagePack` package because it brings its own serializer dependency. The package shape is:
 
 ```text
 Workes.SaveSystem
 Workes.SaveSystem.MessagePack
 ```
 
-When MessagePack support is available, usage should look like normal serializer usage:
+The core `Workes.SaveSystem` package does not reference MessagePack. Applications that want MessagePack saves should install the companion package when it is available:
+
+```xml
+<ItemGroup>
+  <PackageReference Include="Workes.SaveSystem.MessagePack" Version="0.1.0" />
+</ItemGroup>
+```
+
+After installation, usage should look like normal serializer usage:
 
 ```csharp
 var serializer = new MessagePackSaveSerializer();
@@ -54,7 +62,7 @@ var serializer = new CompressedSaveSerializer(
     new JsonSaveSerializer(JsonSaveFormatting.Compact));
 ```
 
-MessagePack is intended for compact production saves. JSON remains the built-in readable serializer and the recommended default while the package is still converging.
+MessagePack is intended for compact production saves through the companion package. JSON remains the built-in readable serializer and the recommended default while the package is still converging.
 
 ## Quick Start
 
@@ -503,7 +511,13 @@ Use `TransformedSaveSerializer` with `ISavePayloadTransform` when an existing se
 
 `CompressedSaveSerializer` is the intended public compression API. Its internal compression transform should remain an implementation detail unless a concrete use case appears for exposing GZip as a standalone payload transform.
 
-MessagePack support is planned as an optional companion serializer package for dependency reasons. Once installed, it should be usable anywhere an `ISaveSerializer` is accepted:
+MessagePack support is intended to be provided by the optional `Workes.SaveSystem.MessagePack` companion package for dependency reasons. The core package does not reference MessagePack directly. Once installed, the companion serializer should be usable anywhere an `ISaveSerializer` is accepted:
+
+```xml
+<ItemGroup>
+  <PackageReference Include="Workes.SaveSystem.MessagePack" Version="0.1.0" />
+</ItemGroup>
+```
 
 ```csharp
 var manager = new SaveManager<string>(

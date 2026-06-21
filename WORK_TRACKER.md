@@ -4,25 +4,16 @@ This file is the durable planning tracker for the save system work. Keep it upda
 
 ## To-do
 
-1. Prototype and add MessagePack dependency and compact payload support.
-   - Add the MessagePack package dependency if it remains compatible with the package targets.
-   - Add `MessagePackSaveSerializer` and `MessagePackSaveSchematic<T>`.
-   - Write compact indexed/array-style MessagePack provider payloads using stable field indexes.
-   - Keep provider files and metadata under a clear extension such as `.msgpack`.
-   - Add size comparison tests or serializer output examples against pretty JSON, compact JSON, and compressed compact JSON.
-
-2. Make MessagePack migration-friendly through serializer metadata.
-   - Store the field index/name map used by each MessagePack provider in serializer metadata when a save is written.
-   - During migration, decode compact MessagePack bytes plus saved metadata into named `ISaveDataNode` trees.
-   - Apply normal `SaveMigrationStep` migrations to the named tree, then encode back to compact current-schema MessagePack.
-   - Validate missing or incompatible MessagePack serializer metadata with clear errors/statuses.
-   - Document stable field-index rules: append fields, do not reorder indexes, and do not reuse removed indexes for new meanings.
-
-3. Add realistic serializer size comparison examples after MessagePack exists.
+1. Add realistic cross-package serializer size comparison examples after MessagePack is available as a package.
    - Generate small, medium typical, large repetitive, and large varied/random-ish save examples.
    - Compare pretty JSON, compact JSON, compressed compact JSON, and MessagePack output sizes.
    - Include generated README summaries with byte counts and percentages.
    - Use the results to document realistic compression/MessagePack expectations instead of relying on the current best-case repetitive GZip example.
+
+2. Sync README MessagePack examples after `Workes.SaveSystem.MessagePack` is published.
+   - Replace conceptual package-reference examples with the published package version.
+   - Link to the companion package README/repository once the URL is final.
+   - Keep this core package free of a MessagePack package reference.
 
 ## Later
 
@@ -38,7 +29,9 @@ These notes are not immediate implementation points, but they should guide the f
 
 2. Treat MessagePack as an optional companion package when it lands.
    - The intended shape is `Workes.SaveSystem.MessagePack`.
-   - The README should show how to install/use MessagePack as a normal `ISaveSerializer` once that package exists.
+   - Basic MessagePack serializer work has moved to the separate `Workes.SaveSystem.MessagePack` package.
+   - MessagePack migration and serializer-metadata field-map work belongs in the companion package tracker, not this core tracker.
+   - The README should show how to install/use MessagePack as a normal `ISaveSerializer` once that package is published.
    - Keep MessagePack implementation late in the v1 process so serializer metadata, compression, transforms, and migration routing are stable first.
    - MessagePack should be positioned as the compact production-save option, not the default readable serializer.
 
@@ -82,6 +75,7 @@ These milestones are completed for the current package migration.
 - Base64/binary serializer experiments were removed before release.
 - Serializer capabilities are exposed through `ISaveSerializer.Migration` and `ISaveSerializer.Metadata`.
 - `TransformedSaveSerializer` supports byte transforms while routing migration and metadata correctly.
+- MessagePack serializer implementation moved out to the optional `Workes.SaveSystem.MessagePack` companion package so the core package does not take a MessagePack dependency.
 
 ### Migration System
 
