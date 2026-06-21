@@ -28,6 +28,31 @@ This file is the durable planning tracker for the save system work. Keep it upda
 
 There are no remaining deferred implementation points in this tracker.
 
+## Packaging And Dependency Strategy
+
+These notes are not immediate implementation points, but they should guide the final pre-v1 packaging decisions.
+
+1. Keep the first reusable package focused on completing the current core system.
+   - Do not split JSON into a separate package for v1 unless a much stronger dependency-free core requirement appears.
+   - Requiring every user to install both `Workes.SaveSystem` and a serializer package would make the first-release experience worse right now.
+
+2. Treat MessagePack as an optional companion package when it lands.
+   - The intended shape is `Workes.SaveSystem.MessagePack`.
+   - The README should show how to install/use MessagePack as a normal `ISaveSerializer` once that package exists.
+   - Keep MessagePack implementation late in the v1 process so serializer metadata, compression, transforms, and migration routing are stable first.
+   - MessagePack should be positioned as the compact production-save option, not the default readable serializer.
+
+3. Keep GZip compression in the core package unless a real packaging reason appears.
+   - `System.IO.Compression.GZipStream` is platform-provided for the current target and does not add a NuGet dependency.
+   - Expose `CompressedSaveSerializer` as the public API.
+   - Keep the concrete GZip payload transform internal unless users need standalone transform composition.
+
+4. Revisit a dependency-free default serializer as a separate design project after v1.
+   - A custom package-owned serializer could make the core system fully self-sufficient without Newtonsoft.
+   - The likely serious option is a stable package-owned node/binary serializer built around the migration data-node model.
+   - This should not be rushed into v1 because reflection mapping, collections, nested objects, nullable values, enums, compatibility rules, and migration behavior all need careful design.
+   - If successful later, it could become the default serializer and allow JSON/Newtonsoft to move to an optional package.
+
 ## Completed
 
 These points are completed for the current package migration.
