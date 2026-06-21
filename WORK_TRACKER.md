@@ -4,26 +4,20 @@ This file is the durable planning tracker for the save system work. Keep it upda
 
 ## To-do
 
-1. Add payload transform/decorator support.
-   - Add an abstraction such as `ISavePayloadTransform` for byte-to-byte transforms with a file-extension suffix.
-   - Add a serializer wrapper that delegates all serializer behavior to an inner serializer while encoding/decoding bytes around it.
-   - Preserve migration support when the inner serializer supports migration by decoding before `DeserializeToNode` and encoding after `SerializeFromNode`.
-   - Document this as the extension point for custom obfuscation or encryption.
-
-2. Add a compressed serializer wrapper.
+1. Add a compressed serializer wrapper.
    - Provide a convenient built-in compression wrapper, likely backed by GZip.
    - Compose file extensions from the inner serializer and compression suffix, such as `.json.gz`.
    - Add tests for save/load, metadata, migration, recovery validation, and serializer output examples using compressed compact JSON.
    - Document recommended usage as `new CompressedSaveSerializer(new JsonSaveSerializer(JsonSaveFormatting.Compact))`.
 
-3. Prototype and add MessagePack dependency and compact payload support.
+2. Prototype and add MessagePack dependency and compact payload support.
    - Add the MessagePack package dependency if it remains compatible with the package targets.
    - Add `MessagePackSaveSerializer` and `MessagePackSaveSchematic<T>`.
    - Write compact indexed/array-style MessagePack provider payloads using stable field indexes.
    - Keep provider files and metadata under a clear extension such as `.msgpack`.
    - Add size comparison tests or serializer output examples against pretty JSON, compact JSON, and compressed compact JSON.
 
-4. Make MessagePack migration-friendly through serializer metadata.
+3. Make MessagePack migration-friendly through serializer metadata.
    - Store the field index/name map used by each MessagePack provider in serializer metadata when a save is written.
    - During migration, decode compact MessagePack bytes plus saved metadata into named `ISaveDataNode` trees.
    - Apply normal `SaveMigrationStep` migrations to the named tree, then encode back to compact current-schema MessagePack.
@@ -37,6 +31,16 @@ There are no remaining deferred implementation points in this tracker.
 ## Completed
 
 These points are completed for the current package migration.
+
+### 61. Added Payload Transform Serializer Wrapper
+
+- Added `ISavePayloadTransform` for reversible byte-to-byte serializer payload transforms.
+- Added `SaveSerializerTransforms.Wrap(...)` as the public composition API.
+- Composed file extensions from the inner serializer and transform suffix, such as `.json.xor`.
+- Preserved migration capability only when the wrapped serializer implements `ISaveMigrationCapableSerializer`.
+- Preserved serializer metadata callbacks only when the wrapped serializer implements `ISaveSerializerMetadataHandler`.
+- Documented payload transforms as the extension point for custom obfuscation, encryption, and other byte encodings.
+- `dotnet test Workes.SaveSystem.sln` passes with 194 tests.
 
 ### 60. Added Serializer Metadata Support
 

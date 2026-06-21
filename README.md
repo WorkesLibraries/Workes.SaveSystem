@@ -117,6 +117,32 @@ var compactManager = new SaveManager<string>(
 
 Save metadata uses the active serializer too. JSON saves write `metadata.json`.
 
+Payload transforms wrap any serializer with reversible byte encoding. Use this extension point for custom obfuscation or encryption; built-in compression is planned separately.
+
+```csharp
+var transformedSerializer = SaveSerializerTransforms.Wrap(
+    new JsonSaveSerializer(JsonSaveFormatting.Compact),
+    new XorToyTransform());
+```
+
+```csharp
+public sealed class XorToyTransform : ISavePayloadTransform
+{
+    public string FileExtensionSuffix => ".xor";
+
+    public byte[] Encode(byte[] data) => Apply(data);
+    public byte[] Decode(byte[] data) => Apply(data);
+
+    private static byte[] Apply(byte[] data)
+    {
+        var copy = new byte[data.Length];
+        for (var i = 0; i < data.Length; i++)
+            copy[i] = (byte)(data[i] ^ 0x5A);
+        return copy;
+    }
+}
+```
+
 The test suite includes `SerializerOutputExampleTests`, which writes pretty and compact JSON example saves to `tests/obj/SerializerOutputExamples` for inspection.
 
 After registering providers, call `ValidateRegistrations()` before disk save/load operations. Registration is intentionally lightweight; validation captures provider state, checks serializer write compatibility, validates migration policy, verifies file-name behavior, and rejects provider file-name collisions at the setup point you choose. Validation is an early compatibility check, not a full future-load proof: issues that only appear while deserializing real saved data can still surface during load.
@@ -435,6 +461,8 @@ A custom serializer must provide these pieces as one coherent format:
 Schematic creation should be lightweight where possible. Provider state write compatibility is validated through real provider state during `ValidateRegistrations()`. Read compatibility is validated when real save data is deserialized during load, so custom serializers should still fail clearly for deserialize-only problems.
 
 If the serializer needs metadata stored with a save, implement `ISaveSerializerMetadataHandler`. The manager calls `WriteMetadata(...)` before writing the metadata file and `ValidateMetadata(...)` when temp-save and recovery-candidate metadata is validated. Missing serializer metadata is treated as empty metadata for compatibility with older saves.
+
+Use `ISavePayloadTransform` with `SaveSerializerTransforms.Wrap(...)` when an existing serializer format should be encoded after serialization and decoded before deserialization. The wrapper composes file extensions, so wrapping JSON with a transform whose suffix is `.enc` writes provider and metadata files such as `player.json.enc` and `metadata.json.enc`. Migration and serializer-metadata support are preserved only when the wrapped serializer supports those extension contracts.
 
 If providers using the serializer implement `ISaveMigratable`, the serializer must also implement `ISaveMigrationCapableSerializer`. That means it must parse serialized payloads into editable `ISaveDataNode` trees, serialize edited node trees back to the payload format, and expose a matching `NodeFactory` that creates new object, array, and primitive nodes for migration steps.
 
