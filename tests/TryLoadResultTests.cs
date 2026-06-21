@@ -143,6 +143,31 @@ public sealed class TryLoadResultTests
     }
 
     [Test]
+    public void TryLoadFromDisk_ReturnsMigrationFailedWhenMiddleMigrationStepIsMissing()
+    {
+        var oldManager = CreateManager();
+        oldManager.RegisterProvider(new V1Provider(new V1State { Name = "Scout" }));
+        oldManager.ValidateRegistrations();
+        oldManager.SaveToDisk("slot");
+
+        var newManager = CreateManager();
+        newManager.RegisterProvider(
+            new MigratingProvider(
+                schemaVersion: 3,
+                current: new V2State { Name = "Unset", Level = 0 },
+                migrations: new[]
+                {
+                    new SaveMigrationStep(1, (data, factory) => data.Set("Level", factory.CreateInt(12)))
+                }));
+        newManager.ValidateRegistrations();
+
+        var result = newManager.TryLoadFromDisk("slot");
+
+        Assert.That(result.Status, Is.EqualTo(SaveLoadStatus.MigrationFailed));
+        Assert.That(result.Exception, Is.Not.Null);
+    }
+
+    [Test]
     public void TryLoadFromDisk_ReturnsRecoveryFailedWhenOnlyTempSaveIsInvalid()
     {
         var manager = CreateManager();

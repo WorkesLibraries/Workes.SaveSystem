@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using Workes.SaveSystem;
 
@@ -75,6 +76,19 @@ public sealed class RegistrationValidationTests
         Assert.That(error, Does.Contain("returned null state"));
         Assert.DoesNotThrow(() => manager.SaveToDisk("slot"));
         Assert.That(File.Exists(Path.Combine(_tempRoot, "slot", "player.json")), Is.True);
+    }
+
+    [Test]
+    public void TryRegisterProvider_WhenMigrationStepsAreDuplicated_DoesNotKeepProvider()
+    {
+        var manager = CreateManager();
+        var provider = new DuplicateMigrationProvider();
+
+        var registered = manager.TryRegisterProvider(provider, out var error);
+
+        Assert.That(registered, Is.False);
+        Assert.That(error, Does.Contain("multiple migration steps"));
+        Assert.That(manager.CaptureSnapshot().Entries, Is.Empty);
     }
 
     [Test]
@@ -437,5 +451,38 @@ public sealed class RegistrationValidationTests
         {
             Current = state;
         }
+    }
+
+    private sealed class DuplicateMigrationProvider : ISaveProvider<TestState>, ISaveMigratable
+    {
+        public string SaveKey => "player";
+
+        public int SchemaVersion => 2;
+
+        public int LoadPriority => 0;
+
+        public TestState CaptureState()
+        {
+            return new TestState { Value = 1 };
+        }
+
+        public void RestoreState(TestState state)
+        {
+        }
+
+        public ISaveMigrationSource CreateMigrationSource()
+        {
+            return new DuplicateMigrationSource();
+        }
+    }
+
+    private sealed class DuplicateMigrationSource : ISaveMigrationSource
+    {
+        public IReadOnlyList<SaveMigrationStep> Migrations { get; } =
+            new[]
+            {
+                new SaveMigrationStep(1, (_, _) => { }),
+                new SaveMigrationStep(1, (_, _) => { })
+            };
     }
 }

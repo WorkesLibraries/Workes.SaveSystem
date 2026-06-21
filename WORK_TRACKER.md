@@ -4,9 +4,6 @@ This file is the durable planning tracker for the save system work. Keep it upda
 
 ## To-do
 
-1. Add migration validation edge-case tests after the new internal exception mapping is in place.
-    - Re-check duplicate and missing migration paths once load-status classification no longer depends on exception message matching.
-
 ## Later
 
 There are no remaining deferred implementation points in this tracker.
@@ -30,6 +27,11 @@ These points are completed for the current package migration.
 - Kept normal load migration behavior unchanged after a valid current-schema save folder is available.
 - Updated recovery tests so older-schema temp saves are rejected and preserved instead of migrated during recovery.
 - Updated the README recovery section to document that recovery validation is structural/current-schema validation, not a migration path.
+
+### 57. Added Migration Edge-Case Coverage
+
+- Added try-load coverage for a multi-version migration where the middle migration step is missing, confirming the structured status is `SaveLoadStatus.MigrationFailed`.
+- Added try-registration coverage for duplicate migration steps, confirming the provider is not kept when validation fails.
 
 ### 1. Created New Package Shell
 

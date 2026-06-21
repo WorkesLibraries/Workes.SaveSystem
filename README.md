@@ -407,6 +407,8 @@ Migration rules:
 - after successful migration, the manager updates the envelope schema version before deserializing;
 - downgrades are rejected.
 
+Duplicate migration steps are rejected during registration validation. Missing migration gaps are detected during load and are reported by `TryLoad...` as `SaveLoadStatus.MigrationFailed`.
+
 Migration steps should be deterministic. Avoid reading live game state, random values, current time, engine services, or other providers while mutating old payloads. A migration should be able to transform the same old payload into the same new payload every time.
 
 ### Serializer Contracts
