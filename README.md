@@ -111,6 +111,8 @@ var manager = new SaveManager<string>(
 
 `BinarySaveSerializer` writes `.bin` provider files. The current serializer contract stores provider payloads as strings, so the binary token payload is Base64-encoded on disk rather than written as raw bytes.
 
+The test suite includes `SerializerOutputExampleTests`, which writes JSON and binary example saves to `tests/obj/SerializerOutputExamples` for inspection.
+
 After registering providers, call `ValidateRegistrations()` before disk save/load operations. Registration is intentionally lightweight; validation captures provider state, checks serializer write compatibility, validates migration policy, verifies file-name behavior, and rejects provider file-name collisions at the setup point you choose. Validation is an early compatibility check, not a full future-load proof: issues that only appear while deserializing real saved data can still surface during load.
 
 Use `ListSaveSlots()` to populate save/load menus or tooling with the saves currently present under the configured save root.
