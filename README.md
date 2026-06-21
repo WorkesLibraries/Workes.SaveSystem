@@ -420,7 +420,7 @@ A custom serializer must provide these pieces as one coherent format:
 
 - a file extension, including the leading dot;
 - schematic creation for provider state types;
-- serialization and deserialization through those schematics;
+- byte-based serialization and deserialization through those schematics;
 - schema-version extraction without fully restoring provider state.
 
 Schematic creation should be lightweight where possible. Provider state write compatibility is validated through real provider state during `ValidateRegistrations()`. Read compatibility is validated when real save data is deserialized during load, so custom serializers should still fail clearly for deserialize-only problems.

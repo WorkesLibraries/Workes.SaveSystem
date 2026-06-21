@@ -58,23 +58,23 @@ namespace Workes.SaveSystem
         }
 
         /// <summary>
-        /// Serializes a state object of type T to a string representation.
+        /// Serializes a state object of type T to bytes.
         /// </summary>
         /// <param name="state">The state object to serialize.</param>
-        /// <returns>A serialized string representation of the state.</returns>
-        public abstract string Serialize(T state);
+        /// <returns>The serialized payload bytes.</returns>
+        public abstract byte[] Serialize(T state);
 
         /// <summary>
-        /// Deserializes a string representation back into a state object of type T.
+        /// Deserializes bytes back into a state object of type T.
         /// </summary>
-        /// <param name="serialized">The serialized string to deserialize.</param>
+        /// <param name="serialized">The serialized bytes to deserialize.</param>
         /// <returns>The deserialized state object.</returns>
-        public abstract T Deserialize(string serialized);
+        public abstract T Deserialize(byte[] serialized);
 
-        string ISaveSchematic.SerializeUntyped(object state)
+        byte[] ISaveSchematic.SerializeUntyped(object state)
             => Serialize((T)state);
 
-        object ISaveSchematic.DeserializeUntyped(string serialized)
+        object ISaveSchematic.DeserializeUntyped(byte[] serialized)
             => Deserialize(serialized)!;
     }
 }

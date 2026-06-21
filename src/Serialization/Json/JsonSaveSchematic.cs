@@ -1,5 +1,6 @@
 using Newtonsoft.Json;
 using System;
+using System.Text;
 
 namespace Workes.SaveSystem
 {
@@ -30,25 +31,27 @@ namespace Workes.SaveSystem
         }
 
         /// <inheritdoc />
-        public override string Serialize(T state)
+        public override byte[] Serialize(T state)
         {
             var payload = new VersionedPayload<T>
             {
                 SchemaVersion = SchemaVersion,
                 Data = state
             };
-            return JsonConvert.SerializeObject(payload, new JsonSerializerSettings
+            var json = JsonConvert.SerializeObject(payload, new JsonSerializerSettings
             {
                 Formatting = Formatting.Indented
             });
+            return Encoding.UTF8.GetBytes(json);
         }
 
         /// <inheritdoc />
-        public override T Deserialize(string serialized)
+        public override T Deserialize(byte[] serialized)
         {
             try
             {
-                var payload = JsonConvert.DeserializeObject<VersionedPayload<T>>(serialized);
+                var json = Encoding.UTF8.GetString(serialized);
+                var payload = JsonConvert.DeserializeObject<VersionedPayload<T>>(json);
                 if (payload == null)
                     throw new InvalidOperationException("Deserialized payload was null");
 

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace Workes.SaveSystem
@@ -6,7 +7,7 @@ namespace Workes.SaveSystem
     {
         internal sealed class SerializedEntry
         {
-            public string Data = string.Empty;
+            public byte[] Data = Array.Empty<byte>();
             public int SchemaVersion;
         }
 

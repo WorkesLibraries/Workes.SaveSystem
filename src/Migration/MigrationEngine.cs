@@ -61,7 +61,7 @@ namespace Workes.SaveSystem
         /// </summary>
         public bool TryApplyMigrations(
             string saveKey,
-            ref string serializedData,
+            ref byte[] serializedData,
             int savedSchemaVersion,
             int currentSchemaVersion,
             ISaveMigrationSource migrationSource)
@@ -176,7 +176,7 @@ namespace Workes.SaveSystem
                 }
             }
 
-            // Convert back to serialized string (envelope with updated SchemaVersion and migrated Data)
+            // Convert back to serialized bytes (envelope with updated SchemaVersion and migrated Data)
             try
             {
                 serializedData = migrationSerializer.SerializeFromNode(envelopeNode);

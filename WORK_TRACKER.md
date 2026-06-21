@@ -4,52 +4,46 @@ This file is the durable planning tracker for the save system work. Keep it upda
 
 ## To-do
 
-1. Change serializer and schematic payloads from strings to bytes.
-   - Update `ISaveSerializer`, `ISaveSchematic`, and `SaveSchematic<T>` so serialized payloads are `byte[]`.
-   - Update `SaveManager` persistence to use `File.WriteAllBytes` and `File.ReadAllBytes`.
-   - Update metadata serialization, provider file loading, temp-save validation, recovery validation, schema-version extraction, and try-load classification to use byte payloads.
-   - Update tests and README/XML docs for the new byte-oriented serializer contract.
-
-2. Add JSON formatting options to the JSON serializer.
+1. Add JSON formatting options to the JSON serializer.
    - Add `JsonSaveFormatting` with `Pretty` and `Compact` values.
    - Make `new JsonSaveSerializer()` keep the current pretty JSON behavior by default.
    - Add `new JsonSaveSerializer(JsonSaveFormatting.Compact)` for compact JSON output using the same `.json` extension and migration behavior.
    - Update serializer output examples and README usage to show pretty and compact JSON.
 
-3. Replace JSON-backed migration data nodes with package-owned format-neutral data nodes.
+2. Replace JSON-backed migration data nodes with package-owned format-neutral data nodes.
    - Introduce an internal package-owned `SaveDataNode` implementation that does not wrap Newtonsoft `JToken`.
    - Keep `ISaveDataNode` and `ISaveDataNodeFactory` as the public migration edit surface.
    - Update JSON serialization to convert JSON bytes to/from the package-owned data-node tree for migrations.
    - Preserve node ownership checks so nodes from different serializer/factory instances cannot be mixed.
    - Update migration/data-node tests to cover the format-neutral implementation.
 
-4. Add serializer metadata support to save metadata.
+3. Add serializer metadata support to save metadata.
    - Add optional system-owned serializer metadata storage to `SaveMetadata`.
    - Let serializers ignore metadata when they do not need it.
    - Provide serializer-facing context for reading/writing per-save or per-provider serializer metadata without creating extra sidecar files.
    - Keep public `SaveMetadataInfo` focused on core metadata unless a public projection is deliberately needed.
    - Validate serializer metadata during temp-save and recovery checks when a serializer requires it.
 
-5. Add payload transform/decorator support.
+4. Add payload transform/decorator support.
    - Add an abstraction such as `ISavePayloadTransform` for byte-to-byte transforms with a file-extension suffix.
    - Add a serializer wrapper that delegates all serializer behavior to an inner serializer while encoding/decoding bytes around it.
    - Preserve migration support when the inner serializer supports migration by decoding before `DeserializeToNode` and encoding after `SerializeFromNode`.
    - Document this as the extension point for custom obfuscation or encryption.
 
-6. Add a compressed serializer wrapper.
+5. Add a compressed serializer wrapper.
    - Provide a convenient built-in compression wrapper, likely backed by GZip.
    - Compose file extensions from the inner serializer and compression suffix, such as `.json.gz`.
    - Add tests for save/load, metadata, migration, recovery validation, and serializer output examples using compressed compact JSON.
    - Document recommended usage as `new CompressedSaveSerializer(new JsonSaveSerializer(JsonSaveFormatting.Compact))`.
 
-7. Prototype and add MessagePack dependency and compact payload support.
+6. Prototype and add MessagePack dependency and compact payload support.
    - Add the MessagePack package dependency if it remains compatible with the package targets.
    - Add `MessagePackSaveSerializer` and `MessagePackSaveSchematic<T>`.
    - Write compact indexed/array-style MessagePack provider payloads using stable field indexes.
    - Keep provider files and metadata under a clear extension such as `.msgpack`.
    - Add size comparison tests or serializer output examples against pretty JSON, compact JSON, and compressed compact JSON.
 
-8. Make MessagePack migration-friendly through serializer metadata.
+7. Make MessagePack migration-friendly through serializer metadata.
    - Store the field index/name map used by each MessagePack provider in serializer metadata when a save is written.
    - During migration, decode compact MessagePack bytes plus saved metadata into named `ISaveDataNode` trees.
    - Apply normal `SaveMigrationStep` migrations to the named tree, then encode back to compact current-schema MessagePack.
@@ -123,6 +117,14 @@ These points are completed for the current package migration.
 - Kept JSON as the only built-in serializer until the byte-payload serializer redesign lands.
 - Updated README and package metadata to describe the current JSON-only built-in serializer state.
 - Added public API shape coverage that Base64 JSON serializer names are not exported.
+
+### 63. Converted Serializer Payloads To Bytes
+
+- Changed serializer and schematic contracts from string payloads to `byte[]` payloads.
+- Updated JSON serialization to read and write UTF-8 JSON bytes while keeping `.json` files human-readable.
+- Updated manager persistence, metadata reads/writes, temp-save validation, recovery validation, schema-version extraction, and migration plumbing to pass byte payloads.
+- Updated test serializers and serializer contract coverage for the byte-oriented API.
+- Updated README and XML documentation for the byte-oriented serializer contract.
 
 ### 1. Created New Package Shell
 

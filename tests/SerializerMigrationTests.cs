@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Text;
 using Workes.SaveSystem;
 
 namespace Workes.SaveSystem.Tests;
@@ -30,9 +31,13 @@ public sealed class SerializerMigrationTests
         var schematic = serializer.CreateSchematic(typeof(V1State));
         schematic.SchemaVersion = 4;
         var serialized = serializer.Serialize(new V1State { Name = "Rook" }, schematic);
+        var decoded = Encoding.UTF8.GetString(serialized);
 
         var version = serializer.ExtractSchemaVersion(serialized);
 
+        Assert.That(decoded.TrimStart(), Does.StartWith("{"));
+        Assert.That(decoded, Does.Contain("\"SchemaVersion\": 4"));
+        Assert.That(decoded, Does.Contain("\"Name\": \"Rook\""));
         Assert.That(version, Is.EqualTo(4));
     }
 
@@ -41,7 +46,7 @@ public sealed class SerializerMigrationTests
     {
         var serializer = new JsonSaveSerializer();
 
-        var ex = Assert.Throws<InvalidOperationException>(() => serializer.ExtractSchemaVersion("""{"Data":{}}"""));
+        var ex = Assert.Throws<InvalidOperationException>(() => serializer.ExtractSchemaVersion(Encoding.UTF8.GetBytes("""{"Data":{}}""")));
 
         Assert.That(ex!.Message, Does.Contain("Failed to extract schema version"));
     }

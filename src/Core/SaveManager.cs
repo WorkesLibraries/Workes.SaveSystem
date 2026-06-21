@@ -602,7 +602,7 @@ namespace Workes.SaveSystem
             return snapshot;
         }
 
-        private object DeserializeProviderState(string saveKey, string serializedData, ISaveSchematic schematic)
+        private object DeserializeProviderState(string saveKey, byte[] serializedData, ISaveSchematic schematic)
         {
             try
             {
@@ -1208,7 +1208,7 @@ namespace Workes.SaveSystem
             }
         }
 
-        private void SaveSerializedEntryToDiskTMP(string saveKey, int schemaVersion, string serializedData, ProviderEntry providerEntry, string tempPath)
+        private void SaveSerializedEntryToDiskTMP(string saveKey, int schemaVersion, byte[] serializedData, ProviderEntry providerEntry, string tempPath)
         {
             var context = new SaveFileContext(
                 saveKey,
@@ -1223,10 +1223,10 @@ namespace Workes.SaveSystem
             var fileName = baseName + fileExtension;
             var filePath = GetProviderFilePath(tempPath, fileName);
 
-            File.WriteAllText(filePath, serializedData);
+            File.WriteAllBytes(filePath, serializedData);
         }
 
-        private string? LoadSerializedEntryFromDisk(
+        private byte[]? LoadSerializedEntryFromDisk(
             ProviderEntry providerEntry,
             string folderPath,
             bool allowMissingProviderFileSkip)
@@ -1260,7 +1260,7 @@ namespace Workes.SaveSystem
                     $"Set {nameof(SaveSystemOptions<TIdentity>.MissingProviderFileBehavior)} to {nameof(MissingProviderFileBehavior.Skip)} to intentionally skip missing provider files.");
             }
 
-            return File.ReadAllText(filePath);
+            return File.ReadAllBytes(filePath);
         }
 
         private IEnumerable<KeyValuePair<string, ProviderEntry>> PersistedProviders()
@@ -1406,7 +1406,7 @@ namespace Workes.SaveSystem
                     _options.Serializer.GetType()
                 );
                 var filePath = GetProviderFilePath(folderPath, context);
-                var serializedData = File.ReadAllText(filePath);
+                var serializedData = File.ReadAllBytes(filePath);
                 var schematic = provider.Value.Schematic;
                 if (schematic == null)
                     continue;
@@ -1513,7 +1513,7 @@ namespace Workes.SaveSystem
 
         private SaveMetadata? ReadSaveMetadataFromFile(string metaPath)
         {
-            var metadata = _options.Serializer.Deserialize(File.ReadAllText(metaPath), CreateMetadataSchematic());
+            var metadata = _options.Serializer.Deserialize(File.ReadAllBytes(metaPath), CreateMetadataSchematic());
             return metadata as SaveMetadata;
         }
 
@@ -1528,7 +1528,7 @@ namespace Workes.SaveSystem
 
         private void WriteSaveMetadataToFile(string metaPath, SaveMetadata metadata)
         {
-            File.WriteAllText(metaPath, _options.Serializer.Serialize(metadata, CreateMetadataSchematic()));
+            File.WriteAllBytes(metaPath, _options.Serializer.Serialize(metadata, CreateMetadataSchematic()));
         }
 
         private bool IsSaveSlotFolder(string folderPath)
@@ -1717,7 +1717,7 @@ namespace Workes.SaveSystem
         /// </summary>
         /// <exception cref="InvalidOperationException">Thrown when the schema version cannot be extracted from the serialized data.</exception>
         private int ExtractSchemaVersionFromSerializedData(
-            string serializedData,
+            byte[] serializedData,
             int currentSchemaVersion)
         {
             // Use the serializer to extract the schema version

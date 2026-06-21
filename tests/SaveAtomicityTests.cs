@@ -191,17 +191,17 @@ public sealed class SaveAtomicityTests
             return new WrongStateTypeSchematic();
         }
 
-        public string Serialize(object data, ISaveSchematic schematic)
+        public byte[] Serialize(object data, ISaveSchematic schematic)
         {
             return schematic.SerializeUntyped(data);
         }
 
-        public object Deserialize(string rawData, ISaveSchematic schematic)
+        public object Deserialize(byte[] rawData, ISaveSchematic schematic)
         {
             return schematic.DeserializeUntyped(rawData);
         }
 
-        public int ExtractSchemaVersion(string serializedData)
+        public int ExtractSchemaVersion(byte[] serializedData)
         {
             return 1;
         }
@@ -211,12 +211,12 @@ public sealed class SaveAtomicityTests
     {
         public int SchemaVersion { get; set; } = 1;
 
-        public string SerializeUntyped(object state)
+        public byte[] SerializeUntyped(object state)
         {
-            return "payload";
+            return Array.Empty<byte>();
         }
 
-        public object DeserializeUntyped(string serialized)
+        public object DeserializeUntyped(byte[] serialized)
         {
             return new WrongState();
         }

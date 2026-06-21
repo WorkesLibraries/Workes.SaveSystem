@@ -16,17 +16,17 @@ namespace Workes.SaveSystem
         int SchemaVersion { get; set; }
 
         /// <summary>
-        /// Serializes a provider state object to a string representation.
+        /// Serializes a provider state object to bytes.
         /// </summary>
         /// <param name="state">The state object to serialize.</param>
-        /// <returns>A serialized string representation of the state.</returns>
-        string SerializeUntyped(object state);
+        /// <returns>The serialized payload bytes.</returns>
+        byte[] SerializeUntyped(object state);
 
         /// <summary>
-        /// Deserializes a string representation back into a provider state object.
+        /// Deserializes bytes back into a provider state object.
         /// </summary>
-        /// <param name="serialized">The serialized string to deserialize.</param>
+        /// <param name="serialized">The serialized bytes to deserialize.</param>
         /// <returns>The deserialized state object.</returns>
-        object DeserializeUntyped(string serialized);
+        object DeserializeUntyped(byte[] serialized);
     }
 }

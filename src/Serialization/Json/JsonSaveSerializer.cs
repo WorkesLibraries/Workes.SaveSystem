@@ -1,5 +1,6 @@
 using Newtonsoft.Json.Linq;
 using System;
+using System.Text;
 
 namespace Workes.SaveSystem
 {
@@ -60,8 +61,8 @@ namespace Workes.SaveSystem
         /// </summary>
         /// <param name="data">The data object to serialize.</param>
         /// <param name="schematic">The schematic that defines how to serialize the data.</param>
-        /// <returns>A JSON string representation of the data.</returns>
-        public string Serialize(object data, ISaveSchematic schematic)
+        /// <returns>UTF-8 JSON bytes.</returns>
+        public byte[] Serialize(object data, ISaveSchematic schematic)
         {
             return schematic.SerializeUntyped(data);
         }
@@ -69,10 +70,10 @@ namespace Workes.SaveSystem
         /// <summary>
         /// Deserializes raw JSON data using the specified schematic. The schematic is responsible for the actual JSON deserialization.
         /// </summary>
-        /// <param name="rawData">The raw JSON string to deserialize.</param>
+        /// <param name="rawData">The raw UTF-8 JSON bytes to deserialize.</param>
         /// <param name="schematic">The schematic that defines how to deserialize the data.</param>
         /// <returns>The deserialized data object.</returns>
-        public object Deserialize(string rawData, ISaveSchematic schematic)
+        public object Deserialize(byte[] rawData, ISaveSchematic schematic)
         {
             return schematic.DeserializeUntyped(rawData);
         }
@@ -81,13 +82,13 @@ namespace Workes.SaveSystem
         /// Extracts the schema version from JSON serialized data by parsing the SchemaVersion field
         /// from the VersionedPayload structure without fully deserializing the data.
         /// </summary>
-        /// <param name="serializedData">The serialized JSON string to extract the schema version from.</param>
+        /// <param name="serializedData">The serialized UTF-8 JSON bytes to extract the schema version from.</param>
         /// <returns>The schema version if found, or null if it cannot be determined.</returns>
-        public int ExtractSchemaVersion(string serializedData)
+        public int ExtractSchemaVersion(byte[] serializedData)
         {
             try
             {
-                var jsonObject = JObject.Parse(serializedData);
+                var jsonObject = JObject.Parse(Encoding.UTF8.GetString(serializedData));
                 var schemaVersionToken = jsonObject["SchemaVersion"];
 
                 if (schemaVersionToken == null || schemaVersionToken.Type != JTokenType.Integer)
@@ -109,17 +110,18 @@ namespace Workes.SaveSystem
         }
         
         /// <inheritdoc />
-        public ISaveDataNode DeserializeToNode(string serializedData)
+        public ISaveDataNode DeserializeToNode(byte[] serializedData)
         {
-            var root = JToken.Parse(serializedData);
+            var root = JToken.Parse(Encoding.UTF8.GetString(serializedData));
             return new JsonSaveDataNode(root, _nodeFactory.Owner);
         }
 
         /// <inheritdoc />
-        public string SerializeFromNode(ISaveDataNode node)
+        public byte[] SerializeFromNode(ISaveDataNode node)
         {
             var jsonNode = JsonSaveDataNode.RequireJsonNode(node, _nodeFactory.Owner);
-            return jsonNode._token.ToString(Newtonsoft.Json.Formatting.Indented);
+            var json = jsonNode._token.ToString(Newtonsoft.Json.Formatting.Indented);
+            return Encoding.UTF8.GetBytes(json);
         }
 
     }

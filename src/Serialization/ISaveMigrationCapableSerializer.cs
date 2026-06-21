@@ -15,14 +15,14 @@ namespace Workes.SaveSystem
         /// </summary>
         /// <param name="data">The serialized payload to parse.</param>
         /// <returns>The root data node.</returns>
-        ISaveDataNode DeserializeToNode(string data);
+        ISaveDataNode DeserializeToNode(byte[] data);
 
         /// <summary>
         /// Serializes an edited data-node tree back to the serializer's payload format.
         /// </summary>
         /// <param name="node">The root data node to serialize.</param>
-        /// <returns>The serialized payload.</returns>
-        string SerializeFromNode(ISaveDataNode node);
+        /// <returns>The serialized payload bytes.</returns>
+        byte[] SerializeFromNode(ISaveDataNode node);
 
         /// <summary>
         /// Gets the factory used to create new nodes during migration.

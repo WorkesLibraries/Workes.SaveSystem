@@ -28,24 +28,24 @@ namespace Workes.SaveSystem
         /// </summary>
         /// <param name="data">The data object to serialize.</param>
         /// <param name="schematic">The schematic that defines how to serialize the data.</param>
-        /// <returns>A serialized string representation of the data.</returns>
-        string Serialize(object data, ISaveSchematic schematic);
+        /// <returns>The serialized payload bytes.</returns>
+        byte[] Serialize(object data, ISaveSchematic schematic);
 
         /// <summary>
         /// Deserializes raw data using the specified schematic.
         /// </summary>
-        /// <param name="rawData">The raw serialized string to deserialize.</param>
+        /// <param name="rawData">The raw serialized bytes to deserialize.</param>
         /// <param name="schematic">The schematic that defines how to deserialize the data.</param>
         /// <returns>The deserialized data object.</returns>
-        object Deserialize(string rawData, ISaveSchematic schematic);
+        object Deserialize(byte[] rawData, ISaveSchematic schematic);
 
         /// <summary>
         /// Extracts the schema version from serialized data without fully deserializing it.
         /// This is a required method as schema versioning is fundamental to the save system.
         /// </summary>
-        /// <param name="serializedData">The serialized string to extract the schema version from.</param>
+        /// <param name="serializedData">The serialized bytes to extract the schema version from.</param>
         /// <returns>The schema version extracted from the serialized data.</returns>
         /// <exception cref="InvalidOperationException">Thrown when the schema version cannot be extracted from the serialized data.</exception>
-        int ExtractSchemaVersion(string serializedData);
+        int ExtractSchemaVersion(byte[] serializedData);
     }
 }
