@@ -85,6 +85,8 @@ public sealed class PublicApiShapeTests
 
         Assert.That(exportedTypeNames, Does.Not.Contain("SaveSerializerTransforms"));
         Assert.That(exportedTypeNames, Does.Contain("TransformedSaveSerializer"));
+        Assert.That(exportedTypeNames, Does.Contain("CompressedSaveSerializer"));
+        Assert.That(exportedTypeNames, Does.Not.Contain("GZipPayloadTransform"));
     }
 
     [Test]

@@ -142,7 +142,19 @@ var compactManager = new SaveManager<string>(
 
 Save metadata uses the active serializer too. JSON saves write `metadata.json`.
 
-Payload transforms wrap any serializer with reversible byte encoding. Use this extension point for custom obfuscation or encryption; built-in compression is planned separately.
+Use `CompressedSaveSerializer` when you want smaller files without adding a NuGet dependency:
+
+```csharp
+var compressedManager = new SaveManager<string>(
+    SaveSystemOptions.Create(
+        saveRootPath: "Saves",
+        serializer: new CompressedSaveSerializer(
+            new JsonSaveSerializer(JsonSaveFormatting.Compact))));
+```
+
+Compressed JSON files use composed extensions such as `player.json.gz` and `metadata.json.gz`.
+
+Payload transforms wrap any serializer with reversible byte encoding. Use this extension point for custom obfuscation or encryption.
 
 ```csharp
 var transformedSerializer = new TransformedSaveSerializer(
@@ -168,7 +180,7 @@ public sealed class XorToyTransform : ISavePayloadTransform
 }
 ```
 
-The test suite includes `SerializerOutputExampleTests`, which writes pretty and compact JSON example saves to `tests/obj/SerializerOutputExamples` for inspection.
+The test suite includes `SerializerOutputExampleTests`, which writes pretty JSON, compact JSON, and compressed compact JSON example saves to `tests/obj/SerializerOutputExamples` for inspection.
 
 After registering providers, call `ValidateRegistrations()` before disk save/load operations. Registration is intentionally lightweight; validation captures provider state, checks serializer write compatibility, validates migration policy, verifies file-name behavior, and rejects provider file-name collisions at the setup point you choose. Validation is an early compatibility check, not a full future-load proof: issues that only appear while deserializing real saved data can still surface during load.
 
