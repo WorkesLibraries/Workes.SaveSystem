@@ -143,6 +143,25 @@ public sealed class TryLoadResultTests
     }
 
     [Test]
+    public void TryLoadFromDisk_ReturnsRecoveryFailedWhenOnlyTempSaveIsInvalid()
+    {
+        var manager = CreateManager();
+        var provider = new TestProvider("player", new TestState { Value = 1 });
+        manager.RegisterProvider(provider);
+        SaveValue(manager, provider, "slot", 1);
+
+        Directory.Move(
+            Path.Combine(_tempRoot, "slot"),
+            Path.Combine(_tempRoot, "slot_tmp"));
+        File.Delete(Path.Combine(_tempRoot, "slot_tmp", "player.json"));
+
+        var result = manager.TryLoadFromDisk("slot");
+
+        Assert.That(result.Status, Is.EqualTo(SaveLoadStatus.RecoveryFailed));
+        Assert.That(result.Exception, Is.Not.Null);
+    }
+
+    [Test]
     public void TryLoadBackupSlotFromDisk_ReturnsBackupSystemDisabled()
     {
         var manager = CreateManager();

@@ -117,6 +117,8 @@ The test suite includes `SerializerOutputExampleTests`, which writes JSON and bi
 
 After registering providers, call `ValidateRegistrations()` before disk save/load operations. Registration is intentionally lightweight; validation captures provider state, checks serializer write compatibility, validates migration policy, verifies file-name behavior, and rejects provider file-name collisions at the setup point you choose. Validation is an early compatibility check, not a full future-load proof: issues that only appear while deserializing real saved data can still surface during load.
 
+`TryLoad...` statuses are the stable result contract for load failures. Exception messages are diagnostics for humans and should not be parsed by callers.
+
 Use `ListSaveSlots()` to populate save/load menus or tooling with the saves currently present under the configured save root.
 
 ```csharp

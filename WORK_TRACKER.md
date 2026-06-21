@@ -4,17 +4,12 @@ This file is the durable planning tracker for the save system work. Keep it upda
 
 ## To-do
 
-1. Add internal load/recovery exception types for stable `TryLoad...` status classification.
-   - `ClassifyLoadException(...)` currently relies partly on exception messages, which is brittle as diagnostics evolve.
-   - Add internal exception types or a small internal status-carrying wrapper so `SaveLoadStatus` mapping is explicit without changing the public API.
-   - Update tests for important classifications.
-
-2. Stop recovery candidate validation from automatically running provider migrations.
+1. Stop recovery candidate validation from automatically running provider migrations.
    - Recovery validation currently uses the normal deserialize path, which can invoke user migration code while deciding whether a temp/to-delete candidate is valid.
    - Recovery should validate candidate structure and provider-file integrity without mutating serialized data or relying on migration side effects.
    - Define the desired older-schema recovery behavior, update README, and adjust tests that currently expect migration-compatible recovery.
 
-3. Add migration validation edge-case tests after the new internal exception mapping is in place.
+2. Add migration validation edge-case tests after the new internal exception mapping is in place.
     - Re-check duplicate and missing migration paths once load-status classification no longer depends on exception message matching.
 
 ## Later
@@ -24,6 +19,14 @@ There are no remaining deferred implementation points in this tracker.
 ## Completed
 
 These points are completed for the current package migration.
+
+### 55. Added Internal Load Status Exceptions
+
+- Added an internal status-carrying load exception so `TryLoad...` result classification no longer depends on diagnostic message text.
+- Mapped unvalidated registrations, missing provider files, corrupt provider data, schema extraction failures, migration failures, and recovery failures to explicit `SaveLoadStatus` values.
+- Kept throwing APIs on the existing `InvalidOperationException` shape by nesting the internal status marker inside it.
+- Added recovery-failure try-load coverage.
+- Clarified in the README that try-load statuses are stable, while exception messages are diagnostic text.
 
 ### 1. Created New Package Shell
 

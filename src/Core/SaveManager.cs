@@ -539,7 +539,8 @@ namespace Workes.SaveSystem
         private void EnsureRegistrationsValidated()
         {
             if (!_registrationsValidated)
-                throw new InvalidOperationException(
+                throw SaveLoadException.Create(
+                    SaveLoadStatus.RegistrationsNotValidated,
                     "Save registrations must be validated with ValidateRegistrations() before disk save/load operations.");
 
             EnsureProviderContractsUnchanged();
@@ -595,7 +596,8 @@ namespace Workes.SaveSystem
             }
             catch (Exception ex)
             {
-                throw new InvalidOperationException(
+                throw SaveLoadException.Create(
+                    SaveLoadStatus.CorruptData,
                     $"Failed to deserialize save data for provider '{saveKey}'.",
                     ex);
             }
@@ -760,7 +762,8 @@ namespace Workes.SaveSystem
                         currentSchemaVersion,
                         migrationSource))
                     {
-                        throw new InvalidOperationException(
+                        throw SaveLoadException.Create(
+                            SaveLoadStatus.MigrationFailed,
                             $"Failed to migrate save data for provider '{kvp.Key}' from schema version {savedSchemaVersion} to {currentSchemaVersion}."
                         );
                     }
@@ -1065,7 +1068,8 @@ namespace Workes.SaveSystem
                     return;
                 }
 
-                throw new InvalidOperationException(
+                throw SaveLoadException.Create(
+                    SaveLoadStatus.RecoveryFailed,
                     $"Recovery failed: neither temp save at '{tempPath}' nor previous save at '{toDeletePath}' could be validated. " +
                     $"Temp error: {tempCandidate.ErrorMessage} Previous-save error: {toDeleteCandidate.ErrorMessage}");
             }
@@ -1075,7 +1079,8 @@ namespace Workes.SaveSystem
                 var tempCandidate = ValidateRecoveryCandidate(tempPath);
                 if (!tempCandidate.IsValid)
                 {
-                    throw new InvalidOperationException(
+                    throw SaveLoadException.Create(
+                        SaveLoadStatus.RecoveryFailed,
                         $"Recovery failed: temp save at '{tempPath}' could not be validated. {tempCandidate.ErrorMessage}");
                 }
 
@@ -1103,10 +1108,12 @@ namespace Workes.SaveSystem
                 var mainMeta = TryReadSaveMetadata(folderPath);
                 var tempMeta = TryReadSaveMetadata(tempPath);
                 if (tempMeta == null || string.IsNullOrEmpty(tempMeta.SaveId))
-                    throw new InvalidOperationException(
+                    throw SaveLoadException.Create(
+                        SaveLoadStatus.RecoveryFailed,
                         $"Recovery failed: temp save at '{tempPath}' has no valid SaveId in {GetMetadataFileName()}.");
                 if (mainMeta != null && mainMeta.SaveId != tempMeta.SaveId)
-                    throw new InvalidOperationException(
+                    throw SaveLoadException.Create(
+                        SaveLoadStatus.RecoveryFailed,
                         $"Recovery failed: SaveId mismatch between main and temp (possible tampering). Main: '{mainMeta.SaveId}', temp: '{tempMeta.SaveId}'.");
                 PerformAtomicSwap(saveName);
             }
@@ -1187,7 +1194,8 @@ namespace Workes.SaveSystem
                     _options.MissingProviderFileBehavior == MissingProviderFileBehavior.Skip)
                     return null;
 
-                throw new InvalidOperationException(
+                throw SaveLoadException.Create(
+                    SaveLoadStatus.MissingProviderFile,
                     $"Missing save file for registered provider '{providerEntry.Provider.SaveKey}' at '{filePath}'. " +
                     $"Set {nameof(SaveSystemOptions<TIdentity>.MissingProviderFileBehavior)} to {nameof(MissingProviderFileBehavior.Skip)} to intentionally skip missing provider files.");
             }
@@ -1448,31 +1456,14 @@ namespace Workes.SaveSystem
 
         private static SaveLoadStatus ClassifyLoadException(Exception exception)
         {
+            for (var current = exception; current != null; current = current.InnerException)
+            {
+                if (current is SaveLoadException saveLoadException)
+                    return saveLoadException.Status;
+            }
+
             if (exception is ArgumentException)
                 return SaveLoadStatus.InvalidRequest;
-
-            if (!(exception is InvalidOperationException))
-                return SaveLoadStatus.LoadFailed;
-
-            var message = exception.Message;
-
-            if (message.IndexOf("ValidateRegistrations", StringComparison.Ordinal) >= 0)
-                return SaveLoadStatus.RegistrationsNotValidated;
-
-            if (message.IndexOf("Missing save file", StringComparison.Ordinal) >= 0)
-                return SaveLoadStatus.MissingProviderFile;
-
-            if (message.IndexOf("Failed to migrate save data", StringComparison.Ordinal) >= 0)
-                return SaveLoadStatus.MigrationFailed;
-
-            if (message.IndexOf("Recovery failed", StringComparison.Ordinal) >= 0)
-                return SaveLoadStatus.RecoveryFailed;
-
-            if (message.IndexOf("Failed to extract schema version", StringComparison.Ordinal) >= 0 ||
-                message.IndexOf("Failed to deserialize", StringComparison.Ordinal) >= 0 ||
-                message.IndexOf("Expected all", StringComparison.Ordinal) >= 0 ||
-                message.IndexOf("Expected ", StringComparison.Ordinal) >= 0)
-                return SaveLoadStatus.CorruptData;
 
             return SaveLoadStatus.LoadFailed;
         }
@@ -1627,7 +1618,8 @@ namespace Workes.SaveSystem
             }
             catch (Exception ex)
             {
-                throw new InvalidOperationException(
+                throw SaveLoadException.Create(
+                    SaveLoadStatus.CorruptData,
                     $"Failed to extract schema version from serialized save data. Deserialization will not proceed.",
                     ex
                 );
