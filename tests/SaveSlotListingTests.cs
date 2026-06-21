@@ -106,21 +106,6 @@ public sealed class SaveSlotListingTests
         Assert.That(slots, Is.EqualTo(new[] { "profile-a-slot-1" }));
     }
 
-    [Test]
-    public void ListSaveSlots_WithBase64JsonSerializerUsesBinMetadataFile()
-    {
-        var manager = CreateManager(_tempRoot, new Base64JsonSaveSerializer());
-        var provider = new TestProvider(new TestState { Value = 1 });
-        manager.RegisterProvider(provider);
-        manager.ValidateRegistrations();
-        manager.SaveToDisk("slot");
-
-        var slots = manager.ListSaveSlots();
-
-        Assert.That(slots, Is.EqualTo(new[] { "slot" }));
-        Assert.That(File.Exists(Path.Combine(_tempRoot, "slot", "metadata.bin")), Is.True);
-    }
-
     private void CreateFolderWithMetadata(string folderName)
     {
         var folderPath = Path.Combine(_tempRoot, folderName);

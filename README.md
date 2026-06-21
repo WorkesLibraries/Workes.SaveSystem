@@ -23,12 +23,11 @@ The main project is `src/Workes.SaveSystem.csproj`. The project already includes
 That dependency is intentional for the current package shape:
 
 - `JsonSaveSerializer` is the built-in serializer.
-- `Base64JsonSaveSerializer` is a built-in Base64 JSON-token serializer that uses the same Newtonsoft-compatible object model while keeping its migration nodes owned by the serializer instance.
 - JSON schematics wrap provider state in a versioned payload.
 - migration data nodes are backed by Newtonsoft `JToken`/`JObject` values.
 - save metadata is serialized through the active serializer.
 
-`System.Text.Json` is not part of the core package for the first reusable version. Under the current `netstandard2.1` target, using it requires an additional package reference, so adding a parallel `System.Text.Json` serializer would not make the package dependency-free. Replacing Newtonsoft would also require replacing the migration data-node model, the JSON serializer, the Base64 JSON serializer's Newtonsoft-backed payload model, and metadata persistence together. For now, consumers should treat Newtonsoft as part of the package contract.
+`System.Text.Json` is not part of the core package for the first reusable version. Under the current `netstandard2.1` target, using it requires an additional package reference, so adding a parallel `System.Text.Json` serializer would not make the package dependency-free. Replacing Newtonsoft would also require replacing the migration data-node model, the JSON serializer, and metadata persistence together. For now, consumers should treat Newtonsoft as part of the package contract.
 
 A future `System.Text.Json` adapter is still possible, especially for applications that do not need migration data nodes or that target newer frameworks directly. Treat it as a separate compatibility decision rather than a drop-in replacement for existing saves.
 
@@ -100,20 +99,18 @@ var manager = new SaveManager<string>(
 
 `CreateDefault(ISaveSerializer)` is a convenience factory for plain .NET applications and writes under the current user's application data folder. Engine integrations should prefer `CreateDefault(ISaveSerializer, string)`, `SaveSystemOptions.Create(...)`, or the options constructor so the engine owns the persistent data path.
 
-Use `JsonSaveSerializer` for directly readable save files and `Base64JsonSaveSerializer` when you want Base64-encoded provider payloads with the same migration helper support.
+Use `JsonSaveSerializer` for directly readable save files.
 
 ```csharp
 var manager = new SaveManager<string>(
     SaveSystemOptions.Create(
         saveRootPath: "Saves",
-        serializer: new Base64JsonSaveSerializer()));
+        serializer: new JsonSaveSerializer()));
 ```
 
-`Base64JsonSaveSerializer` writes `.bin` provider files. The current serializer contract stores provider payloads as strings, so Base64 JSON serializer output is Base64 text. Decoding that Base64 with ordinary tools produces readable JSON.
+Save metadata uses the active serializer too. JSON saves write `metadata.json`.
 
-Save metadata uses the active serializer too: JSON saves write `metadata.json`, while Base64 JSON saves write `metadata.bin`.
-
-The test suite includes `SerializerOutputExampleTests`, which writes JSON and Base64 JSON example saves to `tests/obj/SerializerOutputExamples` for inspection.
+The test suite includes `SerializerOutputExampleTests`, which writes JSON example saves to `tests/obj/SerializerOutputExamples` for inspection.
 
 After registering providers, call `ValidateRegistrations()` before disk save/load operations. Registration is intentionally lightweight; validation captures provider state, checks serializer write compatibility, validates migration policy, verifies file-name behavior, and rejects provider file-name collisions at the setup point you choose. Validation is an early compatibility check, not a full future-load proof: issues that only appear while deserializing real saved data can still surface during load.
 
@@ -372,7 +369,7 @@ Downgrades are not supported. A save written with a newer schema version than th
 
 ## Extending The System
 
-Most application code should use `SaveManager<TIdentity>`, `ISaveProvider<TState>`, `JsonSaveSerializer` or `Base64JsonSaveSerializer`, and plain state DTOs. The interfaces below are extension contracts for projects that need custom persistence formats, migration behavior, or serializer-backed data nodes.
+Most application code should use `SaveManager<TIdentity>`, `ISaveProvider<TState>`, `JsonSaveSerializer`, and plain state DTOs. The interfaces below are extension contracts for projects that need custom persistence formats, migration behavior, or serializer-backed data nodes.
 
 ### Provider Contracts
 
@@ -417,7 +414,7 @@ Migration steps should be deterministic. Avoid reading live game state, random v
 
 ### Serializer Contracts
 
-Implement `ISaveSerializer` only when the built-in JSON and Base64 JSON serializers do not fit the application's persistence format.
+Implement `ISaveSerializer` only when the built-in JSON serializer does not fit the application's persistence format.
 
 A custom serializer must provide these pieces as one coherent format:
 
@@ -430,7 +427,7 @@ Schematic creation should be lightweight where possible. Provider state write co
 
 If providers using the serializer implement `ISaveMigratable`, the serializer must also implement `ISaveMigrationCapableSerializer`. That means it must parse serialized payloads into editable `ISaveDataNode` trees, serialize edited node trees back to the payload format, and expose a matching `NodeFactory` that creates new object, array, and primitive nodes for migration steps.
 
-The migration-capable serializer, its `NodeFactory`, and its data-node trees are coupled. Do not mix data nodes from different serializer or factory instances. The built-in Base64 JSON serializer intentionally shares the JSON-backed node implementation internally, but nodes are still owned by the serializer instance that created or parsed them.
+The migration-capable serializer, its `NodeFactory`, and its data-node trees are coupled. Do not mix data nodes from different serializer or factory instances.
 
 ### Data Node Contracts
 
@@ -447,7 +444,7 @@ Data-node implementations should:
 - support the primitive and null node types exposed by `ISaveDataNodeFactory`;
 - reject attempts to combine nodes created by another serializer or factory instance.
 
-For the built-in JSON and Base64 JSON serializers, migration data nodes wrap Newtonsoft `JToken` values and carry factory ownership so JSON and Base64 JSON migration trees cannot be accidentally mixed.
+For the built-in JSON serializer, migration data nodes wrap Newtonsoft `JToken` values and carry factory ownership so nodes from different serializer instances cannot be accidentally mixed.
 
 ## Unity And Godot
 

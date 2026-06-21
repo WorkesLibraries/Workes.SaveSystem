@@ -95,15 +95,15 @@ public sealed class DataNodeContractTests
     public void MigrationCapableSerializers_RejectNodesFromOtherSerializerFactories()
     {
         var jsonSerializer = new JsonSaveSerializer();
-        var base64JsonSerializer = new Base64JsonSaveSerializer();
+        var otherJsonSerializer = new JsonSaveSerializer();
         var jsonNode = jsonSerializer.NodeFactory.CreateObject();
-        var base64JsonNode = base64JsonSerializer.NodeFactory.CreateObject();
+        var otherJsonNode = otherJsonSerializer.NodeFactory.CreateObject();
 
-        var jsonEx = Assert.Throws<InvalidOperationException>(() => jsonSerializer.SerializeFromNode(base64JsonNode));
-        var base64JsonEx = Assert.Throws<InvalidOperationException>(() => base64JsonSerializer.SerializeFromNode(jsonNode));
+        var jsonEx = Assert.Throws<InvalidOperationException>(() => jsonSerializer.SerializeFromNode(otherJsonNode));
+        var otherJsonEx = Assert.Throws<InvalidOperationException>(() => otherJsonSerializer.SerializeFromNode(jsonNode));
 
         Assert.That(jsonEx!.Message, Does.Contain("same node factory"));
-        Assert.That(base64JsonEx!.Message, Does.Contain("same node factory"));
+        Assert.That(otherJsonEx!.Message, Does.Contain("same node factory"));
     }
 
     private static ISaveDataNodeFactory CreateJsonFactory()

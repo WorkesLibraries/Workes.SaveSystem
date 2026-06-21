@@ -69,14 +69,10 @@ public sealed class PublicApiShapeTests
     public void MigrationCapableSerializers_ExposeNodeCreationThroughNodeFactoryOnly()
     {
         var jsonSerializer = new JsonSaveSerializer();
-        var base64JsonSerializer = new Base64JsonSaveSerializer();
 
         Assert.That(jsonSerializer, Is.InstanceOf<ISaveMigrationCapableSerializer>());
-        Assert.That(base64JsonSerializer, Is.InstanceOf<ISaveMigrationCapableSerializer>());
         Assert.That(jsonSerializer, Is.Not.InstanceOf<ISaveDataNodeFactory>());
-        Assert.That(base64JsonSerializer, Is.Not.InstanceOf<ISaveDataNodeFactory>());
         Assert.That(((ISaveMigrationCapableSerializer)jsonSerializer).NodeFactory, Is.InstanceOf<ISaveDataNodeFactory>());
-        Assert.That(((ISaveMigrationCapableSerializer)base64JsonSerializer).NodeFactory, Is.InstanceOf<ISaveDataNodeFactory>());
     }
 
     [Test]
@@ -92,16 +88,16 @@ public sealed class PublicApiShapeTests
     }
 
     [Test]
-    public void OldBinarySerializerNames_AreNotPublicApi()
+    public void RemovedBinaryAndBase64JsonSerializerNames_AreNotPublicApi()
     {
         var exportedTypeNames = typeof(SaveManager<>).Assembly
             .GetExportedTypes()
             .Select(type => type.Name)
             .ToArray();
 
-        Assert.That(exportedTypeNames, Does.Contain("Base64JsonSaveSerializer"));
-        Assert.That(exportedTypeNames, Does.Contain("Base64JsonSaveSchematic`1"));
         Assert.That(exportedTypeNames, Does.Not.Contain("BinarySaveSerializer"));
         Assert.That(exportedTypeNames, Does.Not.Contain("BinarySaveSchematic`1"));
+        Assert.That(exportedTypeNames, Does.Not.Contain("Base64JsonSaveSerializer"));
+        Assert.That(exportedTypeNames, Does.Not.Contain("Base64JsonSaveSchematic`1"));
     }
 }

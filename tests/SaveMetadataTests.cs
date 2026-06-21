@@ -108,24 +108,25 @@ public sealed class SaveMetadataTests
     }
 
     [Test]
-    public void ForceSaveToDisk_ReplacesOldSerializerFilesWithActiveSerializerFiles()
+    public void ForceSaveToDisk_ReplacesExistingFolderFilesWithActiveSerializerFiles()
     {
-        var jsonManager = CreateManager();
+        var slotPath = Path.Combine(_tempRoot, "slot");
+        Directory.CreateDirectory(slotPath);
+        File.WriteAllText(Path.Combine(slotPath, "metadata.bin"), "old metadata");
+        File.WriteAllText(Path.Combine(slotPath, "player.bin"), "old player");
+
+        var manager = CreateManager();
         var provider = new TestProvider(new TestState { Value = 1 });
-        jsonManager.RegisterProvider(provider);
-        SaveValue(jsonManager, provider, "slot", 1);
-
-        var base64JsonManager = CreateManager(serializer: new Base64JsonSaveSerializer());
-        base64JsonManager.RegisterProvider(provider);
-        base64JsonManager.ValidateRegistrations();
+        manager.RegisterProvider(provider);
         provider.Current = new TestState { Value = 2 };
+        manager.ValidateRegistrations();
 
-        base64JsonManager.ForceSaveToDisk("slot");
+        manager.ForceSaveToDisk("slot");
 
-        Assert.That(File.Exists(Path.Combine(_tempRoot, "slot", "metadata.bin")), Is.True);
-        Assert.That(File.Exists(Path.Combine(_tempRoot, "slot", "player.bin")), Is.True);
-        Assert.That(File.Exists(Path.Combine(_tempRoot, "slot", "metadata.json")), Is.False);
-        Assert.That(File.Exists(Path.Combine(_tempRoot, "slot", "player.json")), Is.False);
+        Assert.That(File.Exists(Path.Combine(_tempRoot, "slot", "metadata.json")), Is.True);
+        Assert.That(File.Exists(Path.Combine(_tempRoot, "slot", "player.json")), Is.True);
+        Assert.That(File.Exists(Path.Combine(_tempRoot, "slot", "metadata.bin")), Is.False);
+        Assert.That(File.Exists(Path.Combine(_tempRoot, "slot", "player.bin")), Is.False);
     }
 
     [Test]
@@ -162,24 +163,6 @@ public sealed class SaveMetadataTests
         Assert.That(ReadValueFromFolder(Path.Combine(_tempRoot, "slot")), Is.EqualTo(3));
         Assert.That(ReadValueFromFolder(Path.Combine(_tempRoot, "_backup", "slot_0001")), Is.EqualTo(1));
         Assert.That(Directory.Exists(Path.Combine(_tempRoot, "_backup", "slot_0002")), Is.False);
-    }
-
-    [Test]
-    public void ReadSaveMetadata_WithBase64JsonSerializerUsesBinMetadataFile()
-    {
-        var manager = CreateManager(serializer: new Base64JsonSaveSerializer());
-        var provider = new TestProvider(new TestState { Value = 1 });
-        manager.RegisterProvider(provider);
-        SaveValue(manager, provider, "slot", 1);
-
-        var metadata = manager.ReadSaveMetadata("slot");
-        var metadataPath = Path.Combine(_tempRoot, "slot", "metadata.bin");
-        var decodedMetadata = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(File.ReadAllText(metadataPath)));
-
-        Assert.That(metadata, Is.Not.Null);
-        Assert.That(File.Exists(metadataPath), Is.True);
-        Assert.That(File.Exists(Path.Combine(_tempRoot, "slot", "metadata.json")), Is.False);
-        Assert.That(decodedMetadata, Does.Contain("\"SaveId\""));
     }
 
     [Test]
