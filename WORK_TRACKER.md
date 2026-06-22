@@ -24,13 +24,21 @@ This file is the durable planning tracker for the save system work. Keep it upda
    - If the optional default-state hook is not implemented, older saves that predate the provider should leave the provider's current runtime state untouched.
    - Update migration/load docs and tests.
 
-3. Add realistic cross-package serializer size comparison examples after MessagePack is available as a package.
+3. Expand migration save data nodes with additional common value types.
+   - Add node/factory support for `long`, `double`, `byte[]`, `decimal`, and `DateTime`.
+   - This expands what shared migrations can directly create/read/edit; it does not change what serializers can save/load outside migration.
+   - Keep the API format-neutral and serializer-owned, matching the current `ISaveDataNode` / `ISaveDataNodeFactory` model.
+   - JSON should preserve readable representations where sensible; for example, bytes likely need a documented Base64 representation and `DateTime` should use a stable round-trip format.
+   - Update migration helper methods where appropriate, such as `AddLongDefault`, `SetLong`, `AddDateTimeDefault`, and `SetDateTime`.
+   - Update README migration docs, data-node contract docs, and tests.
+
+4. Add realistic cross-package serializer size comparison examples after MessagePack is available as a package.
    - Generate small, medium typical, large repetitive, and large varied/random-ish save examples.
    - Compare pretty JSON, compact JSON, compressed compact JSON, and MessagePack output sizes.
    - Include generated README summaries with byte counts and percentages.
    - Use the results to document realistic compression/MessagePack expectations instead of relying on the current best-case repetitive GZip example.
 
-4. Sync README MessagePack examples after `Workes.SaveSystem.MessagePack` is published.
+5. Sync README MessagePack examples after `Workes.SaveSystem.MessagePack` is published.
    - Replace conceptual package-reference examples with the published package version.
    - Link to the companion package README/repository once the URL is final.
    - Keep this core package free of a MessagePack package reference.
