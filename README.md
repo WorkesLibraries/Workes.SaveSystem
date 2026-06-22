@@ -423,11 +423,20 @@ If both a temp folder and a previous `_toDelete` folder exist while the main sav
 
 ## Migration
 
-Providers that need to load older schema versions implement `ISaveMigratable`.
+Providers that need to load older schema versions implement `ISaveMigratable`. Migration is provider-local: each provider owns its own `SchemaVersion`, migration source, and migration steps.
 
-Each `SaveMigrationStep` migrates from version `x` to version `x + 1`. To migrate from version 1 to version 3, provide a step from 1 to 2 and another from 2 to 3.
+Provider files are written as a serializer-owned envelope containing `SchemaVersion` and `Data`. Migration reads the saved schema version from the envelope, converts the payload into editable save data nodes, mutates the `Data` node, updates the envelope schema version, and then deserializes into the current provider state type.
 
-Migration steps edit serialized data before the serializer deserializes it into the current state type. That means application code should normally keep only the current DTO shape in runtime code. Old shapes can live in tests or documentation fixtures, but they do not need to remain as production state classes just so migration can work.
+```json
+{
+  "SchemaVersion": 1,
+  "Data": {
+    "Name": "Rook"
+  }
+}
+```
+
+Migration steps edit the serialized `Data` object before the serializer deserializes it into the current state type. That means application code should normally keep only the current DTO shape in runtime code. Old shapes can live in tests or documentation fixtures, but they do not need to remain as production state classes just so migration can work.
 
 For example, imagine version 1 of `PlayerState` only had `Name`. Version 2 adds required `Level` data. The current code can simply use the current shape:
 
@@ -471,6 +480,22 @@ public sealed class PlayerMigrationSource : ISaveMigrationSource
 
 `SaveMigrationStep.AddIntDefault(1, "Level", 1)` means: when loading a version 1 payload, add a top-level `Level` value before deserializing it as the current `PlayerState`.
 
+### Migration Flow
+
+The load path applies migrations only when the saved provider schema version differs from the registered provider schema version.
+
+1. The manager extracts `SchemaVersion` from the provider file.
+2. If the provider implements `ISaveMigratable`, the manager asks it for an `ISaveMigrationSource`.
+3. The migration engine requires one step for every version gap, such as `1 -> 2` and `2 -> 3`.
+4. The active serializer's `Migration` adapter parses bytes into an editable `ISaveDataNode` tree.
+5. Each migration step mutates the provider payload's `Data` node, not the full envelope.
+6. The migration engine updates the envelope schema version to the current provider version.
+7. The serializer converts the edited node tree back to bytes and deserializes those bytes into the current provider state type.
+
+Downgrades are not supported. A save written with a newer schema version than the current provider expects fails to load.
+
+### Migration API
+
 When one schema-version step needs several simple edits, compose them into one step. This is still one migration from version 1 to version 2:
 
 ```csharp
@@ -485,7 +510,44 @@ public IReadOnlyList<SaveMigrationStep> Migrations { get; } =
     };
 ```
 
-For advanced changes, use the full data-node action. The `data` node is the provider payload's `Data` object, not the full save envelope:
+The migration API is intentionally split into provider-facing contracts, helper steps, and direct data-node editing.
+
+| API | Purpose |
+|---|---|
+| `ISaveMigratable.CreateMigrationSource()` | Implement on a provider that can load older schema versions. |
+| `ISaveMigrationSource.Migrations` | Returns the ordered or unordered list of available `SaveMigrationStep` entries. |
+| `SaveMigrationStep.FromVersion` | The schema version this step migrates from. Each step always migrates to `FromVersion + 1`. |
+| `SaveMigrationStep.Migrate` | The action that mutates the provider payload's `Data` node. |
+| `new SaveMigrationStep(fromVersion, action)` | Creates a custom migration step with full data-node access. |
+| `SaveMigrationStep.From(fromVersion, actions...)` | Combines several migration actions into one version step. |
+
+Helper methods come in two forms. Methods with a `fromVersion` return a complete `SaveMigrationStep`. Methods without `fromVersion` return a reusable action for `SaveMigrationStep.From(...)`.
+
+| Helper family | Complete step example | Action example | Behavior |
+|---|---|---|---|
+| `AddDefault` | `AddIntDefault(1, "Level", 1)` | `AddIntDefault("Level", 1)` | Adds a field only when the field is missing. |
+| `Set` | `SetString(1, "Name", "Rook")` | `SetString("Name", "Rook")` | Writes or replaces a field. |
+| `Remove` | `Remove(1, "LegacyName")` | `Remove("LegacyName")` | Removes a field if it exists. |
+| `Rename` | `Rename(1, "XP", "Experience")` | `Rename("XP", "Experience")` | Moves a field to a new key and fails if the target exists unless `overwrite: true`. |
+| `Move` | `Move(1, "OldName", "NewName")` | `Move("OldName", "NewName")` | Alias for `Rename(...)`, useful when the intent is moving data. |
+
+Primitive helper variants are available for common values:
+
+```csharp
+SaveMigrationStep.AddIntDefault(1, "Level", 1);
+SaveMigrationStep.AddFloatDefault(1, "Speed", 4.5f);
+SaveMigrationStep.AddStringDefault(1, "Title", "Unknown");
+SaveMigrationStep.AddBoolDefault(1, "Unlocked", false);
+SaveMigrationStep.AddNullDefault(1, "DeletedAt");
+
+SaveMigrationStep.SetInt(1, "Level", 1);
+SaveMigrationStep.SetFloat(1, "Speed", 4.5f);
+SaveMigrationStep.SetString(1, "Title", "Unknown");
+SaveMigrationStep.SetBool(1, "Unlocked", false);
+SaveMigrationStep.SetNull(1, "DeletedAt");
+```
+
+Use helper steps for simple top-level object edits. Use direct data-node access when a migration needs nested objects, arrays, conditionals, value conversion, or multi-field logic.
 
 ```csharp
 new SaveMigrationStep(2, (data, factory) =>
@@ -495,7 +557,7 @@ new SaveMigrationStep(2, (data, factory) =>
 });
 ```
 
-If the old field might be missing, migration code can inspect and create nodes explicitly:
+The `data` parameter is an `ISaveDataNode` for the provider payload's `Data` object. The `factory` parameter creates new nodes that belong to the same serializer-owned node tree. Do not create nodes with another serializer or factory instance and insert them here.
 
 ```csharp
 new SaveMigrationStep(2, (data, factory) =>
@@ -507,7 +569,38 @@ new SaveMigrationStep(2, (data, factory) =>
 });
 ```
 
-Downgrades are not supported. A save written with a newer schema version than the current provider expects fails to load.
+### Save Data Nodes
+
+`ISaveDataNode` is a package-owned, format-neutral edit tree for migration. It is not a normal provider state DTO, and it is not Newtonsoft.Json's `JToken` exposed through the public API. The built-in JSON serializer converts JSON into package-owned data nodes before migration, then converts the edited nodes back into JSON afterward.
+
+Supported node types are `Object`, `Array`, `Int`, `Float`, `String`, `Bool`, and `Null`.
+
+| Node API | Applies to | Purpose |
+|---|---|---|
+| `NodeType` | all nodes | Gets the current `SaveDataNodeType`. |
+| `IsObject()`, `IsArray()`, `IsNull()` | all nodes | Checks the current node shape. |
+| `Count` | object/array nodes | Gets the child count. |
+| `Keys` | object nodes | Enumerates object keys. |
+| `Has(key)`, `Get(key)`, `Set(key, value)`, `Remove(key)` | object nodes | Reads and mutates object fields. |
+| `GetAt(index)`, `SetAt(index, value)`, `InsertAt(index, value)`, `RemoveAt(index)`, `Add(value)` | array nodes | Reads and mutates array entries. |
+| `AsInt()`, `AsFloat()`, `AsString()`, `AsBool()` | primitive nodes | Reads primitive values. |
+| `SetInt(value)`, `SetFloat(value)`, `SetString(value)`, `SetBool(value)`, `SetNull()` | existing nodes | Replaces the current node value. |
+
+Use `ISaveDataNodeFactory` to create new nodes:
+
+```csharp
+factory.CreateObject();
+factory.CreateArray();
+factory.CreateInt(1);
+factory.CreateFloat(4.5f);
+factory.CreateString("Rook");
+factory.CreateBool(true);
+factory.CreateNull();
+```
+
+Wrong-shape operations fail clearly. For example, calling `Get("Name")` on an array node or `Add(...)` on an integer node throws. Nodes also track factory ownership so migrations cannot accidentally mix nodes from different serializer instances.
+
+Migration steps should be deterministic. Avoid reading live game state, random values, current time, engine services, or other providers while mutating old payloads. A migration should be able to transform the same old payload into the same new payload every time.
 
 ## Extending The System
 
@@ -537,7 +630,7 @@ Implement `ISaveLifecycle` when a provider needs deterministic setup around save
 
 ### Migration Contracts
 
-Implement `ISaveMigratable` only when the provider needs to load older schema versions.
+Implement `ISaveMigratable` only when the provider needs to load older schema versions. See the `Migration` section for the full provider-facing workflow and helper API.
 
 Migration rules:
 
@@ -545,14 +638,11 @@ Migration rules:
 - every version gap must have exactly one step;
 - duplicate `FromVersion` steps and null migration entries are rejected during registration validation;
 - migration steps mutate the provider payload's `Data` node, not the full envelope;
-- simple helper methods such as `AddIntDefault`, `Rename`, `Move`, `Remove`, and `SetString` cover common top-level field edits;
 - use `SaveMigrationStep.From(...)` to compose several helper actions into one schema-version step;
 - after successful migration, the manager updates the envelope schema version before deserializing;
 - downgrades are rejected.
 
-Duplicate migration steps are rejected during registration validation. Missing migration gaps are detected during load and are reported by `TryLoad...` as `SaveLoadStatus.MigrationFailed`.
-
-Migration steps should be deterministic. Avoid reading live game state, random values, current time, engine services, or other providers while mutating old payloads. A migration should be able to transform the same old payload into the same new payload every time.
+Missing migration gaps are detected during load and are reported by `TryLoad...` as `SaveLoadStatus.MigrationFailed`.
 
 ### Serializer Contracts
 
