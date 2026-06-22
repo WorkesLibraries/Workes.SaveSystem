@@ -24,6 +24,8 @@ namespace Workes.SaveSystem
 
         public bool IsArray() => _nodeType == SaveDataNodeType.Array;
 
+        public bool IsNull() => _nodeType == SaveDataNodeType.Null;
+
         public int Count
         {
             get
@@ -230,6 +232,14 @@ namespace Workes.SaveSystem
         public void SetBool(bool value)
         {
             SetPrimitive(SaveDataNodeType.Bool, value);
+        }
+
+        public void SetNull()
+        {
+            _nodeType = SaveDataNodeType.Null;
+            _objectChildren.Clear();
+            _arrayChildren.Clear();
+            _value = new object();
         }
 
         internal static SaveDataNode RequireSaveDataNode(ISaveDataNode value, object owner)

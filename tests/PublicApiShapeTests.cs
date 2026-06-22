@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Reflection;
 using Workes.SaveSystem;
 
 namespace Workes.SaveSystem.Tests;
@@ -126,6 +127,27 @@ public sealed class PublicApiShapeTests
             .ToArray();
 
         Assert.That(exportedTypeNames, Does.Contain(nameof(SaveMetadata)));
+
+        var saveMetadataProperties = typeof(SaveMetadata)
+            .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Select(property => property.Name)
+            .ToArray();
+
+        Assert.That(saveMetadataProperties, Does.Contain(nameof(SaveMetadata.SaveId)));
+        Assert.That(saveMetadataProperties, Does.Contain(nameof(SaveMetadata.CreatedAtUtc)));
+        Assert.That(saveMetadataProperties, Does.Contain(nameof(SaveMetadata.LastWrittenAtUtc)));
+        Assert.That(saveMetadataProperties, Does.Contain(nameof(SaveMetadata.SerializerMetadata)));
+
+        var saveMetadataFields = typeof(SaveMetadata)
+            .GetFields(BindingFlags.Public | BindingFlags.Instance);
+
+        Assert.That(saveMetadataFields, Is.Empty);
+        Assert.That(
+            typeof(SaveMetadata).GetMethod("CreateNewMetadata", BindingFlags.Public | BindingFlags.Static),
+            Is.Null);
+        Assert.That(
+            typeof(SaveMetadata).GetMethod("PrepareForWrite", BindingFlags.Public | BindingFlags.Instance),
+            Is.Null);
 
         var saveMetadataInfoProperties = typeof(SaveMetadataInfo)
             .GetProperties()

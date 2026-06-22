@@ -226,6 +226,23 @@ public sealed class SaveMetadataTests
     }
 
     [Test]
+    public void SaveToDisk_WritesStableSaveMetadataJsonNames()
+    {
+        var manager = CreateManager();
+        var provider = new TestProvider(new TestState { Value = 1 });
+        manager.RegisterProvider(provider);
+        manager.ValidateRegistrations();
+
+        manager.SaveToDisk("slot");
+
+        var metadata = ReadMetadataData("slot");
+        Assert.That(metadata["SaveId"], Is.Not.Null);
+        Assert.That(metadata["CreatedAtUtc"], Is.Not.Null);
+        Assert.That(metadata["LastWrittenAtUtc"], Is.Not.Null);
+        Assert.That(metadata["SerializerMetadata"], Is.Not.Null);
+    }
+
+    [Test]
     public void SaveToDisk_WithMetadataAwareSerializer_TreatsMissingSerializerMetadataAsEmpty()
     {
         var serializer = new MetadataAwareJsonSerializer();

@@ -9,12 +9,16 @@ This document tracks core `Workes.SaveSystem` changes that affect the optional
 The MessagePack package should serialize and deserialize this type directly when
 the core save system requests a schematic for metadata.
 
-The serialized shape is unchanged:
+The C# contract uses public properties, but the serialized shape is unchanged:
 
 - `SaveId`
 - `CreatedAtUtc`
 - `LastWrittenAtUtc`
 - `SerializerMetadata`
+
+The lifecycle helpers that create new metadata and prepare timestamps for write
+are internal to the core manager and should not be part of companion-package API
+usage.
 
 `SaveMetadataInfo` remains the application-facing read/menu metadata type.
 The MessagePack package should not expose `SerializerMetadata` through menu APIs.
@@ -25,9 +29,10 @@ When updating `Workes.SaveSystem.MessagePack` against this core version:
 
 1. Remove any workaround that existed only because `SaveMetadata` was internal.
 2. Keep support for `MessagePackSaveSerializer.CreateSchematic(typeof(SaveMetadata))`.
-3. Ensure metadata deserialize failures throw clearly.
-4. Ensure metadata deserialization never returns `null` or a non-`SaveMetadata` object.
-5. Keep `ForceSaveToDisk(...)` as the repair path for intentionally replacing corrupt or incompatible metadata.
+3. Ensure the property names above remain supported when serializing metadata.
+4. Ensure metadata deserialize failures throw clearly.
+5. Ensure metadata deserialization never returns `null` or a non-`SaveMetadata` object.
+6. Keep `ForceSaveToDisk(...)` as the repair path for intentionally replacing corrupt or incompatible metadata.
 
 If the MessagePack serializer still needs private resolvers for non-public provider
 state types, that can remain a MessagePack package decision. It should no longer

@@ -213,6 +213,21 @@ public sealed class SerializerMigrationTests
     }
 
     [Test]
+    public void JsonSerializer_SerializeFromNode_WritesMutatedNullNodesAsJsonNull()
+    {
+        var serializer = new JsonSaveSerializer(JsonSaveFormatting.Compact);
+        var schematic = serializer.CreateSchematic(typeof(V1State));
+        var serialized = serializer.Serialize(new V1State { Name = "Scout" }, schematic);
+        var envelope = serializer.DeserializeToNode(serialized);
+
+        envelope.Get("Data").Get("Name").SetNull();
+
+        var json = Encoding.UTF8.GetString(serializer.SerializeFromNode(envelope));
+
+        Assert.That(json, Does.Contain("\"Name\":null"));
+    }
+
+    [Test]
     public void LoadFromDisk_ThrowsWhenMigrationPathIsMissing()
     {
         var oldManager = new SaveManager<string>(CreateOptions());

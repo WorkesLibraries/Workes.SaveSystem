@@ -28,6 +28,11 @@ namespace Workes.SaveSystem
         bool IsArray();
 
         /// <summary>
+        /// Returns whether this node represents a null value.
+        /// </summary>
+        bool IsNull();
+
+        /// <summary>
         /// Gets the number of child entries for object and array nodes.
         /// </summary>
         int Count { get; }
@@ -142,6 +147,11 @@ namespace Workes.SaveSystem
         /// </summary>
         /// <param name="value">The Boolean value to write.</param>
         void SetBool(bool value);
+
+        /// <summary>
+        /// Replaces this node with a null value.
+        /// </summary>
+        void SetNull();
 
         /// <summary>
         /// Gets the object keys for object nodes.

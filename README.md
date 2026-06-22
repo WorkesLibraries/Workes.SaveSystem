@@ -234,7 +234,7 @@ Metadata reads return `null` when no metadata file exists and throw when a metad
 
 Serializers that need format metadata can implement `ISaveSerializerMetadataHandler`. That metadata is stored inside the save-system metadata file as serializer-owned string key/value data, with both global and per-provider buckets. This is intended for serializer implementation details such as field maps or codec settings; it is not exposed through `SaveMetadataInfo` and should not be used for game/application display metadata.
 
-Advanced custom serializers must support the public `SaveMetadata` payload type because save-system metadata is serialized through the active serializer. Application code that only wants to read menu metadata should use `SaveMetadataInfo` from `ReadSaveMetadata(...)` and `ReadBackupSlotMetadata(...)`.
+Advanced custom serializers must support the public `SaveMetadata` payload type because save-system metadata is serialized through the active serializer. `SaveMetadata` is a property-based serializer contract with stable names for `SaveId`, `CreatedAtUtc`, `LastWrittenAtUtc`, and `SerializerMetadata`; manager-owned creation and timestamp update helpers are intentionally not public. Application code that only wants to read menu metadata should use `SaveMetadataInfo` from `ReadSaveMetadata(...)` and `ReadBackupSlotMetadata(...)`.
 
 Use `ForceSaveToDisk(...)` only when intentionally repairing or replacing a save whose existing metadata or serializer format cannot be trusted. Normal `SaveToDisk(...)` preserves readable core metadata and rotates backups when enabled. `ForceSaveToDisk(...)` writes a fresh main save with a new save id and timestamps, ignores unreadable existing metadata, does not rotate the replaced main folder into backups, and leaves existing backup folders untouched.
 
@@ -547,6 +547,7 @@ Data-node implementations should:
 - fail clearly when callers use object operations on arrays or primitive operations on objects;
 - keep mutations local to the represented serialized tree;
 - support the primitive and null node types exposed by `ISaveDataNodeFactory`;
+- expose null values through `IsNull()` and allow existing nodes to be replaced with null through `SetNull()`;
 - reject attempts to combine nodes created by another serializer or factory instance.
 
 For the built-in JSON serializer, JSON payloads are converted into package-owned migration nodes before migration steps run, then converted back to JSON after migration. The Newtonsoft JSON model remains an implementation detail of JSON parsing and writing, not the migration edit surface.

@@ -80,6 +80,7 @@ These milestones are completed for the current package migration.
 ### Migration System
 
 - Migration uses format-neutral `ISaveDataNode` trees.
+- Data nodes expose explicit `IsNull()` and `SetNull()` helpers for null migration edits.
 - Migration helpers cover add/set/remove/rename/move/default/null operations.
 - Registration validation catches duplicate/null migration steps.
 - Try-load reports migration failures through structured statuses.
@@ -87,7 +88,8 @@ These milestones are completed for the current package migration.
 ### Metadata And Diagnostics
 
 - Save metadata is serialized through the active serializer.
-- `SaveMetadata` is public as the serializer-facing metadata payload contract.
+- `SaveMetadata` is public as the property-based serializer-facing metadata payload contract.
+- Manager-owned metadata creation and timestamp preparation helpers are internal implementation details.
 - Metadata exposes core save id and timestamps.
 - Serializer-owned metadata is supported internally for advanced serializers.
 - Existing metadata that deserializes to null or the wrong type fails strict; `ForceSaveToDisk(...)` remains the explicit repair path.

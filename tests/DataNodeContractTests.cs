@@ -16,7 +16,45 @@ public sealed class DataNodeContractTests
         Assert.That(node.NodeType, Is.EqualTo(SaveDataNodeType.Null));
         Assert.That(node.IsObject(), Is.False);
         Assert.That(node.IsArray(), Is.False);
+        Assert.That(node.IsNull(), Is.True);
         Assert.That(node.Count, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void SaveDataNode_IsNullReturnsFalseForNonNullNodes()
+    {
+        var factory = CreateFactory();
+
+        Assert.That(factory.CreateObject().IsNull(), Is.False);
+        Assert.That(factory.CreateArray().IsNull(), Is.False);
+        Assert.That(factory.CreateInt(1).IsNull(), Is.False);
+        Assert.That(factory.CreateFloat(1).IsNull(), Is.False);
+        Assert.That(factory.CreateString("Rook").IsNull(), Is.False);
+        Assert.That(factory.CreateBool(true).IsNull(), Is.False);
+    }
+
+    [Test]
+    public void SaveDataNode_SetNullChangesExistingNodeToNull()
+    {
+        var factory = CreateFactory();
+        var obj = factory.CreateObject();
+        obj.Set("name", factory.CreateString("Rook"));
+        var array = factory.CreateArray();
+        array.Add(factory.CreateInt(1));
+        var primitive = factory.CreateString("Rook");
+
+        obj.SetNull();
+        array.SetNull();
+        primitive.SetNull();
+
+        Assert.That(obj.NodeType, Is.EqualTo(SaveDataNodeType.Null));
+        Assert.That(obj.IsNull(), Is.True);
+        Assert.That(obj.Count, Is.EqualTo(0));
+        Assert.That(array.NodeType, Is.EqualTo(SaveDataNodeType.Null));
+        Assert.That(array.IsNull(), Is.True);
+        Assert.That(array.Count, Is.EqualTo(0));
+        Assert.That(primitive.NodeType, Is.EqualTo(SaveDataNodeType.Null));
+        Assert.That(primitive.IsNull(), Is.True);
     }
 
     [Test]
@@ -116,6 +154,7 @@ public sealed class DataNodeContractTests
         public SaveDataNodeType NodeType => SaveDataNodeType.String;
         public bool IsObject() => false;
         public bool IsArray() => false;
+        public bool IsNull() => false;
         public int Count => 0;
         public IEnumerable<string> Keys => Array.Empty<string>();
         public ISaveDataNode GetAt(int index) => throw new NotSupportedException();
@@ -135,5 +174,6 @@ public sealed class DataNodeContractTests
         public void SetString(string value) => throw new NotSupportedException();
         public bool AsBool() => throw new NotSupportedException();
         public void SetBool(bool value) => throw new NotSupportedException();
+        public void SetNull() => throw new NotSupportedException();
     }
 }
