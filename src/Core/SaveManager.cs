@@ -23,6 +23,18 @@ namespace Workes.SaveSystem
             public Action<object> RestoreState = null!;
         }
 
+        private sealed class ValidatedSaveFolder
+        {
+            public ValidatedSaveFolder(SaveMetadataInfo metadata, SaveSnapshot snapshot)
+            {
+                Metadata = metadata;
+                Snapshot = snapshot;
+            }
+
+            public SaveMetadataInfo Metadata { get; }
+            public SaveSnapshot Snapshot { get; }
+        }
+
         private const string SaveMetadataBaseName = "metadata";
         private const int SaveMetadataSchemaVersion = 1;
         private const string BackupFolderName = "_backup";
@@ -903,11 +915,38 @@ namespace Workes.SaveSystem
             if (!Directory.Exists(folderPath))
                 return false;
 
-            var serialized = LoadSerializedSnapshotFromFolder(folderPath);
-            var snapshot = DeserializeSnapshot(serialized);
-            RestoreSnapshot(snapshot);
+            var validated = ValidateSaveFolderForLoad(folderPath);
+            RestoreSnapshot(validated.Snapshot);
 
             return true;
+        }
+
+        /// <summary>
+        /// Validates that the requested save can be loaded by the current manager configuration without restoring providers or mutating disk.
+        /// </summary>
+        /// <param name="identity">The identity that identifies which save slot to validate.</param>
+        /// <returns>A structured validation result with metadata when validation succeeds.</returns>
+        /// <remarks>
+        /// Call <see cref="ValidateRegistrations"/> successfully after provider registration and before calling this method.
+        /// This method does not run recovery, write migrated data, delete recovery artifacts, restore providers, or call lifecycle hooks.
+        /// </remarks>
+        public SaveValidationResult ValidateSave(TIdentity identity)
+        {
+            try
+            {
+                var folderPath = GetSaveFolderPath(identity);
+                EnsureRegistrationsValidated();
+
+                if (!Directory.Exists(folderPath))
+                    return SaveValidationResult.NotFound("Save was not found.");
+
+                var validated = ValidateSaveFolderForLoad(folderPath);
+                return SaveValidationResult.Success(validated.Metadata);
+            }
+            catch (Exception ex)
+            {
+                return SaveValidationResult.Failure(ClassifyLoadException(ex), ex);
+            }
         }
 
         /// <summary>
@@ -974,11 +1013,52 @@ namespace Workes.SaveSystem
             if (!Directory.Exists(backupFolderPath))
                 return false;
 
-            var serialized = LoadSerializedSnapshotFromFolder(backupFolderPath);
-            var snapshot = DeserializeSnapshot(serialized);
-            RestoreSnapshot(snapshot);
+            var validated = ValidateSaveFolderForLoad(backupFolderPath);
+            RestoreSnapshot(validated.Snapshot);
 
             return true;
+        }
+
+        /// <summary>
+        /// Validates that the requested backup slot can be loaded by the current manager configuration without restoring providers or mutating disk.
+        /// </summary>
+        /// <param name="identity">The identity that identifies which save's backup to validate.</param>
+        /// <param name="slotNumber">The backup slot number (1-based, e.g., 1 = _0001, 2 = _0002).</param>
+        /// <returns>A structured validation result with metadata when validation succeeds.</returns>
+        /// <remarks>
+        /// Call <see cref="ValidateRegistrations"/> successfully after provider registration and before calling this method.
+        /// If backups are disabled, this method returns <see cref="SaveLoadStatus.BackupSystemDisabled"/> before request or registration validation.
+        /// </remarks>
+        public SaveValidationResult ValidateBackupSlot(TIdentity identity, int slotNumber)
+        {
+            if (!_options.EnableBackupSystem)
+                return SaveValidationResult.BackupSystemDisabled(
+                    "Cannot validate backup slot: Backup system is disabled. Enable backups in SaveSystemOptions to use backup slots.");
+
+            try
+            {
+                var saveName = ResolveSavePath(identity);
+                EnsureRegistrationsValidated();
+
+                if (slotNumber < 1 || slotNumber > _options.BackupSystemMaxBackupCount)
+                    throw new ArgumentException(
+                        $"Backup slot number must be between 1 and {_options.BackupSystemMaxBackupCount}, but got {slotNumber}.",
+                        nameof(slotNumber)
+                    );
+
+                var backupSuffix = $"_{slotNumber:D4}";
+                var backupFolderPath = _backupManager.GetBackupFolderPath(saveName, backupSuffix);
+
+                if (!Directory.Exists(backupFolderPath))
+                    return SaveValidationResult.NotFound("Backup slot was not found.");
+
+                var validated = ValidateSaveFolderForLoad(backupFolderPath);
+                return SaveValidationResult.Success(validated.Metadata);
+            }
+            catch (Exception ex)
+            {
+                return SaveValidationResult.Failure(ClassifyLoadException(ex), ex);
+            }
         }
 
         /// <summary>
@@ -1525,6 +1605,52 @@ namespace Workes.SaveSystem
                 metadata.LastWrittenAtUtc);
         }
 
+        private SaveMetadataInfo ReadRequiredSaveMetadataInfo(string folderPath)
+        {
+            var metaPath = GetMetadataFilePath(folderPath);
+            var metadataFileName = GetMetadataFileName();
+
+            if (!File.Exists(metaPath))
+                throw SaveLoadException.Create(
+                    SaveLoadStatus.CorruptData,
+                    $"Missing {metadataFileName} at '{metaPath}'.");
+
+            SaveMetadata metadata;
+            try
+            {
+                metadata = ReadSaveMetadataFromFile(metaPath)!;
+            }
+            catch (Exception ex)
+            {
+                throw SaveLoadException.Create(
+                    SaveLoadStatus.CorruptData,
+                    $"Failed to deserialize {metadataFileName} at '{metaPath}'.",
+                    ex);
+            }
+
+            if (string.IsNullOrEmpty(metadata.SaveId))
+                throw SaveLoadException.Create(
+                    SaveLoadStatus.CorruptData,
+                    $"SaveId in {metadataFileName} at '{metaPath}' is null or empty.");
+
+            try
+            {
+                ValidateSerializerMetadata(metadata);
+            }
+            catch (Exception ex)
+            {
+                throw SaveLoadException.Create(
+                    SaveLoadStatus.CorruptData,
+                    $"Serializer metadata in {metadataFileName} at '{metaPath}' is invalid.",
+                    ex);
+            }
+
+            return new SaveMetadataInfo(
+                metadata.SaveId,
+                metadata.CreatedAtUtc,
+                metadata.LastWrittenAtUtc);
+        }
+
         private ISaveSchematic CreateMetadataSchematic()
         {
             var schematic = _options.Serializer.CreateSchematic(typeof(SaveMetadata));
@@ -1610,6 +1736,15 @@ namespace Workes.SaveSystem
             }
 
             return providers;
+        }
+
+        private ValidatedSaveFolder ValidateSaveFolderForLoad(string folderPath)
+        {
+            var metadata = ReadRequiredSaveMetadataInfo(folderPath);
+            var serialized = LoadSerializedSnapshotFromFolder(folderPath);
+            var snapshot = DeserializeSnapshot(serialized);
+            ValidateSnapshotForRestore(snapshot);
+            return new ValidatedSaveFolder(metadata, snapshot);
         }
 
         private bool IsSaveSlotFolder(string folderPath)

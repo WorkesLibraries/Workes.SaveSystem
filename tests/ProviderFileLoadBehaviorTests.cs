@@ -79,7 +79,7 @@ public sealed class ProviderFileLoadBehaviorTests
     }
 
     [Test]
-    public void LoadFromDisk_ThrowsForPartialSaveFolderMissingRegisteredProviderFile()
+    public void LoadFromDisk_ThrowsForPartialSaveFolderMissingMetadata()
     {
         var manager = CreateManager();
         var provider = new TestProvider("player", new TestState { Value = 1 });
@@ -89,8 +89,7 @@ public sealed class ProviderFileLoadBehaviorTests
 
         var ex = Assert.Throws<InvalidOperationException>(() => manager.LoadFromDisk("slot"));
 
-        Assert.That(ex!.Message, Does.Contain("Missing save file"));
-        Assert.That(ex.Message, Does.Contain("player"));
+        Assert.That(ex!.Message, Does.Contain("Missing metadata.json"));
     }
 
     [Test]

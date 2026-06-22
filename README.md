@@ -261,6 +261,16 @@ The try-load APIs use the same load path as `LoadFromDisk(...)` and `LoadBackupS
 
 For `TryLoadBackupSlotFromDisk(...)`, disabled backups are reported as `SaveLoadStatus.BackupSystemDisabled` before request or registration validation. This makes backup-disabled UI checks cheap and non-throwing even when the caller has not prepared provider registrations.
 
+Use `ValidateSave(...)` or `ValidateBackupSlot(...)` when a save menu needs to check loadability without restoring providers or mutating disk. Validation requires validated registrations, reads save-system and serializer metadata, checks provider files, validates schema extraction and migration paths, and deserializes provider data in memory. It does not run recovery, call lifecycle hooks, write migrated data, or restore provider state.
+
+```csharp
+SaveValidationResult validation = manager.ValidateSave("slot-1");
+if (validation.IsValid)
+{
+    ShowLastWritten(validation.Metadata!.LastWrittenAtUtc);
+}
+```
+
 ## Scopes And Provider Sets
 
 The core package does not have a provider-group API. In the first reusable version, scope is modeled through save identities, save roots, and manager composition.

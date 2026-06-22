@@ -15,24 +15,14 @@ This file is the durable planning tracker for the save system work. Keep it upda
    - Application metadata should support its own schema version and migration source, reusing the existing save data node migration model where possible.
    - Keep this out of the preview implementation, but use this shape as the final design target before `1.0.0` if application metadata becomes a v1 feature.
 
-2. Add non-mutating save validation APIs before the preview release.
-   - Add `ValidateSave(TIdentity identity)` and `ValidateBackupSlot(TIdentity identity, int slotNumber)`.
-   - Return a structured result, likely `SaveValidationResult`, rather than a Boolean `CanLoadSave(...)`.
-   - Require successful `ValidateRegistrations()` because full validation needs registered providers, schematics, state types, migration sources, and serializer configuration.
-   - Validation must not restore providers, call load lifecycle hooks, run recovery, write migrated data, delete temp folders, rotate backups, or otherwise mutate disk/runtime state.
-   - Validate metadata, serializer metadata, required provider files, schema-version extraction, migration path availability, in-memory migration, deserialization, and provider state type compatibility.
-   - Reuse `SaveLoadStatus` where possible so validation and try-load failures speak the same status language.
-   - Include core `SaveMetadataInfo` in successful validation results so save menus can display timestamps without a second read.
-   - Update README and tests.
-
-3. Improve README coverage for options, metadata, schema versioning, and migrations.
+2. Improve README coverage for options, metadata, schema versioning, and migrations.
    - Add a compact `SaveSystemOptions.Create(...)` showcase listing common settings and how to pass them.
    - Add a section explaining which save-system metadata exists: save id, created time, last-written time, and serializer metadata.
    - Expand schema-version documentation: what provider schema versions mean, when to bump them, and why they are stored inside payloads.
    - Expand migration documentation with practical examples for helper steps and custom data-node steps.
    - Fix migration examples so users modify the current `PlayerState` shape instead of implying they must keep old `PlayerStateV1`/`PlayerStateV2` runtime DTOs around.
 
-4. Design metadata-backed provider manifest support for newly added providers before `1.0.0`.
+3. Design metadata-backed provider manifest support for newly added providers before `1.0.0`.
    - Current `MissingProviderFileBehavior.Skip` is too broad because it can hide deleted/corrupt provider files.
    - Add save metadata that records which provider files existed when a save was written, including save key and schema version.
    - Use the manifest to distinguish old saves written before a provider existed from current saves with a missing provider file.
@@ -41,13 +31,13 @@ This file is the durable planning tracker for the save system work. Keep it upda
    - If the optional default-state hook is not implemented, older saves that predate the provider should leave the provider's current runtime state untouched.
    - Update migration/load docs and tests.
 
-5. Add realistic cross-package serializer size comparison examples after MessagePack is available as a package.
+4. Add realistic cross-package serializer size comparison examples after MessagePack is available as a package.
    - Generate small, medium typical, large repetitive, and large varied/random-ish save examples.
    - Compare pretty JSON, compact JSON, compressed compact JSON, and MessagePack output sizes.
    - Include generated README summaries with byte counts and percentages.
    - Use the results to document realistic compression/MessagePack expectations instead of relying on the current best-case repetitive GZip example.
 
-6. Sync README MessagePack examples after `Workes.SaveSystem.MessagePack` is published.
+5. Sync README MessagePack examples after `Workes.SaveSystem.MessagePack` is published.
    - Replace conceptual package-reference examples with the published package version.
    - Link to the companion package README/repository once the URL is final.
    - Keep this core package free of a MessagePack package reference.
@@ -104,6 +94,7 @@ These milestones are completed for the current package migration.
 
 - Provider registration, validation, snapshots, save/load, existence checks, slot listing, deletion, backup rotation, and force-save repair are implemented.
 - `DeleteAllBackupSlots(...)` removes all numbered backup slots for a save identity and returns the deleted count.
+- `ValidateSave(...)` and `ValidateBackupSlot(...)` provide non-mutating loadability checks with structured status and core metadata.
 - Recovery handles temp/to-delete folders, validates candidates strictly, and avoids running migrations during recovery validation.
 
 ### Serializer Architecture

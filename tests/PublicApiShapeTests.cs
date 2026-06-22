@@ -156,4 +156,32 @@ public sealed class PublicApiShapeTests
 
         Assert.That(saveMetadataInfoProperties, Does.Not.Contain(nameof(SaveMetadata.SerializerMetadata)));
     }
+
+    [Test]
+    public void SaveValidationResult_IsPublicValidationContract()
+    {
+        var exportedTypeNames = typeof(SaveManager<>).Assembly
+            .GetExportedTypes()
+            .Select(type => type.Name)
+            .ToArray();
+
+        Assert.That(exportedTypeNames, Does.Contain(nameof(SaveValidationResult)));
+        Assert.That(
+            typeof(SaveManager<string>).GetMethod(nameof(SaveManager<string>.ValidateSave)),
+            Is.Not.Null);
+        Assert.That(
+            typeof(SaveManager<string>).GetMethod(nameof(SaveManager<string>.ValidateBackupSlot)),
+            Is.Not.Null);
+
+        var properties = typeof(SaveValidationResult)
+            .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Select(property => property.Name)
+            .ToArray();
+
+        Assert.That(properties, Does.Contain(nameof(SaveValidationResult.IsValid)));
+        Assert.That(properties, Does.Contain(nameof(SaveValidationResult.Status)));
+        Assert.That(properties, Does.Contain(nameof(SaveValidationResult.Message)));
+        Assert.That(properties, Does.Contain(nameof(SaveValidationResult.Exception)));
+        Assert.That(properties, Does.Contain(nameof(SaveValidationResult.Metadata)));
+    }
 }
