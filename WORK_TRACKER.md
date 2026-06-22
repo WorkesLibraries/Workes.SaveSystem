@@ -15,14 +15,7 @@ This file is the durable planning tracker for the save system work. Keep it upda
    - Application metadata should support its own schema version and migration source, reusing the existing save data node migration model where possible.
    - Keep this out of the preview implementation, but use this shape as the final design target before `1.0.0` if application metadata becomes a v1 feature.
 
-2. Improve README coverage for options, metadata, schema versioning, and migrations.
-   - Add a compact `SaveSystemOptions.Create(...)` showcase listing common settings and how to pass them.
-   - Add a section explaining which save-system metadata exists: save id, created time, last-written time, and serializer metadata.
-   - Expand schema-version documentation: what provider schema versions mean, when to bump them, and why they are stored inside payloads.
-   - Expand migration documentation with practical examples for helper steps and custom data-node steps.
-   - Fix migration examples so users modify the current `PlayerState` shape instead of implying they must keep old `PlayerStateV1`/`PlayerStateV2` runtime DTOs around.
-
-3. Design metadata-backed provider manifest support for newly added providers before `1.0.0`.
+2. Design metadata-backed provider manifest support for newly added providers before `1.0.0`.
    - Current `MissingProviderFileBehavior.Skip` is too broad because it can hide deleted/corrupt provider files.
    - Add save metadata that records which provider files existed when a save was written, including save key and schema version.
    - Use the manifest to distinguish old saves written before a provider existed from current saves with a missing provider file.
@@ -31,13 +24,13 @@ This file is the durable planning tracker for the save system work. Keep it upda
    - If the optional default-state hook is not implemented, older saves that predate the provider should leave the provider's current runtime state untouched.
    - Update migration/load docs and tests.
 
-4. Add realistic cross-package serializer size comparison examples after MessagePack is available as a package.
+3. Add realistic cross-package serializer size comparison examples after MessagePack is available as a package.
    - Generate small, medium typical, large repetitive, and large varied/random-ish save examples.
    - Compare pretty JSON, compact JSON, compressed compact JSON, and MessagePack output sizes.
    - Include generated README summaries with byte counts and percentages.
    - Use the results to document realistic compression/MessagePack expectations instead of relying on the current best-case repetitive GZip example.
 
-5. Sync README MessagePack examples after `Workes.SaveSystem.MessagePack` is published.
+4. Sync README MessagePack examples after `Workes.SaveSystem.MessagePack` is published.
    - Replace conceptual package-reference examples with the published package version.
    - Link to the companion package README/repository once the URL is final.
    - Keep this core package free of a MessagePack package reference.
@@ -128,6 +121,7 @@ These milestones are completed for the current package migration.
 
 - Relative save paths, typed providers, memory providers, lifecycle callbacks, validation helpers, and read APIs are in place.
 - Public API shape tests cover removed/hidden implementation details.
+- README coverage now documents options, save metadata, schema-version guidance, and migration examples using the current state type.
 
 ## Maintenance Rules
 

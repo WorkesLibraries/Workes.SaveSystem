@@ -6,7 +6,15 @@ The package is not tied to Unity, Godot, or any game engine. Engine projects cho
 
 ## Installation
 
-NuGet publishing is planned after release versioning and licensing are finalized. Until then, reference the project directly:
+Install the preview package from NuGet:
+
+```xml
+<ItemGroup>
+  <PackageReference Include="Workes.SaveSystem" Version="1.0.0-preview.1" />
+</ItemGroup>
+```
+
+When working from source, reference the project directly:
 
 ```xml
 <ItemGroup>
@@ -29,40 +37,21 @@ That dependency is intentional for the current package shape:
 
 `System.Text.Json` is not part of the core package for the first reusable version. Under the current `netstandard2.1` target, using it requires an additional package reference, so adding a parallel `System.Text.Json` serializer would not make the package dependency-free. Replacing Newtonsoft would still require replacing the built-in JSON serializer and metadata persistence behavior together. For now, consumers should treat Newtonsoft as part of the package contract.
 
-A future `System.Text.Json` adapter is still possible, especially for applications that do not need migration data nodes or that target newer frameworks directly. Treat it as a separate compatibility decision rather than a drop-in replacement for existing saves.
-
-GZip compression is available through the .NET platform libraries and does not require another NuGet dependency. MessagePack support is intended to be provided by the optional `Workes.SaveSystem.MessagePack` package because it brings its own serializer dependency. The package shape is:
+GZip compression is available through the .NET platform libraries and does not require another NuGet dependency. MessagePack support is planned as a future optional companion package, `Workes.SaveSystem.MessagePack`, because it brings its own serializer dependency. The intended package shape is:
 
 ```text
 Workes.SaveSystem
 Workes.SaveSystem.MessagePack
 ```
 
-The core `Workes.SaveSystem` package does not reference MessagePack. Applications that want MessagePack saves should install the companion package when it is available:
-
-```xml
-<ItemGroup>
-  <PackageReference Include="Workes.SaveSystem.MessagePack" Version="0.1.0" />
-</ItemGroup>
-```
-
-After installation, usage should look like normal serializer usage:
-
-```csharp
-var serializer = new MessagePackSaveSerializer();
-var manager = SaveManager<string>.CreateDefault(
-    serializer,
-    saveRootPath: "Saves");
-```
-
-or, for compressed JSON using only the core package and platform compression:
+The core `Workes.SaveSystem` preview does not reference MessagePack and does not ship a MessagePack serializer. Until the companion package is published, use JSON or compressed JSON:
 
 ```csharp
 var serializer = new CompressedSaveSerializer(
     new JsonSaveSerializer(JsonSaveFormatting.Compact));
 ```
 
-MessagePack is intended for compact production saves through the companion package. JSON remains the built-in readable serializer and the recommended default while the package is still converging.
+MessagePack is intended for compact production saves once the companion package is ready. JSON remains the built-in readable serializer and the recommended default for this preview.
 
 ## Quick Start
 
@@ -72,15 +61,15 @@ Create a save manager, register providers, then save and load a slot.
 using Workes.SaveSystem;
 
 var serializer = new JsonSaveSerializer();
-var manager = SaveManager<string>.CreateDefault(
+var manager = SaveManager<string>.CreateDefault( // SaveManager is generic over identity type
     serializer,
     saveRootPath: "Saves");
 
 var playerProvider = new PlayerSaveProvider();
 manager.RegisterProvider(playerProvider);
-manager.ValidateRegistrations();
+manager.ValidateRegistrations(); // Necessary for using the system after provider registration or unregistration
 
-manager.SaveToDisk("slot-1");
+manager.SaveToDisk("slot-1"); // "slot-1" is simply an identifier. A string is used because var manager is SaveManager<string>
 
 playerProvider.Current = new PlayerState();
 manager.LoadFromDisk("slot-1");
@@ -131,6 +120,22 @@ var manager = new SaveManager<string>(
 ```
 
 `CreateDefault(ISaveSerializer)` is a convenience factory for plain .NET applications and writes under the current user's application data folder. Engine integrations should prefer `CreateDefault(ISaveSerializer, string)`, `SaveSystemOptions.Create(...)`, or the options constructor so the engine owns the persistent data path.
+
+Use `SaveSystemOptions.Create(...)` when the manager needs custom path, file, warning, or missing-file behavior.
+
+```csharp
+var options = SaveSystemOptions.Create<ProfileSlotIdentity>(
+    saveRootPath: "Saves",
+    serializer: new JsonSaveSerializer(JsonSaveFormatting.Compact),
+    savePathResolver: identity => Path.Combine(identity.ProfileId, identity.SlotId),
+    fileNameResolver: context => context.SaveKey,
+    missingProviderFileBehavior: MissingProviderFileBehavior.Throw,
+    warningSink: message => logger.Warn(message));
+
+var manager = new SaveManager<ProfileSlotIdentity>(options);
+```
+
+For simple string slots, omit `savePathResolver`; string identities resolve directly to relative save paths. Keep custom `fileNameResolver` output stable over time, and do not include `SchemaVersion` in file names unless intentionally breaking old saves. Provider schema versions belong inside the provider payload so the migration system can find older files.
 
 Use `JsonSaveSerializer` for directly readable save files. The default constructor writes indented JSON, and `JsonSaveFormatting.Compact` writes the same `.json` payload shape without formatting whitespace.
 
@@ -221,6 +226,8 @@ bool canRestoreBackup = manager.BackupSlotExists("slot-1", slotNumber: 1);
 
 Existence checks inspect the raw disk layout without loading provider data, recovering temp folders, or requiring registration validation. A save or backup exists only when its folder contains save metadata.
 
+## Save Metadata
+
 Use `ReadSaveMetadata(...)` and `ReadBackupSlotMetadata(...)` when a menu or tool needs save-system-owned metadata.
 
 ```csharp
@@ -231,11 +238,21 @@ if (metadata != null)
 }
 ```
 
-Metadata reads return `null` when no metadata file exists and throw when a metadata file is present but invalid. The current metadata contract exposes the stable save id used for recovery validation, plus created and last-written UTC timestamps. Application-owned display metadata such as character name, playtime, difficulty, or screenshot references should live in a provider for now.
+Metadata reads return `null` when no metadata file exists and throw when a metadata file is present but invalid. `SaveMetadataInfo` exposes:
+
+| Property | Meaning |
+|---|---|
+| `SaveId` | Stable id for this save folder. It is used internally to validate recovery candidates and should not be treated as application display data. |
+| `CreatedAtUtc` | UTC timestamp for when this save identity was first written, preserved by normal saves. |
+| `LastWrittenAtUtc` | UTC timestamp for the most recent successful write. |
+
+Use `ValidateSave(...)` when a menu needs to know whether this manager can load the save now. It returns `SaveValidationResult.Metadata` on success, so a menu can check loadability and display timestamps with one call.
 
 Serializers that need format metadata can implement `ISaveSerializerMetadataHandler`. That metadata is stored inside the save-system metadata file as serializer-owned string key/value data, with both global and per-provider buckets. This is intended for serializer implementation details such as field maps or codec settings; it is not exposed through `SaveMetadataInfo` and should not be used for game/application display metadata.
 
-Advanced custom serializers must support the public `SaveMetadata` payload type because save-system metadata is serialized through the active serializer. `SaveMetadata` is a property-based serializer contract with stable names for `SaveId`, `CreatedAtUtc`, `LastWrittenAtUtc`, and `SerializerMetadata`; manager-owned creation and timestamp update helpers are intentionally not public. Application code that only wants to read menu metadata should use `SaveMetadataInfo` from `ReadSaveMetadata(...)` and `ReadBackupSlotMetadata(...)`.
+Application-owned display metadata such as character name, playtime, difficulty, or screenshot references should live in a normal provider for this preview. A dedicated application metadata provider API is planned separately so application metadata can have its own ownership and migration story instead of being mixed with required save-system metadata or serializer metadata.
+
+Advanced custom serializers must support the public `SaveMetadata` payload type because save-system metadata is serialized through the active serializer. `SaveMetadata` is a property-based serializer contract with stable names for `SaveId`, `CreatedAtUtc`, `LastWrittenAtUtc`, and `SerializerMetadata`; manager-owned creation and timestamp update helpers are intentionally not public. Application code that only wants to read menu metadata should use `SaveMetadataInfo` from `ReadSaveMetadata(...)`, `ReadBackupSlotMetadata(...)`, or successful `ValidateSave(...)` results.
 
 Use `ForceSaveToDisk(...)` only when intentionally repairing or replacing a save whose existing metadata or serializer format cannot be trusted. Normal `SaveToDisk(...)` preserves readable core metadata and rotates backups when enabled. `ForceSaveToDisk(...)` writes a fresh main save with a new save id and timestamps, ignores unreadable existing metadata, does not rotate the replaced main folder into backups, and leaves existing backup folders untouched.
 
@@ -327,7 +344,11 @@ Each `ISaveProvider` owns one stable save key and one schema version.
 
 Save keys are persistent identity. Changing a provider key changes the filename and breaks loading of existing provider data unless the application handles that compatibility.
 
+`SchemaVersion` is the version of that provider's persisted state shape. It is stored inside the provider payload, not in the file name, so the manager can read an old payload, see its saved version, run migration steps, and only then deserialize it into the current state type.
+
 `SaveKey` must remain stable after provider registration. `SchemaVersion` must remain stable after registration validation. The manager checks these values before disk save/load operations and throws a clear error if a provider changes its persistence contract after setup. If you intentionally change a provider schema during setup, call `ValidateRegistrations()` again before saving or loading.
+
+Bump `SchemaVersion` when old payloads need help to become the current state shape. Good examples include adding required data, renaming a persisted property, changing a property's type or meaning, or splitting/collapsing fields. You usually do not need a bump for runtime-only code changes, adding optional nullable data that deserializes safely, or refactoring code while the serialized state shape remains compatible.
 
 Custom `FileNameResolver` values must also resolve every persisted provider to a unique file name. The default resolver uses `SaveKey`, so uniqueness follows from unique provider keys. A custom resolver that maps multiple providers to the same file is rejected during registration validation. The provider file base name `metadata` is reserved for save-system metadata, so providers must not resolve to `metadata.json`, `metadata.json.gz`, or the active serializer's equivalent metadata file.
 
@@ -382,6 +403,8 @@ manager.RegisterProvider(playerProvider);
 manager.ValidateRegistrations();
 ```
 
+`CreateWithBackups(...)` accepts the same resolver, warning, and missing-provider-file options as `Create(...)`, plus `backupSystemMaxBackupCount`.
+
 Backup slot `1` is the most recent previous save. Older backups rotate to higher slot numbers.
 
 ```csharp
@@ -406,17 +429,31 @@ Providers that need to load older schema versions implement `ISaveMigratable`.
 
 Each `SaveMigrationStep` migrates from version `x` to version `x + 1`. To migrate from version 1 to version 3, provide a step from 1 to 2 and another from 2 to 3.
 
+Migration steps edit serialized data before the serializer deserializes it into the current state type. That means application code should normally keep only the current DTO shape in runtime code. Old shapes can live in tests or documentation fixtures, but they do not need to remain as production state classes just so migration can work.
+
+For example, imagine version 1 of `PlayerState` only had `Name`. Version 2 adds required `Level` data. The current code can simply use the current shape:
+
 ```csharp
-public sealed class PlayerSaveProvider : ISaveProvider<PlayerStateV2>, ISaveMigratable
+public sealed class PlayerState
+{
+    public string Name { get; set; } = string.Empty;
+    public int Level { get; set; }
+}
+```
+
+The provider reports the current schema version and supplies a migration that adds `Level` to older serialized payloads:
+
+```csharp
+public sealed class PlayerSaveProvider : ISaveProvider<PlayerState>, ISaveMigratable
 {
     public string SaveKey => "player";
     public int SchemaVersion => 2;
     public int LoadPriority => 0;
 
-    public PlayerStateV2 CaptureState() => Current;
-    public void RestoreState(PlayerStateV2 state) => Current = state;
+    public PlayerState CaptureState() => Current;
+    public void RestoreState(PlayerState state) => Current = state;
 
-    public PlayerStateV2 Current { get; set; } = new PlayerStateV2();
+    public PlayerState Current { get; set; } = new PlayerState();
 
     public ISaveMigrationSource CreateMigrationSource()
     {
@@ -434,7 +471,9 @@ public sealed class PlayerMigrationSource : ISaveMigrationSource
 }
 ```
 
-When one schema-version step needs several simple edits, compose them into one step:
+`SaveMigrationStep.AddIntDefault(1, "Level", 1)` means: when loading a version 1 payload, add a top-level `Level` value before deserializing it as the current `PlayerState`.
+
+When one schema-version step needs several simple edits, compose them into one step. This is still one migration from version 1 to version 2:
 
 ```csharp
 public IReadOnlyList<SaveMigrationStep> Migrations { get; } =
@@ -448,13 +487,25 @@ public IReadOnlyList<SaveMigrationStep> Migrations { get; } =
     };
 ```
 
-For advanced changes, use the full data-node action:
+For advanced changes, use the full data-node action. The `data` node is the provider payload's `Data` object, not the full save envelope:
 
 ```csharp
 new SaveMigrationStep(2, (data, factory) =>
 {
     var inventory = data.Get("Inventory");
     inventory.Add(factory.CreateString("starter-sword"));
+});
+```
+
+If the old field might be missing, migration code can inspect and create nodes explicitly:
+
+```csharp
+new SaveMigrationStep(2, (data, factory) =>
+{
+    if (!data.Has("Inventory"))
+        data.Set("Inventory", factory.CreateArray());
+
+    data.Get("Inventory").Add(factory.CreateString("starter-sword"));
 });
 ```
 
@@ -526,20 +577,7 @@ Use `TransformedSaveSerializer` with `ISavePayloadTransform` when an existing se
 
 `CompressedSaveSerializer` is the intended public compression API. Its internal compression transform should remain an implementation detail unless a concrete use case appears for exposing GZip as a standalone payload transform.
 
-MessagePack support is intended to be provided by the optional `Workes.SaveSystem.MessagePack` companion package for dependency reasons. The core package does not reference MessagePack directly. Once installed, the companion serializer should be usable anywhere an `ISaveSerializer` is accepted:
-
-```xml
-<ItemGroup>
-  <PackageReference Include="Workes.SaveSystem.MessagePack" Version="0.1.0" />
-</ItemGroup>
-```
-
-```csharp
-var manager = new SaveManager<string>(
-    SaveSystemOptions.Create(
-        saveRootPath: "Saves",
-        serializer: new MessagePackSaveSerializer()));
-```
+MessagePack support is planned for the optional `Workes.SaveSystem.MessagePack` companion package for dependency reasons. The core package does not reference MessagePack directly, and this preview release does not include the companion serializer yet. When the companion package is ready, it should be usable anywhere an `ISaveSerializer` is accepted.
 
 If providers using the serializer implement `ISaveMigratable`, the serializer must return an `ISaveMigrationCapableSerializer` from `ISaveSerializer.Migration`. That adapter must parse serialized payloads into editable `ISaveDataNode` trees, serialize edited node trees back to the payload format, and expose a matching `NodeFactory` that creates new object, array, and primitive nodes for migration steps.
 
