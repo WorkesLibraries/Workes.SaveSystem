@@ -6,17 +6,26 @@
     <ImplicitUsings>disable</ImplicitUsings>
     <LangVersion>10.0</LangVersion>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    
     <PackageId>Workes.SaveSystem</PackageId>
-    <Version>0.1.0</Version>
+    <Version>1.0.0-preview.1</Version>
+    <PackageReleaseNotes>First preview release of Workes.SaveSystem.</PackageReleaseNotes>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+
     <Authors>Workes</Authors>
     <Company>Workes</Company>
     <Product>Workes.SaveSystem</Product>
+
     <Description>Engine-neutral .NET save system with provider registration, snapshots, backups, migrations, and JSON serialization.</Description>
     <PackageTags>save;save-system;serialization;backup;migration;game-development</PackageTags>
+
     <PackageProjectUrl>https://github.com/WorkesLibraries/Workes.SaveSystem</PackageProjectUrl>
     <RepositoryUrl>https://github.com/WorkesLibraries/Workes.SaveSystem.git</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <PackageReadmeFile>README.md</PackageReadmeFile>
+
+    <Copyright>Copyright (c) 2026 Workes</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
   </PropertyGroup>
 
   <ItemGroup>
