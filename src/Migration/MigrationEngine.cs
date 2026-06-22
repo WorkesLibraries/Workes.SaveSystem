@@ -64,7 +64,9 @@ namespace Workes.SaveSystem
             ref byte[] serializedData,
             int savedSchemaVersion,
             int currentSchemaVersion,
-            ISaveMigrationSource migrationSource)
+            ISaveMigrationSource migrationSource,
+            SaveSerializerContext savedContext,
+            SaveSerializerContext currentContext)
         {
             if (savedSchemaVersion == currentSchemaVersion)
                 return true; // No migration needed
@@ -123,7 +125,9 @@ namespace Workes.SaveSystem
             ISaveDataNode envelopeNode;
             try
             {
-                envelopeNode = migrationSerializer.DeserializeToNode(serializedData);
+                envelopeNode = migrationSerializer is IContextualSaveMigrationCapableSerializer contextual
+                    ? contextual.DeserializeToNode(serializedData, savedContext)
+                    : migrationSerializer.DeserializeToNode(serializedData);
             }
             catch (Exception ex)
             {
@@ -179,7 +183,9 @@ namespace Workes.SaveSystem
             // Convert back to serialized bytes (envelope with updated SchemaVersion and migrated Data)
             try
             {
-                serializedData = migrationSerializer.SerializeFromNode(envelopeNode);
+                serializedData = migrationSerializer is IContextualSaveMigrationCapableSerializer contextual
+                    ? contextual.SerializeFromNode(envelopeNode, currentContext)
+                    : migrationSerializer.SerializeFromNode(envelopeNode);
             }
             catch (Exception ex)
             {

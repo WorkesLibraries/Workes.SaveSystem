@@ -77,6 +77,30 @@ public sealed class PublicApiShapeTests
     }
 
     [Test]
+    public void ContextualSerializerTypes_ArePublicOptionalApi()
+    {
+        var exportedTypeNames = typeof(SaveManager<>).Assembly
+            .GetExportedTypes()
+            .Select(type => type.Name)
+            .ToArray();
+
+        Assert.That(exportedTypeNames, Does.Contain(nameof(SaveSerializerContext)));
+        Assert.That(exportedTypeNames, Does.Contain(nameof(IContextualSaveSerializer)));
+        Assert.That(exportedTypeNames, Does.Contain(nameof(IContextualSaveMigrationCapableSerializer)));
+
+        var contextProperties = typeof(SaveSerializerContext)
+            .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Select(property => property.Name)
+            .ToArray();
+
+        Assert.That(contextProperties, Does.Contain(nameof(SaveSerializerContext.SaveKey)));
+        Assert.That(contextProperties, Does.Contain(nameof(SaveSerializerContext.SchemaVersion)));
+        Assert.That(contextProperties, Does.Contain(nameof(SaveSerializerContext.StateType)));
+        Assert.That(contextProperties, Does.Contain(nameof(SaveSerializerContext.Schematic)));
+        Assert.That(contextProperties, Does.Contain(nameof(SaveSerializerContext.SerializerMetadata)));
+    }
+
+    [Test]
     public void TransformFactory_IsNotPublicApi()
     {
         var exportedTypeNames = typeof(SaveManager<>).Assembly

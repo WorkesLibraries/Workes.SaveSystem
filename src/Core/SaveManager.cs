@@ -25,13 +25,14 @@ namespace Workes.SaveSystem
 
         private sealed class ValidatedSaveFolder
         {
-            public ValidatedSaveFolder(SaveMetadataInfo metadata, SaveSnapshot snapshot)
+            public ValidatedSaveFolder(SaveMetadata metadata, SaveSnapshot snapshot)
             {
-                Metadata = metadata;
+                Metadata = ToMetadataInfo(metadata);
                 Snapshot = snapshot;
             }
 
             public SaveMetadataInfo Metadata { get; }
+
             public SaveSnapshot Snapshot { get; }
         }
 
@@ -355,7 +356,9 @@ namespace Workes.SaveSystem
                     providerEntry.RegisteredSaveKey,
                     baseFileName + _options.Serializer.FileExtension);
 
-                ValidateProviderSerialization(providerEntry, schematic);
+                ValidateProviderSerialization(
+                    providerEntry,
+                    CreateTransientSerializerMetadata());
                 ValidateProviderMigration(providerEntry);
             }
 
@@ -506,13 +509,20 @@ namespace Workes.SaveSystem
             return ReadSaveMetadataInfo(_backupManager.GetBackupFolderPath(saveName, backupSuffix));
         }
 
-        private void ValidateProviderSerialization(ProviderEntry providerEntry, ISaveSchematic schematic)
+        private void ValidateProviderSerialization(
+            ProviderEntry providerEntry,
+            SaveSerializerMetadata serializerMetadata)
         {
             var state = ValidateProviderCapturedState(providerEntry);
 
             try
             {
-                _options.Serializer.Serialize(state, schematic);
+                SerializeProviderState(
+                    providerEntry.RegisteredSaveKey,
+                    providerEntry.Provider.SchemaVersion,
+                    state,
+                    providerEntry,
+                    serializerMetadata);
             }
             catch (Exception ex)
             {
@@ -614,11 +624,19 @@ namespace Workes.SaveSystem
             return snapshot;
         }
 
-        private object DeserializeProviderState(string saveKey, byte[] serializedData, ISaveSchematic schematic)
+        private object DeserializeProviderState(
+            string saveKey,
+            byte[] serializedData,
+            int schemaVersion,
+            ProviderEntry providerEntry,
+            SaveSerializerMetadata serializerMetadata)
         {
             try
             {
-                return _options.Serializer.Deserialize(serializedData, schematic);
+                var context = CreateSerializerContext(saveKey, schemaVersion, providerEntry, serializerMetadata);
+                return _options.Serializer is IContextualSaveSerializer contextual
+                    ? contextual.Deserialize(serializedData, context)
+                    : _options.Serializer.Deserialize(serializedData, context.Schematic);
             }
             catch (Exception ex)
             {
@@ -627,6 +645,39 @@ namespace Workes.SaveSystem
                     $"Failed to deserialize save data for provider '{saveKey}'.",
                     ex);
             }
+        }
+
+        private byte[] SerializeProviderState(
+            string saveKey,
+            int schemaVersion,
+            object state,
+            ProviderEntry providerEntry,
+            SaveSerializerMetadata serializerMetadata)
+        {
+            var context = CreateSerializerContext(saveKey, schemaVersion, providerEntry, serializerMetadata);
+            return _options.Serializer is IContextualSaveSerializer contextual
+                ? contextual.Serialize(state, context)
+                : _options.Serializer.Serialize(state, context.Schematic);
+        }
+
+        private SaveSerializerContext CreateSerializerContext(
+            string saveKey,
+            int schemaVersion,
+            ProviderEntry providerEntry,
+            SaveSerializerMetadata serializerMetadata)
+        {
+            var schematic = providerEntry.Schematic;
+            if (schematic == null)
+                throw new InvalidOperationException(
+                    $"SaveProvider with key '{saveKey}' does not have a persisted schematic.");
+
+            serializerMetadata.Normalize();
+            return new SaveSerializerContext(
+                saveKey,
+                schemaVersion,
+                providerEntry.StateType,
+                schematic,
+                serializerMetadata);
         }
 
         /// <summary>
@@ -699,11 +750,14 @@ namespace Workes.SaveSystem
                         $"Snapshot entry for provider '{entry.SaveKey}' has schema version {entry.SchemaVersion}, but the registered provider expects {expectedSchemaVersion}.");
                 }
 
-                ValidateSnapshotEntryState(entry, providerEntry);
+                ValidateSnapshotEntryState(entry, providerEntry, CreateTransientSerializerMetadata());
             }
         }
 
-        private void ValidateSnapshotEntryState(SaveSnapshot.Entry entry, ProviderEntry providerEntry)
+        private void ValidateSnapshotEntryState(
+            SaveSnapshot.Entry entry,
+            ProviderEntry providerEntry,
+            SaveSerializerMetadata serializerMetadata)
         {
             if (!providerEntry.StateType.IsInstanceOfType(entry.State))
             {
@@ -717,7 +771,12 @@ namespace Workes.SaveSystem
 
             try
             {
-                _options.Serializer.Serialize(entry.State, schematic);
+                SerializeProviderState(
+                    entry.SaveKey,
+                    entry.SchemaVersion,
+                    entry.State,
+                    providerEntry,
+                    serializerMetadata);
             }
             catch (Exception ex)
             {
@@ -727,7 +786,9 @@ namespace Workes.SaveSystem
             }
         }
 
-        internal SerializedSnapshot SerializeSnapshot(SaveSnapshot snapshot)
+        internal SerializedSnapshot SerializeSnapshot(
+            SaveSnapshot snapshot,
+            SaveSerializerMetadata serializerMetadata)
         {
             if (snapshot == null)
                 throw new ArgumentNullException(nameof(snapshot));
@@ -743,7 +804,12 @@ namespace Workes.SaveSystem
                 if (schematic == null)
                     continue; // provider opted out of serialization
 
-                var serializedState = _options.Serializer.Serialize(entry.State, schematic);
+                var serializedState = SerializeProviderState(
+                    entry.SaveKey,
+                    entry.SchemaVersion,
+                    entry.State,
+                    providerEntry,
+                    serializerMetadata);
                 serialized.Data.Add(entry.SaveKey, new SerializedSnapshot.SerializedEntry
                 {
                     SchemaVersion = entry.SchemaVersion,
@@ -754,7 +820,9 @@ namespace Workes.SaveSystem
             return serialized;
         }
 
-        internal SaveSnapshot DeserializeSnapshot(SerializedSnapshot serialized)
+        internal SaveSnapshot DeserializeSnapshot(
+            SerializedSnapshot serialized,
+            SaveSerializerMetadata serializerMetadata)
         {
             if (serialized == null)
                 throw new ArgumentNullException(nameof(serialized));
@@ -786,7 +854,9 @@ namespace Workes.SaveSystem
                         ref serializedData,
                         savedSchemaVersion,
                         currentSchemaVersion,
-                        migrationSource))
+                        migrationSource,
+                        CreateSerializerContext(kvp.Key, savedSchemaVersion, providerEntry, serializerMetadata),
+                        CreateSerializerContext(kvp.Key, currentSchemaVersion, providerEntry, serializerMetadata)))
                     {
                         throw SaveLoadException.Create(
                             SaveLoadStatus.MigrationFailed,
@@ -795,7 +865,12 @@ namespace Workes.SaveSystem
                     }
                 }
 
-                var state = DeserializeProviderState(kvp.Key, serializedData, schematic);
+                var state = DeserializeProviderState(
+                    kvp.Key,
+                    serializedData,
+                    currentSchemaVersion,
+                    providerEntry,
+                    serializerMetadata);
 
                 snapshot.Add(
                     kvp.Key,
@@ -861,7 +936,11 @@ namespace Workes.SaveSystem
             try
             {
                 var snapshot = CaptureSnapshot();
-                var serialized = SerializeSnapshot(snapshot);
+                var metadata = createMetadata();
+                metadata.PrepareForWrite(DateTimeOffset.UtcNow);
+                WriteSerializerMetadata(metadata);
+
+                var serialized = SerializeSnapshot(snapshot, metadata.SerializerMetadata);
 
                 foreach (var serializedEntry in serialized.Data)
                 {
@@ -876,13 +955,9 @@ namespace Workes.SaveSystem
                         tempPath);
                 }
 
-                var metadata = createMetadata();
-                metadata.PrepareForWrite(DateTimeOffset.UtcNow);
-                WriteSerializerMetadata(metadata);
-
                 WriteSaveMetadataToFile(metaPath, metadata);
 
-                ValidateTempSaveFolderSave(tempPath, serialized.Data);
+                ValidateTempSaveFolderSave(tempPath, serialized.Data, metadata);
             }
             catch
             {
@@ -1269,9 +1344,12 @@ namespace Workes.SaveSystem
         {
             try
             {
-                ValidateMetadataFile(folderPath);
-                var serialized = LoadSerializedSnapshotFromFolder(folderPath, allowMissingProviderFileSkip: false);
-                ValidateSerializedSnapshotForRecovery(serialized);
+                var metadata = ValidateMetadataFile(folderPath);
+                var serialized = LoadSerializedSnapshotFromFolder(
+                    folderPath,
+                    metadata,
+                    allowMissingProviderFileSkip: false);
+                ValidateSerializedSnapshotForRecovery(serialized, metadata.SerializerMetadata);
                 return new RecoveryCandidateValidation(isValid: true, errorMessage: null);
             }
             catch (Exception ex)
@@ -1280,7 +1358,9 @@ namespace Workes.SaveSystem
             }
         }
 
-        private void ValidateSerializedSnapshotForRecovery(SerializedSnapshot serialized)
+        private void ValidateSerializedSnapshotForRecovery(
+            SerializedSnapshot serialized,
+            SaveSerializerMetadata serializerMetadata)
         {
             foreach (var kvp in serialized.Data)
             {
@@ -1298,7 +1378,12 @@ namespace Workes.SaveSystem
                 if (schematic == null)
                     continue;
 
-                var state = DeserializeProviderState(kvp.Key, kvp.Value.Data, schematic);
+                var state = DeserializeProviderState(
+                    kvp.Key,
+                    kvp.Value.Data,
+                    kvp.Value.SchemaVersion,
+                    providerEntry,
+                    serializerMetadata);
                 if (!providerEntry.StateType.IsInstanceOfType(state))
                 {
                     throw new InvalidOperationException(
@@ -1446,7 +1531,8 @@ namespace Workes.SaveSystem
 
         private void ValidateTempSaveFolderSave(
             string folderPath,
-            Dictionary<string, SerializedSnapshot.SerializedEntry> serializedEntries)
+            Dictionary<string, SerializedSnapshot.SerializedEntry> serializedEntries,
+            SaveMetadata metadata)
         {
             IEnumerable<KeyValuePair<string, ProviderEntry>> serializableProviders = PersistedProviders();
 
@@ -1457,7 +1543,11 @@ namespace Workes.SaveSystem
                     $"Expected {expectedFileCount} files to exist in the temp save folder, but some were missing. Missing files: {string.Join(", ", missingFiles)}"
                 );
 
-            var (allFilesDeserialize, failedFiles) = CheckIfAllFilesDeserialize(serializableProviders, folderPath, serializedEntries);
+            var (allFilesDeserialize, failedFiles) = CheckIfAllFilesDeserialize(
+                serializableProviders,
+                folderPath,
+                serializedEntries,
+                metadata.SerializerMetadata);
             if (!allFilesDeserialize)
                 throw new InvalidOperationException(
                     $"Expected all {expectedFileCount} files to deserialize correctly, but some did not. Failed files: {string.Join(", ", failedFiles)}"
@@ -1493,7 +1583,8 @@ namespace Workes.SaveSystem
         private (bool allFilesDeserialize, List<string> failedFiles) CheckIfAllFilesDeserialize(
             IEnumerable<KeyValuePair<string, ProviderEntry>> serializableProviders,
             string folderPath,
-            Dictionary<string, SerializedSnapshot.SerializedEntry> serializedEntries)
+            Dictionary<string, SerializedSnapshot.SerializedEntry> serializedEntries,
+            SaveSerializerMetadata serializerMetadata)
         {
             bool allFilesDeserialize = true;
             List<string> failedFiles = new List<string>();
@@ -1510,7 +1601,12 @@ namespace Workes.SaveSystem
                 if (schematic == null)
                     continue;
 
-                var state = DeserializeProviderState(provider.Key, serializedData, schematic);
+                var state = DeserializeProviderState(
+                    provider.Key,
+                    serializedData,
+                    serializedEntries[provider.Key].SchemaVersion,
+                    provider.Value,
+                    serializerMetadata);
                 if (state == null || !provider.Value.StateType.IsInstanceOfType(state))
                 {
                     allFilesDeserialize = false;
@@ -1521,7 +1617,7 @@ namespace Workes.SaveSystem
             return (allFilesDeserialize, failedFiles);
         }
 
-        private void ValidateMetadataFile(string pathContainingMetadata)
+        private SaveMetadata ValidateMetadataFile(string pathContainingMetadata)
         {
             var metaPath = GetMetadataFilePath(pathContainingMetadata);
             var metadataFileName = GetMetadataFileName();
@@ -1555,6 +1651,7 @@ namespace Workes.SaveSystem
                 );
 
             ValidateSerializerMetadata(metadata);
+            return metadata;
         }
 
         private SaveMetadata? TryReadSaveMetadata(string folderPath)
@@ -1605,7 +1702,7 @@ namespace Workes.SaveSystem
                 metadata.LastWrittenAtUtc);
         }
 
-        private SaveMetadataInfo ReadRequiredSaveMetadataInfo(string folderPath)
+        private SaveMetadata ReadRequiredSaveMetadata(string folderPath)
         {
             var metaPath = GetMetadataFilePath(folderPath);
             var metadataFileName = GetMetadataFileName();
@@ -1645,10 +1742,7 @@ namespace Workes.SaveSystem
                     ex);
             }
 
-            return new SaveMetadataInfo(
-                metadata.SaveId,
-                metadata.CreatedAtUtc,
-                metadata.LastWrittenAtUtc);
+            return metadata;
         }
 
         private ISaveSchematic CreateMetadataSchematic()
@@ -1671,6 +1765,14 @@ namespace Workes.SaveSystem
             return saveMetadata;
         }
 
+        private static SaveMetadataInfo ToMetadataInfo(SaveMetadata metadata)
+        {
+            return new SaveMetadataInfo(
+                metadata.SaveId,
+                metadata.CreatedAtUtc,
+                metadata.LastWrittenAtUtc);
+        }
+
         private SaveMetadata ReadExistingMetadataOrCreateNew(string folderPath)
         {
             var existingMetaPath = GetMetadataFilePath(folderPath);
@@ -1685,10 +1787,16 @@ namespace Workes.SaveSystem
             File.WriteAllBytes(metaPath, _options.Serializer.Serialize(metadata, CreateMetadataSchematic()));
         }
 
-        private void WriteSerializerMetadata(SaveMetadata metadata)
+        private SaveSerializerMetadata CreateTransientSerializerMetadata()
         {
-            metadata.SerializerMetadata ??= new SaveSerializerMetadata();
-            metadata.SerializerMetadata.Normalize();
+            var metadata = new SaveSerializerMetadata();
+            WriteSerializerMetadata(metadata);
+            return metadata;
+        }
+
+        private void WriteSerializerMetadata(SaveSerializerMetadata metadata)
+        {
+            metadata.Normalize();
 
             var metadataHandler = _options.Serializer.Metadata;
             if (metadataHandler == null)
@@ -1696,10 +1804,16 @@ namespace Workes.SaveSystem
 
             metadataHandler.WriteMetadata(
                 new SaveSerializerMetadataWriteContext(
-                    metadata.SerializerMetadata,
+                    metadata,
                     CreateSerializerProviderInfos()));
 
-            metadata.SerializerMetadata.Normalize();
+            metadata.Normalize();
+        }
+
+        private void WriteSerializerMetadata(SaveMetadata metadata)
+        {
+            metadata.SerializerMetadata ??= new SaveSerializerMetadata();
+            WriteSerializerMetadata(metadata.SerializerMetadata);
         }
 
         private void ValidateSerializerMetadata(SaveMetadata metadata)
@@ -1740,9 +1854,9 @@ namespace Workes.SaveSystem
 
         private ValidatedSaveFolder ValidateSaveFolderForLoad(string folderPath)
         {
-            var metadata = ReadRequiredSaveMetadataInfo(folderPath);
-            var serialized = LoadSerializedSnapshotFromFolder(folderPath);
-            var snapshot = DeserializeSnapshot(serialized);
+            var metadata = ReadRequiredSaveMetadata(folderPath);
+            var serialized = LoadSerializedSnapshotFromFolder(folderPath, metadata);
+            var snapshot = DeserializeSnapshot(serialized, metadata.SerializerMetadata);
             ValidateSnapshotForRestore(snapshot);
             return new ValidatedSaveFolder(metadata, snapshot);
         }
@@ -1899,6 +2013,7 @@ namespace Workes.SaveSystem
         /// </summary>
         private SerializedSnapshot LoadSerializedSnapshotFromFolder(
             string folderPath,
+            SaveMetadata metadata,
             bool allowMissingProviderFileSkip = true)
         {
             var serialized = new SerializedSnapshot();
@@ -1915,6 +2030,8 @@ namespace Workes.SaveSystem
                 // Extract the saved schema version from the serialized data using the serializer
                 int savedSchemaVersion = ExtractSchemaVersionFromSerializedData(
                     serializedEntry,
+                    kvp.Value,
+                    metadata.SerializerMetadata,
                     kvp.Value.Provider.SchemaVersion);
 
                 serialized.Data[kvp.Key] = new SerializedSnapshot.SerializedEntry
@@ -1934,12 +2051,21 @@ namespace Workes.SaveSystem
         /// <exception cref="InvalidOperationException">Thrown when the schema version cannot be extracted from the serialized data.</exception>
         private int ExtractSchemaVersionFromSerializedData(
             byte[] serializedData,
+            ProviderEntry providerEntry,
+            SaveSerializerMetadata serializerMetadata,
             int currentSchemaVersion)
         {
             // Use the serializer to extract the schema version
             try
             {
-                return _options.Serializer.ExtractSchemaVersion(serializedData);
+                var context = CreateSerializerContext(
+                    providerEntry.RegisteredSaveKey,
+                    currentSchemaVersion,
+                    providerEntry,
+                    serializerMetadata);
+                return _options.Serializer is IContextualSaveSerializer contextual
+                    ? contextual.ExtractSchemaVersion(serializedData, context)
+                    : _options.Serializer.ExtractSchemaVersion(serializedData);
             }
             catch (Exception ex)
             {

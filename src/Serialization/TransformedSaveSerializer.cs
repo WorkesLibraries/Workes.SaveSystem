@@ -9,7 +9,7 @@ namespace Workes.SaveSystem
     /// <remarks>
     /// Use this for format-level concerns such as custom obfuscation or encryption.
     /// </remarks>
-    public sealed class TransformedSaveSerializer : ISaveSerializer
+    public sealed class TransformedSaveSerializer : ISaveSerializer, IContextualSaveSerializer
     {
         private readonly ISaveMigrationCapableSerializer? _migration;
 
@@ -62,15 +62,43 @@ namespace Workes.SaveSystem
         }
 
         /// <inheritdoc />
+        public byte[] Serialize(object data, SaveSerializerContext context)
+        {
+            var innerData = Inner is IContextualSaveSerializer contextual
+                ? contextual.Serialize(data, context)
+                : Inner.Serialize(data, context.Schematic);
+
+            return Transform.Encode(innerData);
+        }
+
+        /// <inheritdoc />
         public object Deserialize(byte[] rawData, ISaveSchematic schematic)
         {
             return Inner.Deserialize(Transform.Decode(rawData), schematic);
         }
 
         /// <inheritdoc />
+        public object Deserialize(byte[] rawData, SaveSerializerContext context)
+        {
+            var decoded = Transform.Decode(rawData);
+            return Inner is IContextualSaveSerializer contextual
+                ? contextual.Deserialize(decoded, context)
+                : Inner.Deserialize(decoded, context.Schematic);
+        }
+
+        /// <inheritdoc />
         public int ExtractSchemaVersion(byte[] serializedData)
         {
             return Inner.ExtractSchemaVersion(Transform.Decode(serializedData));
+        }
+
+        /// <inheritdoc />
+        public int ExtractSchemaVersion(byte[] serializedData, SaveSerializerContext context)
+        {
+            var decoded = Transform.Decode(serializedData);
+            return Inner is IContextualSaveSerializer contextual
+                ? contextual.ExtractSchemaVersion(decoded, context)
+                : Inner.ExtractSchemaVersion(decoded);
         }
 
         private static void ValidateExtension(string extension, string parameterName)
@@ -85,7 +113,7 @@ namespace Workes.SaveSystem
                 throw new ArgumentException($"File extension '{extension}' contains invalid characters.", parameterName);
         }
 
-        private sealed class TransformedMigrationAdapter : ISaveMigrationCapableSerializer
+        private sealed class TransformedMigrationAdapter : ISaveMigrationCapableSerializer, IContextualSaveMigrationCapableSerializer
         {
             private readonly ISaveMigrationCapableSerializer _inner;
             private readonly ISavePayloadTransform _transform;
@@ -105,9 +133,26 @@ namespace Workes.SaveSystem
                 return _inner.DeserializeToNode(_transform.Decode(data));
             }
 
+            public ISaveDataNode DeserializeToNode(byte[] data, SaveSerializerContext context)
+            {
+                var decoded = _transform.Decode(data);
+                return _inner is IContextualSaveMigrationCapableSerializer contextual
+                    ? contextual.DeserializeToNode(decoded, context)
+                    : _inner.DeserializeToNode(decoded);
+            }
+
             public byte[] SerializeFromNode(ISaveDataNode node)
             {
                 return _transform.Encode(_inner.SerializeFromNode(node));
+            }
+
+            public byte[] SerializeFromNode(ISaveDataNode node, SaveSerializerContext context)
+            {
+                var innerData = _inner is IContextualSaveMigrationCapableSerializer contextual
+                    ? contextual.SerializeFromNode(node, context)
+                    : _inner.SerializeFromNode(node);
+
+                return _transform.Encode(innerData);
             }
         }
     }

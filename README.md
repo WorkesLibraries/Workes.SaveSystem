@@ -37,14 +37,14 @@ That dependency is intentional for the current package shape:
 
 `System.Text.Json` is not part of the core package for the first reusable version. Under the current `netstandard2.1` target, using it requires an additional package reference, so adding a parallel `System.Text.Json` serializer would not make the package dependency-free. Replacing Newtonsoft would still require replacing the built-in JSON serializer and metadata persistence behavior together. For now, consumers should treat Newtonsoft as part of the package contract.
 
-GZip compression is available through the .NET platform libraries and does not require another NuGet dependency. MessagePack support is planned as a future optional companion package, `Workes.SaveSystem.MessagePack`, because it brings its own serializer dependency. The intended package shape is:
+GZip compression is available through the .NET platform libraries and does not require another NuGet dependency. MessagePack support is intended for the optional companion package, `Workes.SaveSystem.MessagePack`, because it brings its own serializer dependency. The intended package shape is:
 
 ```text
 Workes.SaveSystem
 Workes.SaveSystem.MessagePack
 ```
 
-The core `Workes.SaveSystem` preview does not reference MessagePack and does not ship a MessagePack serializer. Until the companion package is published, use JSON or compressed JSON:
+The core `Workes.SaveSystem` preview does not reference MessagePack and does not ship a MessagePack serializer. It provides contextual serializer APIs so metadata-backed companion serializers can use field maps during payload reads, writes, validation, and migration. Until the companion package is published, use JSON or compressed JSON:
 
 ```csharp
 var serializer = new CompressedSaveSerializer(
@@ -257,6 +257,8 @@ Metadata reads return `null` when no metadata file exists and throw when a metad
 | `LastWrittenAtUtc` | UTC timestamp for the most recent successful write. |
 
 Serializers that need format metadata can implement `ISaveSerializerMetadataHandler`. That metadata is stored inside the save-system metadata file as serializer-owned string key/value data, with both global and per-provider buckets. This is intended for serializer implementation details such as field maps or codec settings; it is not exposed through `SaveMetadataInfo` and should not be used for game/application display metadata.
+
+Serializers whose provider payload format depends on that metadata can also implement `IContextualSaveSerializer` and, for migration support, `IContextualSaveMigrationCapableSerializer`. The manager passes a `SaveSerializerContext` containing the provider save key, schema version, state type, schematic, and saved serializer metadata when serializing, extracting schema versions, deserializing, validating, and migrating provider payloads. Plain JSON-style serializers can ignore these optional interfaces.
 
 Application-owned display metadata such as character name, playtime, difficulty, or screenshot references should live in a normal provider for this preview. A dedicated application metadata provider API is planned separately so application metadata can have its own ownership and migration story instead of being mixed with required save-system metadata or serializer metadata.
 
@@ -676,17 +678,19 @@ A custom serializer must provide these pieces as one coherent format:
 
 Schematic creation should be lightweight where possible. Provider state write compatibility is validated through real provider state during `ValidateRegistrations()`. Read compatibility is validated when real save data is deserialized during load, so custom serializers should still fail clearly for deserialize-only problems.
 
-If the serializer needs metadata stored with a save, implement `ISaveSerializerMetadataHandler` and return it from `ISaveSerializer.Metadata`. The manager calls `WriteMetadata(...)` before writing the metadata file and `ValidateMetadata(...)` when temp-save and recovery-candidate metadata is validated. Missing serializer metadata is treated as empty metadata for compatibility with older saves.
+If the serializer needs metadata stored with a save, implement `ISaveSerializerMetadataHandler` and return it from `ISaveSerializer.Metadata`. The manager calls `WriteMetadata(...)` before provider payloads and the metadata file are written, and calls `ValidateMetadata(...)` when temp-save, load, validation, and recovery-candidate metadata is validated. Missing serializer metadata is treated as empty metadata for compatibility with older saves.
+
+If provider payload serialization depends on serializer-owned metadata, implement `IContextualSaveSerializer`. The manager will prefer its contextual `Serialize(...)`, `Deserialize(...)`, and `ExtractSchemaVersion(...)` methods for provider files and fall back to `ISaveSerializer` methods for existing serializers. Use this for compact metadata-backed formats such as MessagePack field maps; JSON serializers and other self-describing formats usually do not need it.
 
 Custom serializers must also be able to create a schematic for the public `SaveMetadata` type. Existing metadata files that deserialize to `null` or to another type are treated as corrupt; use `ForceSaveToDisk(...)` when intentionally replacing a corrupt or incompatible save.
 
-Use `TransformedSaveSerializer` with `ISavePayloadTransform` when an existing serializer format should be encoded after serialization and decoded before deserialization. The decorator composes file extensions, so wrapping JSON with a transform whose suffix is `.enc` writes provider and metadata files such as `player.json.enc` and `metadata.json.enc`. Migration is routed through the decorator by decoding before `DeserializeToNode(...)` and encoding after `SerializeFromNode(...)`. Serializer metadata is delegated from the inner serializer.
+Use `TransformedSaveSerializer` with `ISavePayloadTransform` when an existing serializer format should be encoded after serialization and decoded before deserialization. The decorator composes file extensions, so wrapping JSON with a transform whose suffix is `.enc` writes provider and metadata files such as `player.json.enc` and `metadata.json.enc`. Migration is routed through the decorator by decoding before `DeserializeToNode(...)` and encoding after `SerializeFromNode(...)`. Contextual serializer and migration calls are forwarded to the inner serializer when supported. Serializer metadata is delegated from the inner serializer.
 
 `CompressedSaveSerializer` is the intended public compression API. Its internal compression transform should remain an implementation detail unless a concrete use case appears for exposing GZip as a standalone payload transform.
 
-MessagePack support is planned for the optional `Workes.SaveSystem.MessagePack` companion package for dependency reasons. The core package does not reference MessagePack directly, and this preview release does not include the companion serializer yet. When the companion package is ready, it should be usable anywhere an `ISaveSerializer` is accepted.
+MessagePack support belongs in the optional `Workes.SaveSystem.MessagePack` companion package for dependency reasons. The core package does not reference MessagePack directly and does not implement field maps itself; it provides the contextual serializer plumbing needed for the companion package to store and use those maps in `SaveMetadata.SerializerMetadata`.
 
-If providers using the serializer implement `ISaveMigratable`, the serializer must return an `ISaveMigrationCapableSerializer` from `ISaveSerializer.Migration`. That adapter must parse serialized payloads into editable `ISaveDataNode` trees, serialize edited node trees back to the payload format, and expose a matching `NodeFactory` that creates new object, array, and primitive nodes for migration steps.
+If providers using the serializer implement `ISaveMigratable`, the serializer must return an `ISaveMigrationCapableSerializer` from `ISaveSerializer.Migration`. That adapter must parse serialized payloads into editable `ISaveDataNode` trees, serialize edited node trees back to the payload format, and expose a matching `NodeFactory` that creates new object, array, and primitive nodes for migration steps. Metadata-backed migration adapters can additionally implement `IContextualSaveMigrationCapableSerializer` to receive the same `SaveSerializerContext` used by contextual provider serialization.
 
 The migration-capable serializer, its `NodeFactory`, and its data-node trees are coupled. Do not mix data nodes from different serializer or factory instances.
 
