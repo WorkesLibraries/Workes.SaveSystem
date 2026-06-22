@@ -202,14 +202,15 @@ IReadOnlyList<string> slots = manager.ListSaveSlots();
 
 The returned values are resolved relative save paths, not `TIdentity` values, because custom identity resolvers may not be reversible. The list is sorted with ordinal string ordering, uses `/` separators, and ignores backup folders, temp folders, to-delete folders, and directories that do not contain save metadata.
 
-Use `DeleteSave(...)` and `DeleteBackupSlot(...)` for save-menu cleanup or debug tooling.
+Use `DeleteSave(...)`, `DeleteBackupSlot(...)`, and `DeleteAllBackupSlots(...)` for save-menu cleanup or debug tooling.
 
 ```csharp
 bool saveDeleted = manager.DeleteSave("slot-1");
 bool backupDeleted = manager.DeleteBackupSlot("slot-1", slotNumber: 1);
+int backupsDeleted = manager.DeleteAllBackupSlots("slot-1");
 ```
 
-`DeleteSave(...)` removes the main save and any temp or to-delete artifacts for the same resolved save path. It does not remove backups. `DeleteBackupSlot(...)` removes only the numbered backup folder and can be used even when backup creation is currently disabled.
+`DeleteSave(...)` removes the main save and any temp or to-delete artifacts for the same resolved save path. It does not remove backups. `DeleteBackupSlot(...)` removes only the requested numbered backup folder, while `DeleteAllBackupSlots(...)` removes all numbered backup folders for the save identity and returns the number deleted. Backup deletion can be used even when backup creation is currently disabled.
 
 Use `SaveExists(...)` and `BackupSlotExists(...)` for lightweight UI checks such as enabling load buttons or showing overwrite prompts.
 

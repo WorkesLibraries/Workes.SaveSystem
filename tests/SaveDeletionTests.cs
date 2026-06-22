@@ -103,16 +103,110 @@ public sealed class SaveDeletionTests
         Assert.That(ex!.ParamName, Is.EqualTo("slotNumber"));
     }
 
+    [Test]
+    public void DeleteAllBackupSlots_DeletesAllNumberedBackupsAndLeavesMainSave()
+    {
+        var manager = CreateManager(enableBackupSystem: true, backupSystemMaxBackupCount: 3);
+        var provider = new TestProvider(new TestState { Value = 1 });
+        manager.RegisterProvider(provider);
+        SaveValue(manager, provider, "slot", 1);
+        SaveValue(manager, provider, "slot", 2);
+        SaveValue(manager, provider, "slot", 3);
+        SaveValue(manager, provider, "slot", 4);
+
+        var deleted = manager.DeleteAllBackupSlots("slot");
+
+        Assert.That(deleted, Is.EqualTo(3));
+        Assert.That(Directory.Exists(Path.Combine(_tempRoot, "slot")), Is.True);
+        Assert.That(Directory.Exists(Path.Combine(_tempRoot, "_backup", "slot_0001")), Is.False);
+        Assert.That(Directory.Exists(Path.Combine(_tempRoot, "_backup", "slot_0002")), Is.False);
+        Assert.That(Directory.Exists(Path.Combine(_tempRoot, "_backup", "slot_0003")), Is.False);
+    }
+
+    [Test]
+    public void DeleteAllBackupSlots_CanDeleteWhenBackupsAreCurrentlyDisabled()
+    {
+        var backupPath = Path.Combine(_tempRoot, "_backup", "slot_0001");
+        Directory.CreateDirectory(backupPath);
+        var manager = CreateManager();
+
+        var deleted = manager.DeleteAllBackupSlots("slot");
+
+        Assert.That(deleted, Is.EqualTo(1));
+        Assert.That(Directory.Exists(backupPath), Is.False);
+    }
+
+    [Test]
+    public void DeleteAllBackupSlots_ReturnsZeroWhenNoMatchingBackupsExist()
+    {
+        var manager = CreateManager();
+
+        var deleted = manager.DeleteAllBackupSlots("missing");
+
+        Assert.That(deleted, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void DeleteAllBackupSlots_RejectsInvalidIdentity()
+    {
+        var manager = CreateManager();
+
+        Assert.Throws<ArgumentNullException>(() => manager.DeleteAllBackupSlots(null!));
+        Assert.Throws<InvalidOperationException>(() => manager.DeleteAllBackupSlots("../slot"));
+    }
+
+    [Test]
+    public void DeleteAllBackupSlots_SupportsNestedResolvedSavePaths()
+    {
+        var manager = CreateManager(
+            enableBackupSystem: true,
+            backupSystemMaxBackupCount: 2,
+            savePathResolver: identity => Path.Combine("profile-a", identity));
+        var provider = new TestProvider(new TestState { Value = 1 });
+        manager.RegisterProvider(provider);
+        SaveValue(manager, provider, "slot", 1);
+        SaveValue(manager, provider, "slot", 2);
+        SaveValue(manager, provider, "slot", 3);
+
+        var deleted = manager.DeleteAllBackupSlots("slot");
+
+        Assert.That(deleted, Is.EqualTo(2));
+        Assert.That(Directory.Exists(Path.Combine(_tempRoot, "profile-a", "slot")), Is.True);
+        Assert.That(Directory.Exists(Path.Combine(_tempRoot, "_backup", "profile-a", "slot_0001")), Is.False);
+        Assert.That(Directory.Exists(Path.Combine(_tempRoot, "_backup", "profile-a", "slot_0002")), Is.False);
+    }
+
+    [Test]
+    public void DeleteAllBackupSlots_IgnoresMalformedAndUnrelatedBackupFolders()
+    {
+        Directory.CreateDirectory(Path.Combine(_tempRoot, "_backup", "slot_0001"));
+        Directory.CreateDirectory(Path.Combine(_tempRoot, "_backup", "slot_extra"));
+        Directory.CreateDirectory(Path.Combine(_tempRoot, "_backup", "slot_00001"));
+        Directory.CreateDirectory(Path.Combine(_tempRoot, "_backup", "slot_00x1"));
+        Directory.CreateDirectory(Path.Combine(_tempRoot, "_backup", "slot2_0001"));
+        var manager = CreateManager();
+
+        var deleted = manager.DeleteAllBackupSlots("slot");
+
+        Assert.That(deleted, Is.EqualTo(1));
+        Assert.That(Directory.Exists(Path.Combine(_tempRoot, "_backup", "slot_0001")), Is.False);
+        Assert.That(Directory.Exists(Path.Combine(_tempRoot, "_backup", "slot_extra")), Is.True);
+        Assert.That(Directory.Exists(Path.Combine(_tempRoot, "_backup", "slot_00001")), Is.True);
+        Assert.That(Directory.Exists(Path.Combine(_tempRoot, "_backup", "slot_00x1")), Is.True);
+        Assert.That(Directory.Exists(Path.Combine(_tempRoot, "_backup", "slot2_0001")), Is.True);
+    }
+
     private SaveManager<string> CreateManager(
         bool enableBackupSystem = false,
-        int backupSystemMaxBackupCount = 0)
+        int backupSystemMaxBackupCount = 0,
+        Func<string, string>? savePathResolver = null)
     {
         return new SaveManager<string>(
             new SaveSystemOptions<string>(
                 saveRootPath: _tempRoot,
                 serializer: new JsonSaveSerializer(),
                 tempFolderName: SaveSystemOptions<string>.DefaultTempFolderName(),
-                savePathResolver: identity => identity,
+                savePathResolver: savePathResolver ?? (identity => identity),
                 fileNameResolver: SaveSystemOptions<string>.DefaultFileNameResolver,
                 enableBackupSystem: enableBackupSystem,
                 backupSystemMaxBackupCount: backupSystemMaxBackupCount));

@@ -103,6 +103,31 @@ namespace Workes.SaveSystem
         }
 
         /// <summary>
+        /// Deletes all numbered backup folders for the specified relative save path.
+        /// </summary>
+        /// <param name="savePath">The resolved relative save path.</param>
+        /// <returns>The number of backup folders deleted.</returns>
+        public int DeleteAllBackupSlots(string savePath)
+        {
+            var backupParentPath = GetBackupParentFolderPath(savePath);
+            if (!Directory.Exists(backupParentPath))
+                return 0;
+
+            var deletedCount = 0;
+            foreach (var backupDirectory in GetBackupDirectoriesForSave(savePath))
+            {
+                var backupPath = Path.Combine(backupParentPath, backupDirectory);
+                if (!Directory.Exists(backupPath))
+                    continue;
+
+                Directory.Delete(backupPath, true);
+                deletedCount++;
+            }
+
+            return deletedCount;
+        }
+
+        /// <summary>
         /// Corrects backup index sequencing before the "make space" sweep.
         /// Deletes backups beyond MaxBackupCount (considered tampered). Fills gaps in the sequence
         /// (e.g. _0001, _0002, _0004 -> rename _0004 to _0003). Assumes higher index = newer save.

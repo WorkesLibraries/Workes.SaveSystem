@@ -1066,6 +1066,24 @@ namespace Workes.SaveSystem
         }
 
         /// <summary>
+        /// Deletes all numbered backup slots for the specified identity from disk.
+        /// </summary>
+        /// <remarks>
+        /// Backup deletion is available even when the backup system is currently disabled, which allows cleanup
+        /// tools to remove old backup folders without re-enabling backup creation. This method deletes only valid
+        /// numbered backup folders for the resolved save path and does not delete the main save.
+        /// </remarks>
+        /// <param name="identity">The identity that identifies which save's backups should be deleted.</param>
+        /// <returns>The number of backup slot folders deleted.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="identity"/> is null.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when the resolved save path is invalid.</exception>
+        public int DeleteAllBackupSlots(TIdentity identity)
+        {
+            var saveName = ResolveSavePath(identity);
+            return _backupManager.DeleteAllBackupSlots(saveName);
+        }
+
+        /// <summary>
         /// Attempts to recover an incomplete save operation. This is automatically called by <see cref="LoadFromDisk"/>.
         /// Checks for temporary save folders and attempts to complete or restore interrupted save operations.
         /// </summary>
