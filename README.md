@@ -226,6 +226,16 @@ bool canRestoreBackup = manager.BackupSlotExists("slot-1", slotNumber: 1);
 
 Existence checks inspect the raw disk layout without loading provider data, recovering temp folders, or requiring registration validation. A save or backup exists only when its folder contains save metadata.
 
+Use `ValidateSave(...)` or `ValidateBackupSlot(...)` when a save menu needs to check loadability without restoring providers or mutating disk. Validation requires validated registrations, reads save-system and serializer metadata, checks provider files, validates schema extraction and migration paths, and deserializes provider data in memory. It does not run recovery, call lifecycle hooks, write migrated data, or restore provider state.
+
+```csharp
+SaveValidationResult validation = manager.ValidateSave("slot-1");
+if (validation.IsValid)
+{
+    ShowLastWritten(validation.Metadata!.LastWrittenAtUtc);
+}
+```
+
 ## Save Metadata
 
 Use `ReadSaveMetadata(...)` and `ReadBackupSlotMetadata(...)` when a menu or tool needs save-system-owned metadata.
@@ -245,8 +255,6 @@ Metadata reads return `null` when no metadata file exists and throw when a metad
 | `SaveId` | Stable id for this save folder. It is used internally to validate recovery candidates and should not be treated as application display data. |
 | `CreatedAtUtc` | UTC timestamp for when this save identity was first written, preserved by normal saves. |
 | `LastWrittenAtUtc` | UTC timestamp for the most recent successful write. |
-
-Use `ValidateSave(...)` when a menu needs to know whether this manager can load the save now. It returns `SaveValidationResult.Metadata` on success, so a menu can check loadability and display timestamps with one call.
 
 Serializers that need format metadata can implement `ISaveSerializerMetadataHandler`. That metadata is stored inside the save-system metadata file as serializer-owned string key/value data, with both global and per-provider buckets. This is intended for serializer implementation details such as field maps or codec settings; it is not exposed through `SaveMetadataInfo` and should not be used for game/application display metadata.
 
@@ -277,16 +285,6 @@ if (!result.Succeeded)
 The try-load APIs use the same load path as `LoadFromDisk(...)` and `LoadBackupSlotFromDisk(...)`. Successful loads restore providers normally. Missing saves, disabled backups, registration validation failures, missing provider files, migration failures, recovery failures, corrupt data, and other load failures are reported through `SaveLoadResult.Status`; failed error cases keep the captured exception on `SaveLoadResult.Exception`. Provider payloads with a valid envelope but null `Data` are treated as corrupt data because provider state must be non-null.
 
 For `TryLoadBackupSlotFromDisk(...)`, disabled backups are reported as `SaveLoadStatus.BackupSystemDisabled` before request or registration validation. This makes backup-disabled UI checks cheap and non-throwing even when the caller has not prepared provider registrations.
-
-Use `ValidateSave(...)` or `ValidateBackupSlot(...)` when a save menu needs to check loadability without restoring providers or mutating disk. Validation requires validated registrations, reads save-system and serializer metadata, checks provider files, validates schema extraction and migration paths, and deserializes provider data in memory. It does not run recovery, call lifecycle hooks, write migrated data, or restore provider state.
-
-```csharp
-SaveValidationResult validation = manager.ValidateSave("slot-1");
-if (validation.IsValid)
-{
-    ShowLastWritten(validation.Metadata!.LastWrittenAtUtc);
-}
-```
 
 ## Scopes And Provider Sets
 
