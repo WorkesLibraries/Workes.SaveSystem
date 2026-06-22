@@ -535,15 +535,25 @@ Primitive helper variants are available for common values:
 
 ```csharp
 SaveMigrationStep.AddIntDefault(1, "Level", 1);
+SaveMigrationStep.AddLongDefault(1, "TotalGold", 9000000000L);
 SaveMigrationStep.AddFloatDefault(1, "Speed", 4.5f);
+SaveMigrationStep.AddDoubleDefault(1, "Precision", 4.56789d);
+SaveMigrationStep.AddDecimalDefault(1, "Cost", 123.45m);
 SaveMigrationStep.AddStringDefault(1, "Title", "Unknown");
 SaveMigrationStep.AddBoolDefault(1, "Unlocked", false);
+SaveMigrationStep.AddBytesDefault(1, "Thumbnail", bytes);
+SaveMigrationStep.AddDateTimeDefault(1, "LastSeenAt", DateTime.UtcNow);
 SaveMigrationStep.AddNullDefault(1, "DeletedAt");
 
 SaveMigrationStep.SetInt(1, "Level", 1);
+SaveMigrationStep.SetLong(1, "TotalGold", 9000000000L);
 SaveMigrationStep.SetFloat(1, "Speed", 4.5f);
+SaveMigrationStep.SetDouble(1, "Precision", 4.56789d);
+SaveMigrationStep.SetDecimal(1, "Cost", 123.45m);
 SaveMigrationStep.SetString(1, "Title", "Unknown");
 SaveMigrationStep.SetBool(1, "Unlocked", false);
+SaveMigrationStep.SetBytes(1, "Thumbnail", bytes);
+SaveMigrationStep.SetDateTime(1, "LastSeenAt", DateTime.UtcNow);
 SaveMigrationStep.SetNull(1, "DeletedAt");
 ```
 
@@ -573,7 +583,7 @@ new SaveMigrationStep(2, (data, factory) =>
 
 `ISaveDataNode` is a package-owned, format-neutral edit tree for migration. It is not a normal provider state DTO, and it is not Newtonsoft.Json's `JToken` exposed through the public API. The built-in JSON serializer converts JSON into package-owned data nodes before migration, then converts the edited nodes back into JSON afterward.
 
-Supported node types are `Object`, `Array`, `Int`, `Float`, `String`, `Bool`, and `Null`.
+Supported node types are `Object`, `Array`, `Int`, `Long`, `Float`, `Double`, `Decimal`, `String`, `Bool`, `Bytes`, `DateTime`, and `Null`.
 
 | Node API | Applies to | Purpose |
 |---|---|---|
@@ -583,8 +593,10 @@ Supported node types are `Object`, `Array`, `Int`, `Float`, `String`, `Bool`, an
 | `Keys` | object nodes | Enumerates object keys. |
 | `Has(key)`, `Get(key)`, `Set(key, value)`, `Remove(key)` | object nodes | Reads and mutates object fields. |
 | `GetAt(index)`, `SetAt(index, value)`, `InsertAt(index, value)`, `RemoveAt(index)`, `Add(value)` | array nodes | Reads and mutates array entries. |
-| `AsInt()`, `AsFloat()`, `AsString()`, `AsBool()` | primitive nodes | Reads primitive values. |
-| `SetInt(value)`, `SetFloat(value)`, `SetString(value)`, `SetBool(value)`, `SetNull()` | existing nodes | Replaces the current node value. |
+| `AsInt()`, `AsLong()`, `AsFloat()`, `AsDouble()`, `AsDecimal()` | numeric nodes | Reads numeric values. |
+| `AsString()`, `AsBool()`, `AsBytes()`, `AsDateTime()` | primitive nodes | Reads primitive values. |
+| `SetInt(value)`, `SetLong(value)`, `SetFloat(value)`, `SetDouble(value)`, `SetDecimal(value)` | existing nodes | Replaces the current node with a numeric value. |
+| `SetString(value)`, `SetBool(value)`, `SetBytes(value)`, `SetDateTime(value)`, `SetNull()` | existing nodes | Replaces the current node value. |
 
 Use `ISaveDataNodeFactory` to create new nodes:
 
@@ -592,11 +604,18 @@ Use `ISaveDataNodeFactory` to create new nodes:
 factory.CreateObject();
 factory.CreateArray();
 factory.CreateInt(1);
+factory.CreateLong(9000000000L);
 factory.CreateFloat(4.5f);
+factory.CreateDouble(4.56789d);
+factory.CreateDecimal(123.45m);
 factory.CreateString("Rook");
 factory.CreateBool(true);
+factory.CreateBytes(bytes);
+factory.CreateDateTime(DateTime.UtcNow);
 factory.CreateNull();
 ```
+
+For the built-in JSON serializer, `Long` writes a JSON integer and `Double` writes a JSON number. `Decimal` writes an invariant-culture string, `Bytes` writes a Base64 string, and `DateTime` writes an `"O"` round-trip string. When reading migration nodes from JSON, date-looking strings remain strings until migration code asks for `AsDateTime()`, and Base64 strings remain strings until migration code asks for `AsBytes()`.
 
 Wrong-shape operations fail clearly. For example, calling `Get("Name")` on an array node or `Add(...)` on an integer node throws. Nodes also track factory ownership so migrations cannot accidentally mix nodes from different serializer instances.
 

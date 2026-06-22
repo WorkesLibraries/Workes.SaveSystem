@@ -29,11 +29,32 @@ namespace Workes.SaveSystem
         ISaveDataNode CreateInt(int value);
 
         /// <summary>
+        /// Creates a new 64-bit integer node with the specified value.
+        /// </summary>
+        /// <param name="value">The 64-bit integer value.</param>
+        /// <returns>A new 64-bit integer node.</returns>
+        ISaveDataNode CreateLong(long value);
+
+        /// <summary>
         /// Creates a new float node with the specified value.
         /// </summary>
         /// <param name="value">The float value.</param>
         /// <returns>A new float node.</returns>
         ISaveDataNode CreateFloat(float value);
+
+        /// <summary>
+        /// Creates a new double node with the specified value.
+        /// </summary>
+        /// <param name="value">The double value.</param>
+        /// <returns>A new double node.</returns>
+        ISaveDataNode CreateDouble(double value);
+
+        /// <summary>
+        /// Creates a new decimal node with the specified value.
+        /// </summary>
+        /// <param name="value">The decimal value.</param>
+        /// <returns>A new decimal node.</returns>
+        ISaveDataNode CreateDecimal(decimal value);
 
         /// <summary>
         /// Creates a new string node with the specified value.
@@ -48,6 +69,20 @@ namespace Workes.SaveSystem
         /// <param name="value">The boolean value.</param>
         /// <returns>A new boolean node.</returns>
         ISaveDataNode CreateBool(bool value);
+
+        /// <summary>
+        /// Creates a new byte-array node with the specified value.
+        /// </summary>
+        /// <param name="value">The byte-array value.</param>
+        /// <returns>A new byte-array node.</returns>
+        ISaveDataNode CreateBytes(byte[] value);
+
+        /// <summary>
+        /// Creates a new date/time node with the specified value.
+        /// </summary>
+        /// <param name="value">The date/time value.</param>
+        /// <returns>A new date/time node.</returns>
+        ISaveDataNode CreateDateTime(System.DateTime value);
 
         /// <summary>
         /// Creates a new null node.

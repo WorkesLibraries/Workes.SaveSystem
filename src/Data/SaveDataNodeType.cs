@@ -21,9 +21,24 @@ namespace Workes.SaveSystem
         Int,
 
         /// <summary>
+        /// A 64-bit integer primitive type.
+        /// </summary>
+        Long,
+
+        /// <summary>
         /// A floating-point number primitive type.
         /// </summary>
         Float,
+
+        /// <summary>
+        /// A double-precision floating-point number primitive type.
+        /// </summary>
+        Double,
+
+        /// <summary>
+        /// A decimal primitive type.
+        /// </summary>
+        Decimal,
 
         /// <summary>
         /// A string primitive type.
@@ -34,6 +49,16 @@ namespace Workes.SaveSystem
         /// A boolean primitive type.
         /// </summary>
         Bool,
+
+        /// <summary>
+        /// A byte-array primitive type.
+        /// </summary>
+        Bytes,
+
+        /// <summary>
+        /// A date/time primitive type.
+        /// </summary>
+        DateTime,
 
         /// <summary>
         /// A null primitive type.

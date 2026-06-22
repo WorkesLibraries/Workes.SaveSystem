@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace Workes.SaveSystem
@@ -113,6 +114,18 @@ namespace Workes.SaveSystem
         void SetInt(int value);
 
         /// <summary>
+        /// Reads this node as a 64-bit integer value.
+        /// </summary>
+        /// <returns>The 64-bit integer value.</returns>
+        long AsLong();
+
+        /// <summary>
+        /// Replaces this node with a 64-bit integer value.
+        /// </summary>
+        /// <param name="value">The 64-bit integer value to write.</param>
+        void SetLong(long value);
+
+        /// <summary>
         /// Reads this node as a floating-point value.
         /// </summary>
         /// <returns>The floating-point value.</returns>
@@ -123,6 +136,30 @@ namespace Workes.SaveSystem
         /// </summary>
         /// <param name="value">The floating-point value to write.</param>
         void SetFloat(float value);
+
+        /// <summary>
+        /// Reads this node as a double-precision floating-point value.
+        /// </summary>
+        /// <returns>The double-precision floating-point value.</returns>
+        double AsDouble();
+
+        /// <summary>
+        /// Replaces this node with a double-precision floating-point value.
+        /// </summary>
+        /// <param name="value">The double-precision floating-point value to write.</param>
+        void SetDouble(double value);
+
+        /// <summary>
+        /// Reads this node as a decimal value.
+        /// </summary>
+        /// <returns>The decimal value.</returns>
+        decimal AsDecimal();
+
+        /// <summary>
+        /// Replaces this node with a decimal value.
+        /// </summary>
+        /// <param name="value">The decimal value to write.</param>
+        void SetDecimal(decimal value);
 
         /// <summary>
         /// Reads this node as a string value.
@@ -147,6 +184,30 @@ namespace Workes.SaveSystem
         /// </summary>
         /// <param name="value">The Boolean value to write.</param>
         void SetBool(bool value);
+
+        /// <summary>
+        /// Reads this node as a byte-array value.
+        /// </summary>
+        /// <returns>The byte-array value.</returns>
+        byte[] AsBytes();
+
+        /// <summary>
+        /// Replaces this node with a byte-array value.
+        /// </summary>
+        /// <param name="value">The byte-array value to write.</param>
+        void SetBytes(byte[] value);
+
+        /// <summary>
+        /// Reads this node as a date/time value.
+        /// </summary>
+        /// <returns>The date/time value.</returns>
+        DateTime AsDateTime();
+
+        /// <summary>
+        /// Replaces this node with a date/time value.
+        /// </summary>
+        /// <param name="value">The date/time value to write.</param>
+        void SetDateTime(DateTime value);
 
         /// <summary>
         /// Replaces this node with a null value.

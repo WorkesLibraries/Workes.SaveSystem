@@ -112,6 +112,18 @@ namespace Workes.SaveSystem
             => AddDefault(key, factory => factory.CreateInt(value));
 
         /// <summary>
+        /// Creates a migration step that adds a 64-bit integer field only when it does not already exist.
+        /// </summary>
+        public static SaveMigrationStep AddLongDefault(int fromVersion, string key, long value)
+            => AddDefault(fromVersion, key, factory => factory.CreateLong(value));
+
+        /// <summary>
+        /// Creates a migration action that adds a 64-bit integer field only when it does not already exist.
+        /// </summary>
+        public static Action<ISaveDataNode, ISaveDataNodeFactory> AddLongDefault(string key, long value)
+            => AddDefault(key, factory => factory.CreateLong(value));
+
+        /// <summary>
         /// Creates a migration step that adds a floating-point field only when it does not already exist.
         /// </summary>
         public static SaveMigrationStep AddFloatDefault(int fromVersion, string key, float value)
@@ -122,6 +134,30 @@ namespace Workes.SaveSystem
         /// </summary>
         public static Action<ISaveDataNode, ISaveDataNodeFactory> AddFloatDefault(string key, float value)
             => AddDefault(key, factory => factory.CreateFloat(value));
+
+        /// <summary>
+        /// Creates a migration step that adds a double-precision floating-point field only when it does not already exist.
+        /// </summary>
+        public static SaveMigrationStep AddDoubleDefault(int fromVersion, string key, double value)
+            => AddDefault(fromVersion, key, factory => factory.CreateDouble(value));
+
+        /// <summary>
+        /// Creates a migration action that adds a double-precision floating-point field only when it does not already exist.
+        /// </summary>
+        public static Action<ISaveDataNode, ISaveDataNodeFactory> AddDoubleDefault(string key, double value)
+            => AddDefault(key, factory => factory.CreateDouble(value));
+
+        /// <summary>
+        /// Creates a migration step that adds a decimal field only when it does not already exist.
+        /// </summary>
+        public static SaveMigrationStep AddDecimalDefault(int fromVersion, string key, decimal value)
+            => AddDefault(fromVersion, key, factory => factory.CreateDecimal(value));
+
+        /// <summary>
+        /// Creates a migration action that adds a decimal field only when it does not already exist.
+        /// </summary>
+        public static Action<ISaveDataNode, ISaveDataNodeFactory> AddDecimalDefault(string key, decimal value)
+            => AddDefault(key, factory => factory.CreateDecimal(value));
 
         /// <summary>
         /// Creates a migration step that adds a string field only when it does not already exist.
@@ -146,6 +182,30 @@ namespace Workes.SaveSystem
         /// </summary>
         public static Action<ISaveDataNode, ISaveDataNodeFactory> AddBoolDefault(string key, bool value)
             => AddDefault(key, factory => factory.CreateBool(value));
+
+        /// <summary>
+        /// Creates a migration step that adds a byte-array field only when it does not already exist.
+        /// </summary>
+        public static SaveMigrationStep AddBytesDefault(int fromVersion, string key, byte[] value)
+            => AddDefault(fromVersion, key, factory => factory.CreateBytes(value));
+
+        /// <summary>
+        /// Creates a migration action that adds a byte-array field only when it does not already exist.
+        /// </summary>
+        public static Action<ISaveDataNode, ISaveDataNodeFactory> AddBytesDefault(string key, byte[] value)
+            => AddDefault(key, factory => factory.CreateBytes(value));
+
+        /// <summary>
+        /// Creates a migration step that adds a date/time field only when it does not already exist.
+        /// </summary>
+        public static SaveMigrationStep AddDateTimeDefault(int fromVersion, string key, DateTime value)
+            => AddDefault(fromVersion, key, factory => factory.CreateDateTime(value));
+
+        /// <summary>
+        /// Creates a migration action that adds a date/time field only when it does not already exist.
+        /// </summary>
+        public static Action<ISaveDataNode, ISaveDataNodeFactory> AddDateTimeDefault(string key, DateTime value)
+            => AddDefault(key, factory => factory.CreateDateTime(value));
 
         /// <summary>
         /// Creates a migration step that adds a null field only when it does not already exist.
@@ -206,6 +266,18 @@ namespace Workes.SaveSystem
             => Set(key, factory => factory.CreateInt(value));
 
         /// <summary>
+        /// Creates a migration step that sets a 64-bit integer field.
+        /// </summary>
+        public static SaveMigrationStep SetLong(int fromVersion, string key, long value)
+            => Set(fromVersion, key, factory => factory.CreateLong(value));
+
+        /// <summary>
+        /// Creates a migration action that sets a 64-bit integer field.
+        /// </summary>
+        public static Action<ISaveDataNode, ISaveDataNodeFactory> SetLong(string key, long value)
+            => Set(key, factory => factory.CreateLong(value));
+
+        /// <summary>
         /// Creates a migration step that sets a floating-point field.
         /// </summary>
         public static SaveMigrationStep SetFloat(int fromVersion, string key, float value)
@@ -216,6 +288,30 @@ namespace Workes.SaveSystem
         /// </summary>
         public static Action<ISaveDataNode, ISaveDataNodeFactory> SetFloat(string key, float value)
             => Set(key, factory => factory.CreateFloat(value));
+
+        /// <summary>
+        /// Creates a migration step that sets a double-precision floating-point field.
+        /// </summary>
+        public static SaveMigrationStep SetDouble(int fromVersion, string key, double value)
+            => Set(fromVersion, key, factory => factory.CreateDouble(value));
+
+        /// <summary>
+        /// Creates a migration action that sets a double-precision floating-point field.
+        /// </summary>
+        public static Action<ISaveDataNode, ISaveDataNodeFactory> SetDouble(string key, double value)
+            => Set(key, factory => factory.CreateDouble(value));
+
+        /// <summary>
+        /// Creates a migration step that sets a decimal field.
+        /// </summary>
+        public static SaveMigrationStep SetDecimal(int fromVersion, string key, decimal value)
+            => Set(fromVersion, key, factory => factory.CreateDecimal(value));
+
+        /// <summary>
+        /// Creates a migration action that sets a decimal field.
+        /// </summary>
+        public static Action<ISaveDataNode, ISaveDataNodeFactory> SetDecimal(string key, decimal value)
+            => Set(key, factory => factory.CreateDecimal(value));
 
         /// <summary>
         /// Creates a migration step that sets a string field.
@@ -240,6 +336,30 @@ namespace Workes.SaveSystem
         /// </summary>
         public static Action<ISaveDataNode, ISaveDataNodeFactory> SetBool(string key, bool value)
             => Set(key, factory => factory.CreateBool(value));
+
+        /// <summary>
+        /// Creates a migration step that sets a byte-array field.
+        /// </summary>
+        public static SaveMigrationStep SetBytes(int fromVersion, string key, byte[] value)
+            => Set(fromVersion, key, factory => factory.CreateBytes(value));
+
+        /// <summary>
+        /// Creates a migration action that sets a byte-array field.
+        /// </summary>
+        public static Action<ISaveDataNode, ISaveDataNodeFactory> SetBytes(string key, byte[] value)
+            => Set(key, factory => factory.CreateBytes(value));
+
+        /// <summary>
+        /// Creates a migration step that sets a date/time field.
+        /// </summary>
+        public static SaveMigrationStep SetDateTime(int fromVersion, string key, DateTime value)
+            => Set(fromVersion, key, factory => factory.CreateDateTime(value));
+
+        /// <summary>
+        /// Creates a migration action that sets a date/time field.
+        /// </summary>
+        public static Action<ISaveDataNode, ISaveDataNodeFactory> SetDateTime(string key, DateTime value)
+            => Set(key, factory => factory.CreateDateTime(value));
 
         /// <summary>
         /// Creates a migration step that sets a field to null.

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 
 namespace Workes.SaveSystem
@@ -62,9 +63,24 @@ namespace Workes.SaveSystem
             return CreatePrimitive(SaveDataNodeType.Int, value, owner);
         }
 
+        internal static SaveDataNode CreateLong(long value, object owner)
+        {
+            return CreatePrimitive(SaveDataNodeType.Long, value, owner);
+        }
+
         internal static SaveDataNode CreateFloat(float value, object owner)
         {
             return CreatePrimitive(SaveDataNodeType.Float, value, owner);
+        }
+
+        internal static SaveDataNode CreateDouble(double value, object owner)
+        {
+            return CreatePrimitive(SaveDataNodeType.Double, value, owner);
+        }
+
+        internal static SaveDataNode CreateDecimal(decimal value, object owner)
+        {
+            return CreatePrimitive(SaveDataNodeType.Decimal, value, owner);
         }
 
         internal static SaveDataNode CreateString(string value, object owner)
@@ -78,6 +94,19 @@ namespace Workes.SaveSystem
         internal static SaveDataNode CreateBool(bool value, object owner)
         {
             return CreatePrimitive(SaveDataNodeType.Bool, value, owner);
+        }
+
+        internal static SaveDataNode CreateBytes(byte[] value, object owner)
+        {
+            if (value == null)
+                throw new ArgumentNullException(nameof(value));
+
+            return CreatePrimitive(SaveDataNodeType.Bytes, (byte[])value.Clone(), owner);
+        }
+
+        internal static SaveDataNode CreateDateTime(DateTime value, object owner)
+        {
+            return CreatePrimitive(SaveDataNodeType.DateTime, value, owner);
         }
 
         internal static SaveDataNode CreateNull(object owner)
@@ -189,8 +218,17 @@ namespace Workes.SaveSystem
 
         public int AsInt()
         {
-            EnsureNodeType(SaveDataNodeType.Int);
-            return (int)_value;
+            if (_nodeType == SaveDataNodeType.Int)
+                return (int)_value;
+
+            if (_nodeType == SaveDataNodeType.Long)
+            {
+                var value = (long)_value;
+                if (value >= int.MinValue && value <= int.MaxValue)
+                    return (int)value;
+            }
+
+            throw CreateWrongTypeException(SaveDataNodeType.Int);
         }
 
         public void SetInt(int value)
@@ -198,15 +236,82 @@ namespace Workes.SaveSystem
             SetPrimitive(SaveDataNodeType.Int, value);
         }
 
+        public long AsLong()
+        {
+            if (_nodeType == SaveDataNodeType.Long)
+                return (long)_value;
+
+            if (_nodeType == SaveDataNodeType.Int)
+                return (int)_value;
+
+            throw CreateWrongTypeException(SaveDataNodeType.Long);
+        }
+
+        public void SetLong(long value)
+        {
+            SetPrimitive(SaveDataNodeType.Long, value);
+        }
+
         public float AsFloat()
         {
-            EnsureNodeType(SaveDataNodeType.Float);
-            return (float)_value;
+            if (_nodeType == SaveDataNodeType.Float)
+                return (float)_value;
+
+            if (_nodeType == SaveDataNodeType.Double)
+            {
+                var value = (double)_value;
+                if (value >= -float.MaxValue && value <= float.MaxValue)
+                    return (float)value;
+            }
+
+            throw CreateWrongTypeException(SaveDataNodeType.Float);
         }
 
         public void SetFloat(float value)
         {
             SetPrimitive(SaveDataNodeType.Float, value);
+        }
+
+        public double AsDouble()
+        {
+            if (_nodeType == SaveDataNodeType.Double)
+                return (double)_value;
+
+            if (_nodeType == SaveDataNodeType.Float)
+                return (float)_value;
+
+            throw CreateWrongTypeException(SaveDataNodeType.Double);
+        }
+
+        public void SetDouble(double value)
+        {
+            SetPrimitive(SaveDataNodeType.Double, value);
+        }
+
+        public decimal AsDecimal()
+        {
+            if (_nodeType == SaveDataNodeType.Decimal)
+                return (decimal)_value;
+
+            if (_nodeType == SaveDataNodeType.String)
+            {
+                var text = (string)_value;
+                try
+                {
+                    return decimal.Parse(text, NumberStyles.Number, CultureInfo.InvariantCulture);
+                }
+                catch (Exception ex)
+                {
+                    throw new InvalidOperationException("String node does not contain a valid invariant decimal value.", ex);
+                }
+            }
+
+            throw CreateWrongTypeException(SaveDataNodeType.Decimal);
+        }
+
+        public void SetDecimal(decimal value)
+        {
+            SetPrimitive(SaveDataNodeType.Decimal, value);
         }
 
         public string AsString()
@@ -232,6 +337,61 @@ namespace Workes.SaveSystem
         public void SetBool(bool value)
         {
             SetPrimitive(SaveDataNodeType.Bool, value);
+        }
+
+        public byte[] AsBytes()
+        {
+            if (_nodeType == SaveDataNodeType.Bytes)
+                return (byte[])((byte[])_value).Clone();
+
+            if (_nodeType == SaveDataNodeType.String)
+            {
+                var text = (string)_value;
+                try
+                {
+                    return Convert.FromBase64String(text);
+                }
+                catch (Exception ex)
+                {
+                    throw new InvalidOperationException("String node does not contain a valid Base64 byte-array value.", ex);
+                }
+            }
+
+            throw CreateWrongTypeException(SaveDataNodeType.Bytes);
+        }
+
+        public void SetBytes(byte[] value)
+        {
+            if (value == null)
+                throw new ArgumentNullException(nameof(value));
+
+            SetPrimitive(SaveDataNodeType.Bytes, (byte[])value.Clone());
+        }
+
+        public DateTime AsDateTime()
+        {
+            if (_nodeType == SaveDataNodeType.DateTime)
+                return (DateTime)_value;
+
+            if (_nodeType == SaveDataNodeType.String)
+            {
+                var text = (string)_value;
+                try
+                {
+                    return DateTime.Parse(text, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
+                }
+                catch (Exception ex)
+                {
+                    throw new InvalidOperationException("String node does not contain a valid round-trip date/time value.", ex);
+                }
+            }
+
+            throw CreateWrongTypeException(SaveDataNodeType.DateTime);
+        }
+
+        public void SetDateTime(DateTime value)
+        {
+            SetPrimitive(SaveDataNodeType.DateTime, value);
         }
 
         public void SetNull()
@@ -278,7 +438,12 @@ namespace Workes.SaveSystem
         private void EnsureNodeType(SaveDataNodeType nodeType)
         {
             if (_nodeType != nodeType)
-                throw new InvalidOperationException($"Node is not a {nodeType} value");
+                throw CreateWrongTypeException(nodeType);
+        }
+
+        private InvalidOperationException CreateWrongTypeException(SaveDataNodeType expectedType)
+        {
+            return new InvalidOperationException($"Node is not a {expectedType} value");
         }
 
         private void SetPrimitive(SaveDataNodeType nodeType, object value)

@@ -28,9 +28,14 @@ public sealed class DataNodeContractTests
         Assert.That(factory.CreateObject().IsNull(), Is.False);
         Assert.That(factory.CreateArray().IsNull(), Is.False);
         Assert.That(factory.CreateInt(1).IsNull(), Is.False);
+        Assert.That(factory.CreateLong(1L).IsNull(), Is.False);
         Assert.That(factory.CreateFloat(1).IsNull(), Is.False);
+        Assert.That(factory.CreateDouble(1).IsNull(), Is.False);
+        Assert.That(factory.CreateDecimal(1m).IsNull(), Is.False);
         Assert.That(factory.CreateString("Rook").IsNull(), Is.False);
         Assert.That(factory.CreateBool(true).IsNull(), Is.False);
+        Assert.That(factory.CreateBytes(new byte[] { 1 }).IsNull(), Is.False);
+        Assert.That(factory.CreateDateTime(DateTime.UtcNow).IsNull(), Is.False);
     }
 
     [Test]
@@ -90,6 +95,113 @@ public sealed class DataNodeContractTests
         Assert.That(node.GetAt(1).AsString(), Is.EqualTo("second"));
         Assert.That(node.RemoveAt(0), Is.True);
         Assert.That(node.GetAt(0).AsString(), Is.EqualTo("second"));
+    }
+
+    [Test]
+    public void SaveDataNode_PrimitiveValuesRoundTrip()
+    {
+        var factory = CreateFactory();
+        var dateTime = new DateTime(2026, 6, 22, 10, 11, 12, DateTimeKind.Utc);
+        var bytes = new byte[] { 1, 2, 3, 4 };
+        var node = factory.CreateObject();
+
+        node.Set("long", factory.CreateLong(9_000_000_000L));
+        node.Set("double", factory.CreateDouble(123.456789d));
+        node.Set("decimal", factory.CreateDecimal(1234567890.123456789m));
+        node.Set("bytes", factory.CreateBytes(bytes));
+        node.Set("dateTime", factory.CreateDateTime(dateTime));
+
+        Assert.That(node.Get("long").NodeType, Is.EqualTo(SaveDataNodeType.Long));
+        Assert.That(node.Get("long").AsLong(), Is.EqualTo(9_000_000_000L));
+        Assert.That(node.Get("double").NodeType, Is.EqualTo(SaveDataNodeType.Double));
+        Assert.That(node.Get("double").AsDouble(), Is.EqualTo(123.456789d));
+        Assert.That(node.Get("decimal").NodeType, Is.EqualTo(SaveDataNodeType.Decimal));
+        Assert.That(node.Get("decimal").AsDecimal(), Is.EqualTo(1234567890.123456789m));
+        Assert.That(node.Get("bytes").NodeType, Is.EqualTo(SaveDataNodeType.Bytes));
+        Assert.That(node.Get("bytes").AsBytes(), Is.EqualTo(bytes));
+        Assert.That(node.Get("dateTime").NodeType, Is.EqualTo(SaveDataNodeType.DateTime));
+        Assert.That(node.Get("dateTime").AsDateTime(), Is.EqualTo(dateTime));
+    }
+
+    [Test]
+    public void SaveDataNode_SetPrimitiveValuesReplacesNodeTypes()
+    {
+        var node = CreateFactory().CreateString("start");
+        var bytes = new byte[] { 9, 8, 7 };
+        var dateTime = new DateTime(2026, 6, 22, 10, 11, 12, DateTimeKind.Utc);
+
+        node.SetLong(9_000_000_000L);
+        Assert.That(node.NodeType, Is.EqualTo(SaveDataNodeType.Long));
+        Assert.That(node.AsLong(), Is.EqualTo(9_000_000_000L));
+
+        node.SetDouble(12.5d);
+        Assert.That(node.NodeType, Is.EqualTo(SaveDataNodeType.Double));
+        Assert.That(node.AsDouble(), Is.EqualTo(12.5d));
+
+        node.SetDecimal(12.345m);
+        Assert.That(node.NodeType, Is.EqualTo(SaveDataNodeType.Decimal));
+        Assert.That(node.AsDecimal(), Is.EqualTo(12.345m));
+
+        node.SetBytes(bytes);
+        Assert.That(node.NodeType, Is.EqualTo(SaveDataNodeType.Bytes));
+        Assert.That(node.AsBytes(), Is.EqualTo(bytes));
+
+        node.SetDateTime(dateTime);
+        Assert.That(node.NodeType, Is.EqualTo(SaveDataNodeType.DateTime));
+        Assert.That(node.AsDateTime(), Is.EqualTo(dateTime));
+    }
+
+    [Test]
+    public void SaveDataNode_StringConversionsSupportDocumentedJsonConventions()
+    {
+        var factory = CreateFactory();
+        var bytes = new byte[] { 1, 2, 3, 4 };
+        var dateTime = new DateTime(2026, 6, 22, 10, 11, 12, DateTimeKind.Utc);
+
+        var bytesNode = factory.CreateString(Convert.ToBase64String(bytes));
+        var decimalNode = factory.CreateString("1234567890.123456789");
+        var dateTimeNode = factory.CreateString(dateTime.ToString("O"));
+
+        Assert.That(bytesNode.AsBytes(), Is.EqualTo(bytes));
+        Assert.That(decimalNode.AsDecimal(), Is.EqualTo(1234567890.123456789m));
+        Assert.That(dateTimeNode.AsDateTime(), Is.EqualTo(dateTime));
+    }
+
+    [Test]
+    public void SaveDataNode_StringConversionsRejectInvalidValues()
+    {
+        var factory = CreateFactory();
+
+        Assert.Throws<InvalidOperationException>(() => factory.CreateString("not base64").AsBytes());
+        Assert.Throws<InvalidOperationException>(() => factory.CreateString("not decimal").AsDecimal());
+        Assert.Throws<InvalidOperationException>(() => factory.CreateString("not date").AsDateTime());
+    }
+
+    [Test]
+    public void SaveDataNode_CompatibleNumericReadsConvertSafely()
+    {
+        var factory = CreateFactory();
+
+        Assert.That(factory.CreateInt(3).AsLong(), Is.EqualTo(3L));
+        Assert.That(factory.CreateLong(3L).AsInt(), Is.EqualTo(3));
+        Assert.That(factory.CreateFloat(3.5f).AsDouble(), Is.EqualTo(3.5d).Within(0.0001d));
+        Assert.That(factory.CreateDouble(3.5d).AsFloat(), Is.EqualTo(3.5f).Within(0.0001f));
+        Assert.Throws<InvalidOperationException>(() => factory.CreateLong(9_000_000_000L).AsInt());
+        Assert.Throws<InvalidOperationException>(() => factory.CreateDouble(double.MaxValue).AsFloat());
+    }
+
+    [Test]
+    public void SaveDataNode_BytesAreCopiedOnSetAndRead()
+    {
+        var factory = CreateFactory();
+        var bytes = new byte[] { 1, 2, 3 };
+        var node = factory.CreateBytes(bytes);
+        bytes[0] = 9;
+
+        var read = node.AsBytes();
+        read[1] = 9;
+
+        Assert.That(node.AsBytes(), Is.EqualTo(new byte[] { 1, 2, 3 }));
     }
 
     [Test]
@@ -168,12 +280,22 @@ public sealed class DataNodeContractTests
         public bool Remove(string key) => false;
         public int AsInt() => throw new NotSupportedException();
         public void SetInt(int value) => throw new NotSupportedException();
+        public long AsLong() => throw new NotSupportedException();
+        public void SetLong(long value) => throw new NotSupportedException();
         public float AsFloat() => throw new NotSupportedException();
         public void SetFloat(float value) => throw new NotSupportedException();
+        public double AsDouble() => throw new NotSupportedException();
+        public void SetDouble(double value) => throw new NotSupportedException();
+        public decimal AsDecimal() => throw new NotSupportedException();
+        public void SetDecimal(decimal value) => throw new NotSupportedException();
         public string AsString() => "foreign";
         public void SetString(string value) => throw new NotSupportedException();
         public bool AsBool() => throw new NotSupportedException();
         public void SetBool(bool value) => throw new NotSupportedException();
+        public byte[] AsBytes() => throw new NotSupportedException();
+        public void SetBytes(byte[] value) => throw new NotSupportedException();
+        public DateTime AsDateTime() => throw new NotSupportedException();
+        public void SetDateTime(DateTime value) => throw new NotSupportedException();
         public void SetNull() => throw new NotSupportedException();
     }
 }

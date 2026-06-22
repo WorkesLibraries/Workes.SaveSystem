@@ -228,6 +228,76 @@ public sealed class SerializerMigrationTests
     }
 
     [Test]
+    public void JsonSerializer_MigrationNodes_RoundTripAdditionalValueTypes()
+    {
+        var serializer = new JsonSaveSerializer(JsonSaveFormatting.Compact);
+        var data = serializer.NodeFactory.CreateObject();
+        var dateTime = new DateTime(2026, 6, 22, 10, 11, 12, DateTimeKind.Utc);
+        var bytes = new byte[] { 1, 2, 3, 4 };
+
+        data.Set("SchemaVersion", serializer.NodeFactory.CreateInt(1));
+        var payload = serializer.NodeFactory.CreateObject();
+        payload.Set("Long", serializer.NodeFactory.CreateLong(9_000_000_000L));
+        payload.Set("Double", serializer.NodeFactory.CreateDouble(123.456789d));
+        payload.Set("Decimal", serializer.NodeFactory.CreateDecimal(1234567890.123456789m));
+        payload.Set("Bytes", serializer.NodeFactory.CreateBytes(bytes));
+        payload.Set("DateTime", serializer.NodeFactory.CreateDateTime(dateTime));
+        data.Set("Data", payload);
+
+        var serialized = serializer.SerializeFromNode(data);
+        var json = Encoding.UTF8.GetString(serialized);
+        var deserialized = serializer.DeserializeToNode(serialized);
+        var deserializedPayload = deserialized.Get("Data");
+
+        Assert.That(json, Does.Contain("\"Long\":9000000000"));
+        Assert.That(json, Does.Contain("\"Double\":123.456789"));
+        Assert.That(json, Does.Contain("\"Decimal\":\"1234567890.123456789\""));
+        Assert.That(json, Does.Contain("\"Bytes\":\"AQIDBA==\""));
+        Assert.That(json, Does.Contain("\"DateTime\":\"2026-06-22T10:11:12.0000000Z\""));
+        Assert.That(deserializedPayload.Get("Long").NodeType, Is.EqualTo(SaveDataNodeType.Long));
+        Assert.That(deserializedPayload.Get("Long").AsLong(), Is.EqualTo(9_000_000_000L));
+        Assert.That(deserializedPayload.Get("Double").NodeType, Is.EqualTo(SaveDataNodeType.Double));
+        Assert.That(deserializedPayload.Get("Double").AsDouble(), Is.EqualTo(123.456789d));
+        Assert.That(deserializedPayload.Get("Decimal").NodeType, Is.EqualTo(SaveDataNodeType.String));
+        Assert.That(deserializedPayload.Get("Decimal").AsDecimal(), Is.EqualTo(1234567890.123456789m));
+        Assert.That(deserializedPayload.Get("Bytes").NodeType, Is.EqualTo(SaveDataNodeType.String));
+        Assert.That(deserializedPayload.Get("Bytes").AsBytes(), Is.EqualTo(bytes));
+        Assert.That(deserializedPayload.Get("DateTime").NodeType, Is.EqualTo(SaveDataNodeType.String));
+        Assert.That(deserializedPayload.Get("DateTime").AsDateTime(), Is.EqualTo(dateTime));
+    }
+
+    [Test]
+    public void JsonSerializer_MigrationNodes_ParseIntegersAsIntWhenPossibleAndLongWhenNeeded()
+    {
+        var serializer = new JsonSaveSerializer(JsonSaveFormatting.Compact);
+        var json = Encoding.UTF8.GetBytes("""{"SchemaVersion":1,"Data":{"Small":12,"Large":9000000000}}""");
+
+        var node = serializer.DeserializeToNode(json).Get("Data");
+
+        Assert.That(node.Get("Small").NodeType, Is.EqualTo(SaveDataNodeType.Int));
+        Assert.That(node.Get("Small").AsInt(), Is.EqualTo(12));
+        Assert.That(node.Get("Large").NodeType, Is.EqualTo(SaveDataNodeType.Long));
+        Assert.That(node.Get("Large").AsLong(), Is.EqualTo(9_000_000_000L));
+    }
+
+    [Test]
+    public void JsonSerializer_DeserializesDocumentedStringConventionsThroughSchematics()
+    {
+        var serializer = new JsonSaveSerializer(JsonSaveFormatting.Compact);
+        var schematic = serializer.CreateSchematic(typeof(AdditionalValueTypesState));
+        schematic.SchemaVersion = 1;
+        var bytes = new byte[] { 1, 2, 3, 4 };
+        var dateTime = new DateTime(2026, 6, 22, 10, 11, 12, DateTimeKind.Utc);
+        var json = Encoding.UTF8.GetBytes(
+            """{"SchemaVersion":1,"Data":{"Bytes":"AQIDBA==","DateTime":"2026-06-22T10:11:12.0000000Z"}}""");
+
+        var state = (AdditionalValueTypesState)serializer.Deserialize(json, schematic);
+
+        Assert.That(state.Bytes, Is.EqualTo(bytes));
+        Assert.That(state.DateTime, Is.EqualTo(dateTime));
+    }
+
+    [Test]
     public void LoadFromDisk_ThrowsWhenMigrationPathIsMissing()
     {
         var oldManager = new SaveManager<string>(CreateOptions());
@@ -348,6 +418,12 @@ public sealed class SerializerMigrationTests
     {
         public string Name { get; set; } = string.Empty;
         public int Level { get; set; }
+    }
+
+    public sealed class AdditionalValueTypesState
+    {
+        public byte[] Bytes { get; set; } = Array.Empty<byte>();
+        public DateTime DateTime { get; set; }
     }
 
     private sealed class V1Provider : ISaveProvider<V1State>

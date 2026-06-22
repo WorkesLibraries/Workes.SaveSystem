@@ -1,5 +1,8 @@
 using Newtonsoft.Json.Linq;
+using Newtonsoft.Json;
 using System;
+using System.Globalization;
+using System.IO;
 using System.Text;
 
 namespace Workes.SaveSystem
@@ -136,7 +139,13 @@ namespace Workes.SaveSystem
         /// <inheritdoc />
         public ISaveDataNode DeserializeToNode(byte[] serializedData)
         {
-            var root = JToken.Parse(Encoding.UTF8.GetString(serializedData));
+            using var stringReader = new StringReader(Encoding.UTF8.GetString(serializedData));
+            using var jsonReader = new JsonTextReader(stringReader)
+            {
+                DateParseHandling = DateParseHandling.None
+            };
+
+            var root = JToken.ReadFrom(jsonReader);
             return ConvertFromJson(root, _nodeFactory.Owner);
         }
 
@@ -173,7 +182,11 @@ namespace Workes.SaveSystem
                 case JTokenType.Integer:
                     try
                     {
-                        return SaveDataNode.CreateInt(token.Value<int>(), owner);
+                        var longValue = token.Value<long>();
+                        if (longValue >= int.MinValue && longValue <= int.MaxValue)
+                            return SaveDataNode.CreateInt((int)longValue, owner);
+
+                        return SaveDataNode.CreateLong(longValue, owner);
                     }
                     catch (Exception ex)
                     {
@@ -181,7 +194,7 @@ namespace Workes.SaveSystem
                     }
 
                 case JTokenType.Float:
-                    return SaveDataNode.CreateFloat(token.Value<float>(), owner);
+                    return SaveDataNode.CreateDouble(token.Value<double>(), owner);
 
                 case JTokenType.String:
                     var stringValue = token.Value<string>();
@@ -228,14 +241,29 @@ namespace Workes.SaveSystem
                 case SaveDataNodeType.Int:
                     return new JValue(node.AsInt());
 
+                case SaveDataNodeType.Long:
+                    return new JValue(node.AsLong());
+
                 case SaveDataNodeType.Float:
                     return new JValue(node.AsFloat());
+
+                case SaveDataNodeType.Double:
+                    return new JValue(node.AsDouble());
+
+                case SaveDataNodeType.Decimal:
+                    return new JValue(node.AsDecimal().ToString(CultureInfo.InvariantCulture));
 
                 case SaveDataNodeType.String:
                     return new JValue(node.AsString());
 
                 case SaveDataNodeType.Bool:
                     return new JValue(node.AsBool());
+
+                case SaveDataNodeType.Bytes:
+                    return new JValue(Convert.ToBase64String(node.AsBytes()));
+
+                case SaveDataNodeType.DateTime:
+                    return new JValue(node.AsDateTime().ToString("O", CultureInfo.InvariantCulture));
 
                 case SaveDataNodeType.Null:
                     return JValue.CreateNull();
