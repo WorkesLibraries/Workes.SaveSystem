@@ -41,6 +41,10 @@ ScaffoldingReadMe.txt
 *~
 CodeCoverage/
 
+# Local planning notes
+/WORK_TRACKER.md
+/MESSAGE_PACK.md
+
 # MSBuild Binary and Structured Log
 *.binlog
 
