@@ -402,6 +402,15 @@ namespace Workes.SaveSystem
             _value = new object();
         }
 
+        public void ReplaceWith(ISaveDataNode value)
+        {
+            var replacement = RequireSaveDataNode(value, _owner).Clone();
+            _nodeType = replacement._nodeType;
+            _objectChildren = replacement._objectChildren;
+            _arrayChildren = replacement._arrayChildren;
+            _value = replacement._value;
+        }
+
         internal static SaveDataNode RequireSaveDataNode(ISaveDataNode value, object owner)
         {
             if (value == null)
@@ -411,6 +420,36 @@ namespace Workes.SaveSystem
                 return node;
 
             throw new InvalidOperationException("Save data nodes can only be combined with nodes created by the same node factory.");
+        }
+
+        private SaveDataNode Clone()
+        {
+            var clone = new SaveDataNode(_nodeType, _owner)
+            {
+                _value = CloneValue(_value),
+                _objectChildren = new List<KeyValuePair<string, SaveDataNode>>(),
+                _arrayChildren = new List<SaveDataNode>()
+            };
+
+            foreach (var child in _objectChildren)
+            {
+                clone._objectChildren.Add(new KeyValuePair<string, SaveDataNode>(child.Key, child.Value.Clone()));
+            }
+
+            foreach (var child in _arrayChildren)
+            {
+                clone._arrayChildren.Add(child.Clone());
+            }
+
+            return clone;
+        }
+
+        private static object CloneValue(object value)
+        {
+            if (value is byte[] bytes)
+                return (byte[])bytes.Clone();
+
+            return value;
         }
 
         private static SaveDataNode CreatePrimitive(SaveDataNodeType nodeType, object value, object owner)

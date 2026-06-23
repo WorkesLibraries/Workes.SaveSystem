@@ -215,6 +215,12 @@ namespace Workes.SaveSystem
         void SetNull();
 
         /// <summary>
+        /// Replaces this node with the shape and value of another node created by the same node factory.
+        /// </summary>
+        /// <param name="value">The node whose value should replace this node.</param>
+        void ReplaceWith(ISaveDataNode value);
+
+        /// <summary>
         /// Gets the object keys for object nodes.
         /// </summary>
         IEnumerable<string> Keys { get; }

@@ -469,7 +469,7 @@ If both a temp folder and a previous `_toDelete` folder exist while the main sav
 
 Providers that need to load older schema versions implement `ISaveMigratable`. Migration is provider-local: each provider owns its own `SchemaVersion`, migration source, and migration steps.
 
-Provider files are written as a serializer-owned envelope containing `SchemaVersion` and `Data`. Migration reads the saved schema version from the envelope, converts the payload into editable save data nodes, mutates the `Data` node, updates the envelope schema version, and then deserializes into the current provider state type.
+Provider files may be written as a serializer-owned envelope containing `SchemaVersion` and provider data. Migration reads the saved schema version from the serialized payload, converts the provider data root into editable save data nodes, mutates that root node, and then asks the serializer to write the current schema version back into its payload format. Migration steps never edit serializer envelopes directly.
 
 ```json
 {
@@ -480,7 +480,7 @@ Provider files are written as a serializer-owned envelope containing `SchemaVers
 }
 ```
 
-Migration steps edit the serialized `Data` object before the serializer deserializes it into the current state type. That means application code should normally keep only the current DTO shape in runtime code. Old shapes can live in tests or documentation fixtures, but they do not need to remain as production state classes just so migration can work.
+Migration steps edit the serialized provider data root before the serializer deserializes it into the current state type. For an object-root provider, that root is an object node. For a list-root provider, it is an array node. For a string-key dictionary root, it is an object/map node whose keys are data keys. For a primitive root, it is a primitive node. That means application code should normally keep only the current DTO shape in runtime code. Old shapes can live in tests or documentation fixtures, but they do not need to remain as production state classes just so migration can work.
 
 For example, imagine version 1 of `PlayerState` only had `Name`. Version 2 adds required `Level` data. The current code can simply use the current shape:
 
@@ -531,10 +531,10 @@ The load path applies migrations only when the saved provider schema version dif
 1. The manager extracts `SchemaVersion` from the provider file.
 2. If the provider implements `ISaveMigratable`, the manager asks it for an `ISaveMigrationSource`.
 3. The migration engine requires one step for every version gap, such as `1 -> 2` and `2 -> 3`.
-4. The active serializer's `Migration` adapter parses bytes into an editable `ISaveDataNode` tree.
-5. Each migration step mutates the provider payload's `Data` node, not the full envelope.
-6. The migration engine updates the envelope schema version to the current provider version.
-7. The serializer converts the edited node tree back to bytes and deserializes those bytes into the current provider state type.
+4. The active serializer's `Migration` adapter parses bytes into an editable `ISaveDataNode` provider root.
+5. Each migration step mutates that provider root node, not the full serializer envelope.
+6. The serializer converts the edited root node back to bytes using the current provider schema version.
+7. The serializer deserializes those bytes into the current provider state type.
 
 Downgrades are not supported. A save written with a newer schema version than the current provider expects fails to load.
 
@@ -561,7 +561,7 @@ The migration API is intentionally split into provider-facing contracts, helper 
 | `ISaveMigratable.CreateMigrationSource()` | Implement on a provider that can load older schema versions. |
 | `ISaveMigrationSource.Migrations` | Returns the ordered or unordered list of available `SaveMigrationStep` entries. |
 | `SaveMigrationStep.FromVersion` | The schema version this step migrates from. Each step always migrates to `FromVersion + 1`. |
-| `SaveMigrationStep.Migrate` | The action that mutates the provider payload's `Data` node. |
+| `SaveMigrationStep.Migrate` | The action that mutates the provider data root node. |
 | `new SaveMigrationStep(fromVersion, action)` | Creates a custom migration step with full data-node access. |
 | `SaveMigrationStep.From(fromVersion, actions...)` | Combines several migration actions into one version step. |
 
@@ -601,7 +601,7 @@ SaveMigrationStep.SetDateTime(1, "LastSeenAt", DateTime.UtcNow);
 SaveMigrationStep.SetNull(1, "DeletedAt");
 ```
 
-Use helper steps for simple top-level object edits. Use direct data-node access when a migration needs nested objects, arrays, conditionals, value conversion, or multi-field logic.
+Use helper steps for simple top-level object edits. Use direct data-node access when a migration needs nested objects, arrays, root collections, conditionals, value conversion, or multi-field logic.
 
 ```csharp
 new SaveMigrationStep(2, (data, factory) =>
@@ -611,7 +611,7 @@ new SaveMigrationStep(2, (data, factory) =>
 });
 ```
 
-The `data` parameter is an `ISaveDataNode` for the provider payload's `Data` object. The `factory` parameter creates new nodes that belong to the same serializer-owned node tree. Do not create nodes with another serializer or factory instance and insert them here.
+The `data` parameter is an `ISaveDataNode` for the provider data root. The factory parameter creates new nodes that belong to the same serializer-owned node tree. Do not create nodes with another serializer or factory instance and insert them here.
 
 ```csharp
 new SaveMigrationStep(2, (data, factory) =>
@@ -620,6 +620,25 @@ new SaveMigrationStep(2, (data, factory) =>
         data.Set("Inventory", factory.CreateArray());
 
     data.Get("Inventory").Add(factory.CreateString("starter-sword"));
+});
+```
+
+Root collection and primitive migrations use the same node model:
+
+```csharp
+new SaveMigrationStep(1, (root, factory) =>
+{
+    for (var i = 0; i < root.Count; i++)
+    {
+        var item = root.GetAt(i);
+        if (!item.Has("Count"))
+            item.Set("Count", factory.CreateInt(1));
+    }
+});
+
+new SaveMigrationStep(2, (root, factory) =>
+{
+    root.ReplaceWith(factory.CreateString("level-" + root.AsInt()));
 });
 ```
 
@@ -641,6 +660,7 @@ Supported node types are `Object`, `Array`, `Int`, `Long`, `Float`, `Double`, `D
 | `AsString()`, `AsBool()`, `AsBytes()`, `AsDateTime()` | primitive nodes | Reads primitive values. |
 | `SetInt(value)`, `SetLong(value)`, `SetFloat(value)`, `SetDouble(value)`, `SetDecimal(value)` | existing nodes | Replaces the current node with a numeric value. |
 | `SetString(value)`, `SetBool(value)`, `SetBytes(value)`, `SetDateTime(value)`, `SetNull()` | existing nodes | Replaces the current node value. |
+| `ReplaceWith(value)` | existing nodes | Replaces the current node with another node shape/value created by the same factory. |
 
 Use `ISaveDataNodeFactory` to create new nodes:
 
@@ -700,9 +720,9 @@ Migration rules:
 - one `SaveMigrationStep` migrates from `FromVersion` to `FromVersion + 1`;
 - every version gap must have exactly one step;
 - duplicate `FromVersion` steps and null migration entries are rejected during registration validation;
-- migration steps mutate the provider payload's `Data` node, not the full envelope;
+- migration steps mutate the provider data root node, not the full serializer envelope;
 - use `SaveMigrationStep.From(...)` to compose several helper actions into one schema-version step;
-- after successful migration, the manager updates the envelope schema version before deserializing;
+- after successful migration, the serializer writes the current schema version before deserializing;
 - downgrades are rejected.
 
 Missing migration gaps are detected during load and are reported by `TryLoad...` as `SaveLoadStatus.MigrationFailed`.
@@ -728,13 +748,15 @@ If provider payload serialization depends on serializer-owned metadata or manage
 
 Custom serializers must also be able to create a schematic for the public `SaveMetadata` type. Existing metadata files that deserialize to `null` or to another type are treated as corrupt; use `ForceSaveToDisk(...)` when intentionally replacing a corrupt or incompatible save.
 
-Use `TransformedSaveSerializer` with `ISavePayloadTransform` when an existing serializer format should be encoded after serialization and decoded before deserialization. The decorator composes file extensions, so wrapping JSON with a transform whose suffix is `.enc` writes provider and metadata files such as `player.json.enc` and `metadata.json.enc`. Migration is routed through the decorator by decoding before `DeserializeToNode(...)` and encoding after `SerializeFromNode(...)`. Contextual serializer and migration calls are forwarded to the inner serializer when supported. Serializer metadata is delegated from the inner serializer.
+Use `TransformedSaveSerializer` with `ISavePayloadTransform` when an existing serializer format should be encoded after serialization and decoded before deserialization. The decorator composes file extensions, so wrapping JSON with a transform whose suffix is `.enc` writes provider and metadata files such as `player.json.enc` and `metadata.json.enc`. Migration is routed through the decorator by decoding before `DeserializeToNode(...)` and encoding after `SerializeFromNode(...)`; those migration methods pass provider root nodes, not serializer envelopes. Contextual serializer and migration calls are forwarded to the inner serializer when supported. Serializer metadata is delegated from the inner serializer.
 
 `CompressedSaveSerializer` is the intended public compression API. Its internal compression transform should remain an implementation detail unless a concrete use case appears for exposing GZip as a standalone payload transform.
 
 MessagePack support belongs in the optional `Workes.SaveSystem.MessagePack` companion package for dependency reasons. The core package does not reference MessagePack directly and does not implement field maps itself; it provides the contextual serializer plumbing needed for the companion package to store and use those maps in `SaveMetadata.SerializerMetadata`.
 
-If providers using the serializer implement `ISaveMigratable`, the serializer must return an `ISaveMigrationCapableSerializer` from `ISaveSerializer.Migration`. That adapter must parse serialized payloads into editable `ISaveDataNode` trees, serialize edited node trees back to the payload format, and expose a matching `NodeFactory` that creates new object, array, and primitive nodes for migration steps. Metadata-backed migration adapters can additionally implement `IContextualSaveMigrationCapableSerializer` to receive the same `SaveSerializerContext` used by contextual provider serialization.
+The companion package should treat the provider root as one of several root shapes: object, array/list, string-key map, scalar, or null while editing migration nodes. Field-map metadata applies to object-root DTOs only. Root arrays/lists, string-key dictionaries, primitives, and nil/null are provider root values, not fake object field maps. A companion serializer may support non-string dictionary keys for normal save/load if it documents that generic migration exposes only string-key maps through `ISaveDataNode`.
+
+If providers using the serializer implement `ISaveMigratable`, the serializer must return an `ISaveMigrationCapableSerializer` from `ISaveSerializer.Migration`. That adapter must parse serialized payloads into editable provider-root `ISaveDataNode` trees, serialize edited root node trees back to the payload format, and expose a matching `NodeFactory` that creates new object, array, and primitive nodes for migration steps. Metadata-backed migration adapters can additionally implement `IContextualSaveMigrationCapableSerializer` to receive the same `SaveSerializerContext` used by contextual provider serialization and to write the current schema version after migration.
 
 The migration-capable serializer, its `NodeFactory`, and its data-node trees are coupled. Do not mix data nodes from different serializer or factory instances.
 
@@ -752,6 +774,7 @@ Data-node implementations should:
 - keep mutations local to the represented serialized tree;
 - support the primitive and null node types exposed by `ISaveDataNodeFactory`;
 - expose null values through `IsNull()` and allow existing nodes to be replaced with null through `SetNull()`;
+- allow existing nodes, including root nodes, to be replaced with same-factory nodes through `ReplaceWith(...)`;
 - reject attempts to combine nodes created by another serializer or factory instance.
 
 For the built-in JSON serializer, JSON payloads are converted into package-owned migration nodes before migration steps run, then converted back to JSON after migration. The Newtonsoft JSON model remains an implementation detail of JSON parsing and writing, not the migration edit surface.

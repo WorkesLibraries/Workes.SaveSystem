@@ -63,6 +63,57 @@ public sealed class DataNodeContractTests
     }
 
     [Test]
+    public void SaveDataNode_ReplaceWith_ReplacesNodeShapeAndValue()
+    {
+        var factory = CreateFactory();
+        var root = factory.CreateObject();
+        root.Set("name", factory.CreateString("Rook"));
+        var array = factory.CreateArray();
+        array.Add(factory.CreateInt(1));
+
+        root.ReplaceWith(array);
+
+        Assert.That(root.NodeType, Is.EqualTo(SaveDataNodeType.Array));
+        Assert.That(root.Count, Is.EqualTo(1));
+        Assert.That(root.GetAt(0).AsInt(), Is.EqualTo(1));
+
+        var obj = factory.CreateObject();
+        obj.Set("level", factory.CreateInt(4));
+        root.ReplaceWith(obj);
+
+        Assert.That(root.NodeType, Is.EqualTo(SaveDataNodeType.Object));
+        Assert.That(root.Get("level").AsInt(), Is.EqualTo(4));
+
+        root.ReplaceWith(factory.CreateString("done"));
+
+        Assert.That(root.NodeType, Is.EqualTo(SaveDataNodeType.String));
+        Assert.That(root.AsString(), Is.EqualTo("done"));
+
+        root.ReplaceWith(factory.CreateNull());
+
+        Assert.That(root.NodeType, Is.EqualTo(SaveDataNodeType.Null));
+        Assert.That(root.IsNull(), Is.True);
+    }
+
+    [Test]
+    public void SaveDataNode_ReplaceWith_ClonesReplacementTree()
+    {
+        var factory = CreateFactory();
+        var root = factory.CreateObject();
+        var replacement = factory.CreateObject();
+        var bytes = new byte[] { 1, 2, 3 };
+        var child = factory.CreateArray();
+        child.Add(factory.CreateBytes(bytes));
+        replacement.Set("items", child);
+
+        root.ReplaceWith(replacement);
+        bytes[0] = 9;
+        replacement.Get("items").GetAt(0).SetBytes(new byte[] { 4, 5, 6 });
+
+        Assert.That(root.Get("items").GetAt(0).AsBytes(), Is.EqualTo(new byte[] { 1, 2, 3 }));
+    }
+
+    [Test]
     public void SaveDataObjectNode_SupportsObjectOperations()
     {
         var factory = CreateFactory();
@@ -225,8 +276,10 @@ public sealed class DataNodeContractTests
         var node = factory.CreateObject();
 
         var ex = Assert.Throws<InvalidOperationException>(() => node.Set("foreign", new ForeignNode()));
+        var replaceEx = Assert.Throws<InvalidOperationException>(() => node.ReplaceWith(new ForeignNode()));
 
         Assert.That(ex!.Message, Does.Contain("Save data nodes"));
+        Assert.That(replaceEx!.Message, Does.Contain("Save data nodes"));
     }
 
     [Test]
@@ -237,8 +290,10 @@ public sealed class DataNodeContractTests
         var node = factory.CreateObject();
 
         var ex = Assert.Throws<InvalidOperationException>(() => node.Set("foreign", otherFactory.CreateString("Rook")));
+        var replaceEx = Assert.Throws<InvalidOperationException>(() => node.ReplaceWith(otherFactory.CreateString("Rook")));
 
         Assert.That(ex!.Message, Does.Contain("same node factory"));
+        Assert.That(replaceEx!.Message, Does.Contain("same node factory"));
     }
 
     [Test]
@@ -297,5 +352,6 @@ public sealed class DataNodeContractTests
         public DateTime AsDateTime() => throw new NotSupportedException();
         public void SetDateTime(DateTime value) => throw new NotSupportedException();
         public void SetNull() => throw new NotSupportedException();
+        public void ReplaceWith(ISaveDataNode value) => throw new NotSupportedException();
     }
 }

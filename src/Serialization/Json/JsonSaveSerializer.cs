@@ -3,6 +3,7 @@ using Newtonsoft.Json;
 using System;
 using System.Globalization;
 using System.IO;
+using System.Runtime.CompilerServices;
 using System.Text;
 
 namespace Workes.SaveSystem
@@ -11,9 +12,12 @@ namespace Workes.SaveSystem
     /// A serializer implementation that uses JSON format for save files.
     /// Creates <see cref="JsonSaveSchematic{T}"/> instances for each state type at registration.
     /// </summary>
-    public sealed class JsonSaveSerializer : ISaveSerializer, ISaveMigrationCapableSerializer
+    public sealed class JsonSaveSerializer : ISaveSerializer, ISaveMigrationCapableSerializer, IContextualSaveMigrationCapableSerializer
     {
+        private const int DefaultMigrationSchemaVersion = 1;
         private readonly SaveDataNodeFactory _nodeFactory;
+        private readonly ConditionalWeakTable<ISaveDataNode, VersionHolder> _nodeVersions =
+            new ConditionalWeakTable<ISaveDataNode, VersionHolder>();
 
         /// <summary>
         /// Initializes a new instance of the <see cref="JsonSaveSerializer"/> class.
@@ -139,6 +143,58 @@ namespace Workes.SaveSystem
         /// <inheritdoc />
         public ISaveDataNode DeserializeToNode(byte[] serializedData)
         {
+            var envelope = ReadEnvelope(serializedData);
+            var dataNode = ConvertFromJson(envelope.Data, _nodeFactory.Owner);
+            _nodeVersions.Remove(dataNode);
+            _nodeVersions.Add(dataNode, new VersionHolder(envelope.SchemaVersion));
+            return dataNode;
+        }
+
+        /// <inheritdoc />
+        public byte[] SerializeFromNode(ISaveDataNode node)
+        {
+            var schemaVersion = _nodeVersions.TryGetValue(node, out var holder)
+                ? holder.SchemaVersion
+                : DefaultMigrationSchemaVersion;
+
+            return SerializeEnvelopeFromNode(node, schemaVersion);
+        }
+
+        /// <inheritdoc />
+        public ISaveDataNode DeserializeToNode(byte[] data, SaveSerializerContext context)
+        {
+            if (context == null)
+                throw new ArgumentNullException(nameof(context));
+
+            return DeserializeToNode(data);
+        }
+
+        /// <inheritdoc />
+        public byte[] SerializeFromNode(ISaveDataNode node, SaveSerializerContext context)
+        {
+            if (context == null)
+                throw new ArgumentNullException(nameof(context));
+
+            return SerializeEnvelopeFromNode(node, context.SchemaVersion);
+        }
+
+        private byte[] SerializeEnvelopeFromNode(ISaveDataNode node, int schemaVersion)
+        {
+            var saveDataNode = SaveDataNode.RequireSaveDataNode(node, _nodeFactory.Owner);
+            var envelope = new JObject
+            {
+                ["SchemaVersion"] = schemaVersion,
+                ["Data"] = ConvertToJson(saveDataNode)
+            };
+            var json = envelope.ToString(ToNewtonsoftFormatting(Formatting));
+            return Encoding.UTF8.GetBytes(json);
+        }
+
+        private static JsonEnvelope ReadEnvelope(byte[] serializedData)
+        {
+            if (serializedData == null)
+                throw new ArgumentNullException(nameof(serializedData));
+
             using var stringReader = new StringReader(Encoding.UTF8.GetString(serializedData));
             using var jsonReader = new JsonTextReader(stringReader)
             {
@@ -146,15 +202,20 @@ namespace Workes.SaveSystem
             };
 
             var root = JToken.ReadFrom(jsonReader);
-            return ConvertFromJson(root, _nodeFactory.Owner);
-        }
+            if (!(root is JObject jsonObject))
+                throw new InvalidOperationException("JSON save payload root must be an object envelope.");
 
-        /// <inheritdoc />
-        public byte[] SerializeFromNode(ISaveDataNode node)
-        {
-            var saveDataNode = SaveDataNode.RequireSaveDataNode(node, _nodeFactory.Owner);
-            var json = ConvertToJson(saveDataNode).ToString(ToNewtonsoftFormatting(Formatting));
-            return Encoding.UTF8.GetBytes(json);
+            var schemaVersionToken = jsonObject["SchemaVersion"];
+            if (schemaVersionToken == null || schemaVersionToken.Type != JTokenType.Integer)
+            {
+                throw new InvalidOperationException(
+                    "Serialized JSON does not contain a valid integer 'SchemaVersion' field.");
+            }
+
+            if (!jsonObject.TryGetValue("Data", out var dataToken))
+                throw new InvalidOperationException("Serialized JSON does not contain a 'Data' field.");
+
+            return new JsonEnvelope(schemaVersionToken.Value<int>(), dataToken);
         }
 
         private static SaveDataNode ConvertFromJson(JToken token, object owner)
@@ -284,6 +345,29 @@ namespace Workes.SaveSystem
                 default:
                     throw new ArgumentOutOfRangeException(nameof(formatting));
             }
+        }
+
+        private sealed class VersionHolder
+        {
+            public VersionHolder(int schemaVersion)
+            {
+                SchemaVersion = schemaVersion;
+            }
+
+            public int SchemaVersion { get; }
+        }
+
+        private readonly struct JsonEnvelope
+        {
+            public JsonEnvelope(int schemaVersion, JToken data)
+            {
+                SchemaVersion = schemaVersion;
+                Data = data;
+            }
+
+            public int SchemaVersion { get; }
+
+            public JToken Data { get; }
         }
     }
 }

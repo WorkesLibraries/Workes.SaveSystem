@@ -121,11 +121,12 @@ namespace Workes.SaveSystem
                 return false;
             }
 
-            // Convert serialized data to ISaveDataNode (this is the envelope)
-            ISaveDataNode envelopeNode;
+            // Convert serialized data to the provider data root node. Serializer-owned envelopes
+            // remain hidden inside the migration adapter.
+            ISaveDataNode dataNode;
             try
             {
-                envelopeNode = migrationSerializer is IContextualSaveMigrationCapableSerializer contextual
+                dataNode = migrationSerializer is IContextualSaveMigrationCapableSerializer contextual
                     ? contextual.DeserializeToNode(serializedData, savedContext)
                     : migrationSerializer.DeserializeToNode(serializedData);
             }
@@ -139,17 +140,7 @@ namespace Workes.SaveSystem
                 return false;
             }
 
-            // Verify the envelope structure
-            if (!envelopeNode.Has("Data"))
-            {
-                _diagnostics.LogWarning($"Cannot migrate save data for provider '{saveKey}': envelope does not contain 'Data' field. Deserialization for this provider will almost certainly fail.");
-                return false;
-            }
-
-            // Extract the Data field from the envelope - this is what we migrate
-            ISaveDataNode dataNode = envelopeNode.Get("Data");
-
-            // Apply migrations sequentially to the Data field only.
+            // Apply migrations sequentially to the provider data root.
             var factory = migrationSerializer.NodeFactory;
             for (int version = savedSchemaVersion; version < currentSchemaVersion; version++)
             {
@@ -169,23 +160,13 @@ namespace Workes.SaveSystem
                 }
             }
 
-            // Update the SchemaVersion in the envelope to the final version after all migrations
-            // The envelope structure remains unchanged, only SchemaVersion is updated
-            if (envelopeNode.Has("SchemaVersion"))
-            {
-                var schemaVersionNode = envelopeNode.Get("SchemaVersion");
-                if (schemaVersionNode != null)
-                {
-                    schemaVersionNode.SetInt(currentSchemaVersion);
-                }
-            }
-
-            // Convert back to serialized bytes (envelope with updated SchemaVersion and migrated Data)
+            // Convert back to serialized bytes. The serializer writes the current schema version
+            // using the current context when it owns an envelope/header.
             try
             {
                 serializedData = migrationSerializer is IContextualSaveMigrationCapableSerializer contextual
-                    ? contextual.SerializeFromNode(envelopeNode, currentContext)
-                    : migrationSerializer.SerializeFromNode(envelopeNode);
+                    ? contextual.SerializeFromNode(dataNode, currentContext)
+                    : migrationSerializer.SerializeFromNode(dataNode);
             }
             catch (Exception ex)
             {

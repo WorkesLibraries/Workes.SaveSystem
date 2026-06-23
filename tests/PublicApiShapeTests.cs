@@ -87,6 +87,9 @@ public sealed class PublicApiShapeTests
         Assert.That(exportedTypeNames, Does.Contain(nameof(SaveSerializerContext)));
         Assert.That(exportedTypeNames, Does.Contain(nameof(IContextualSaveSerializer)));
         Assert.That(exportedTypeNames, Does.Contain(nameof(IContextualSaveMigrationCapableSerializer)));
+        Assert.That(
+            typeof(ISaveDataNode).GetMethod(nameof(ISaveDataNode.ReplaceWith), new[] { typeof(ISaveDataNode) }),
+            Is.Not.Null);
 
         var contextProperties = typeof(SaveSerializerContext)
             .GetProperties(BindingFlags.Public | BindingFlags.Instance)

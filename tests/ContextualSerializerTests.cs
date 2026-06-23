@@ -416,13 +416,13 @@ public sealed class ContextualSerializerTests
             public ISaveDataNode DeserializeToNode(byte[] data, SaveSerializerContext context)
             {
                 _owner.Records.Add(ContextRecord.From("DeserializeToNode", context));
-                return _inner.DeserializeToNode(data);
+                return ((IContextualSaveMigrationCapableSerializer)_inner).DeserializeToNode(data, context);
             }
 
             public byte[] SerializeFromNode(ISaveDataNode node, SaveSerializerContext context)
             {
                 _owner.Records.Add(ContextRecord.From("SerializeFromNode", context));
-                return _inner.SerializeFromNode(node);
+                return ((IContextualSaveMigrationCapableSerializer)_inner).SerializeFromNode(node, context);
             }
         }
     }
