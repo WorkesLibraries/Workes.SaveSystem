@@ -258,7 +258,7 @@ Metadata reads return `null` when no metadata file exists and throw when a metad
 
 Serializers that need format metadata can implement `ISaveSerializerMetadataHandler`. That metadata is stored inside the save-system metadata file as serializer-owned string key/value data, with both global and per-provider buckets. This is intended for serializer implementation details such as field maps or codec settings; it is not exposed through `SaveMetadataInfo` and should not be used for game/application display metadata.
 
-Serializers whose provider payload format depends on that metadata can also implement `IContextualSaveSerializer` and, for migration support, `IContextualSaveMigrationCapableSerializer`. The manager passes a `SaveSerializerContext` containing the provider save key, schema version, state type, schematic, and saved serializer metadata when serializing, extracting schema versions, deserializing, validating, and migrating provider payloads. Plain JSON-style serializers can ignore these optional interfaces.
+Serializers whose provider payload format depends on that metadata can also implement contextual extension interfaces such as `IContextualSaveSerializer` and, for migration support, `IContextualSaveMigrationCapableSerializer`. The manager passes a `SaveSerializerContext` containing the provider save key, schema version, state type, schematic, and saved serializer metadata when serializing, extracting schema versions, deserializing, validating, and migrating provider payloads. When these interfaces are present, `SaveManager` uses the contextual path for provider payloads. Direct calls to the base `ISaveSerializer` methods may not produce the same provider payload shape as manager-managed saves. Plain JSON-style serializers can ignore these optional interfaces.
 
 Application-owned display metadata such as character name, playtime, difficulty, or screenshot references should live in a normal provider for this preview. A dedicated application metadata provider API is planned separately so application metadata can have its own ownership and migration story instead of being mixed with required save-system metadata or serializer metadata.
 
@@ -669,6 +669,8 @@ Missing migration gaps are detected during load and are reported by `TryLoad...`
 
 Implement `ISaveSerializer` only when the built-in JSON serializer does not fit the application's persistence format.
 
+Serializer methods are primarily extension points for the save-system pipeline. Application code should usually interact with `SaveManager` instead of calling serializers directly. Use manager APIs such as `SaveToDisk(...)`, `LoadFromDisk(...)`, `TryLoadFromDisk(...)`, and `ValidateSave(...)` for normal save/load flows. `ISaveSerializer.Serialize(...)`, `Deserialize(...)`, and `CreateSchematic(...)` are intended for `SaveManager`, serializer wrappers, and advanced integration code.
+
 A custom serializer must provide these pieces as one coherent format:
 
 - a file extension, including the leading dot;
@@ -680,7 +682,7 @@ Schematic creation should be lightweight where possible. Provider state write co
 
 If the serializer needs metadata stored with a save, implement `ISaveSerializerMetadataHandler` and return it from `ISaveSerializer.Metadata`. The manager calls `WriteMetadata(...)` before provider payloads and the metadata file are written, and calls `ValidateMetadata(...)` when temp-save, load, validation, and recovery-candidate metadata is validated. Missing serializer metadata is treated as empty metadata for compatibility with older saves.
 
-If provider payload serialization depends on serializer-owned metadata, implement `IContextualSaveSerializer`. The manager will prefer its contextual `Serialize(...)`, `Deserialize(...)`, and `ExtractSchemaVersion(...)` methods for provider files and fall back to `ISaveSerializer` methods for existing serializers. Use this for compact metadata-backed formats such as MessagePack field maps; JSON serializers and other self-describing formats usually do not need it.
+If provider payload serialization depends on serializer-owned metadata or manager-owned context, implement contextual extension interfaces such as `IContextualSaveSerializer`. The manager will prefer contextual `Serialize(...)`, `Deserialize(...)`, and `ExtractSchemaVersion(...)` methods for provider files and fall back to `ISaveSerializer` methods for existing serializers. Use this when serializers need save metadata, provider keys, schema versions, or other manager-owned context, such as compact metadata-backed formats with MessagePack field maps. Direct calls to the base `ISaveSerializer` methods are best treated as low-level integration or diagnostic operations because they may not produce the same provider payload shape as manager-managed saves. JSON serializers and other self-describing formats usually do not need contextual serialization.
 
 Custom serializers must also be able to create a schematic for the public `SaveMetadata` type. Existing metadata files that deserialize to `null` or to another type are treated as corrupt; use `ForceSaveToDisk(...)` when intentionally replacing a corrupt or incompatible save.
 
