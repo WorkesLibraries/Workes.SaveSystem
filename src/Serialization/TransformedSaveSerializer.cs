@@ -72,13 +72,13 @@ namespace Workes.SaveSystem
         }
 
         /// <inheritdoc />
-        public object Deserialize(byte[] rawData, ISaveSchematic schematic)
+        public object? Deserialize(byte[] rawData, ISaveSchematic schematic)
         {
             return Inner.Deserialize(Transform.Decode(rawData), schematic);
         }
 
         /// <inheritdoc />
-        public object Deserialize(byte[] rawData, SaveSerializerContext context)
+        public object? Deserialize(byte[] rawData, SaveSerializerContext context)
         {
             var decoded = Transform.Decode(rawData);
             return Inner is IContextualSaveSerializer contextual

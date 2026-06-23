@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace Workes.SaveSystem
 {
     /// <summary>
@@ -27,6 +29,7 @@ namespace Workes.SaveSystem
         /// </summary>
         /// <param name="serialized">The serialized bytes to deserialize.</param>
         /// <returns>The deserialized state object.</returns>
+        [return: MaybeNull]
         object DeserializeUntyped(byte[] serialized);
     }
 }

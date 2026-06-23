@@ -284,7 +284,7 @@ if (!result.Succeeded)
 }
 ```
 
-The try-load APIs use the same load path as `LoadFromDisk(...)` and `LoadBackupSlotFromDisk(...)`. Successful loads restore providers normally. Missing saves, disabled backups, registration validation failures, missing provider files, migration failures, recovery failures, corrupt data, and other load failures are reported through `SaveLoadResult.Status`; failed error cases keep the captured exception on `SaveLoadResult.Exception`. Provider payloads with a valid envelope but null `Data` are treated as corrupt data because provider state must be non-null.
+The try-load APIs use the same load path as `LoadFromDisk(...)` and `LoadBackupSlotFromDisk(...)`. Successful loads restore providers normally. Missing saves, disabled backups, registration validation failures, missing provider files, migration failures, recovery failures, corrupt data, and other load failures are reported through `SaveLoadResult.Status`; failed error cases keep the captured exception on `SaveLoadResult.Exception`. Provider payloads with a valid envelope but null `Data` are valid only when the registered provider state type can accept null; null data for a non-nullable value-type provider is treated as corrupt data.
 
 For `TryLoadBackupSlotFromDisk(...)`, disabled backups are reported as `SaveLoadStatus.BackupSystemDisabled` before request or registration validation. This makes backup-disabled UI checks cheap and non-throwing even when the caller has not prepared provider registrations.
 
@@ -352,7 +352,7 @@ Bump `SchemaVersion` when old payloads need help to become the current state sha
 
 Custom `FileNameResolver` values must also resolve every persisted provider to a unique file name. The default resolver uses `SaveKey`, so uniqueness follows from unique provider keys. A custom resolver that maps multiple providers to the same file is rejected during registration validation. The provider file base name `metadata` is reserved for save-system metadata, so providers must not resolve to `metadata.json`, `metadata.json.gz`, or the active serializer's equivalent metadata file.
 
-Provider state must be non-null and compatible with the provider's `ISaveProvider<TState>` state type. Persisted providers must also be compatible with the serializer. If a provider has no data to save, return an explicit empty state object rather than `null`.
+Provider state must be compatible with the provider's `ISaveProvider<TState>` state type. Null provider state is supported for reference-type state and `Nullable<T>` state. Null is rejected for non-nullable value-type providers so JSON null cannot silently restore as a default value such as `0` or `false`. Persisted providers must also be compatible with the serializer.
 The built-in JSON serializer does not require a public parameterless constructor during registration; constructor-based DTOs are supported when Newtonsoft.Json can serialize and deserialize the real captured state.
 
 ```csharp
@@ -369,7 +369,7 @@ if (!manager.TryRegisterProvider(playerProvider, out var registrationError))
 }
 ```
 
-`TryRegisterProvider(...)` and `TryRegisterMemoryProvider(...)` tentatively register the provider, run the same global `ValidateRegistrations()` path, and remove the provider again if registration or validation fails. Memory-only providers are also captured during validation so null state is rejected before the first snapshot or disk operation. Successful try-registration leaves the manager validated for disk save/load operations.
+`TryRegisterProvider(...)` and `TryRegisterMemoryProvider(...)` tentatively register the provider, run the same global `ValidateRegistrations()` path, and remove the provider again if registration or validation fails. Memory-only providers are also captured during validation so incompatible state is rejected before the first snapshot or disk operation. Successful try-registration leaves the manager validated for disk save/load operations.
 
 Providers can optionally implement `ISaveLifecycle` to receive `OnBeforeSave()` before capture and `OnAfterLoad()` after a successful restore. Providers can also be registered without a schematic through `RegisterMemoryProvider(provider)` when they should participate in snapshots but not write their state to disk.
 
@@ -698,7 +698,7 @@ Implement `ISaveProvider<TState>` for each subsystem that owns saveable state.
 | `SaveKey` | Stable provider identity. It must be unique within a manager and must not change after provider registration. |
 | `SchemaVersion` | Stable integer version for the provider state shape. Increase it when older payloads need migration. It must not change after registration validation. |
 | `LoadPriority` | Lower values restore first. Use it when one provider must exist before another restores. |
-| `CaptureState()` | Return a non-null, serializer-compatible state object of type `TState`. The manager calls lifecycle `OnBeforeSave()` before capture. |
+| `CaptureState()` | Return a serializer-compatible state object of type `TState`. Null is allowed for reference-type and `Nullable<T>` state. The manager calls lifecycle `OnBeforeSave()` before capture. |
 | `RestoreState(TState)` | Accept the object shape produced by the registered schematic. |
 
 Use `RegisterProvider(provider)` for disk persistence. The provider's `ISaveProvider<TState>` implementation supplies the state type.

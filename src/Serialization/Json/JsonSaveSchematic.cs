@@ -62,7 +62,7 @@ namespace Workes.SaveSystem
         }
 
         /// <inheritdoc />
-        public override byte[] Serialize(T state)
+        public override byte[] Serialize(T? state)
         {
             var payload = new VersionedPayload<T>
             {
@@ -77,7 +77,7 @@ namespace Workes.SaveSystem
         }
 
         /// <inheritdoc />
-        public override T Deserialize(byte[] serialized)
+        public override T? Deserialize(byte[] serialized)
         {
             try
             {
@@ -94,8 +94,8 @@ namespace Workes.SaveSystem
                     );
                 }
 
-                if (payload.Data == null)
-                    throw new InvalidOperationException("Deserialized payload data was null. Provider state cannot be null.");
+                if (payload.Data == null && !SaveStateCompatibility.CanAcceptNull(typeof(T)))
+                    throw new InvalidOperationException("Deserialized payload data was null, but this provider state type cannot accept null.");
 
                 return payload.Data;
             }

@@ -104,7 +104,7 @@ namespace Workes.SaveSystem
         /// <param name="rawData">The raw UTF-8 JSON bytes to deserialize.</param>
         /// <param name="schematic">The schematic that defines how to deserialize the data.</param>
         /// <returns>The deserialized data object.</returns>
-        public object Deserialize(byte[] rawData, ISaveSchematic schematic)
+        public object? Deserialize(byte[] rawData, ISaveSchematic schematic)
         {
             return schematic.DeserializeUntyped(rawData);
         }

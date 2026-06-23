@@ -108,9 +108,10 @@ public sealed class TryLoadResultTests
     public void TryLoadFromDisk_ReturnsCorruptDataWhenProviderPayloadDataIsNull()
     {
         var manager = CreateManager();
-        var provider = new TestProvider("player", new TestState { Value = 1 });
+        var provider = new IntProvider("player", 1);
         manager.RegisterProvider(provider);
-        SaveValue(manager, provider, "slot", 1);
+        manager.ValidateRegistrations();
+        manager.SaveToDisk("slot");
         File.WriteAllText(Path.Combine(_tempRoot, "slot", "player.json"), """{"SchemaVersion":1,"Data":null}""");
 
         var result = manager.TryLoadFromDisk("slot");
@@ -369,5 +370,21 @@ public sealed class TryLoadResultTests
         }
 
         public IReadOnlyList<SaveMigrationStep> Migrations { get; }
+    }
+
+    private sealed class IntProvider : ISaveProvider<int>
+    {
+        public IntProvider(string saveKey, int current)
+        {
+            SaveKey = saveKey;
+            Current = current;
+        }
+
+        public string SaveKey { get; }
+        public int SchemaVersion => 1;
+        public int LoadPriority => 0;
+        public int Current { get; private set; }
+        public int CaptureState() => Current;
+        public void RestoreState(int state) => Current = state;
     }
 }

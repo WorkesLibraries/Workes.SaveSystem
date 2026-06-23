@@ -6,6 +6,6 @@ namespace Workes.SaveSystem
     internal sealed class VersionedPayload<T>
     {
         public int SchemaVersion;
-        public T Data = default!;
+        public T? Data;
     }
 }

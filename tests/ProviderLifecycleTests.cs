@@ -165,6 +165,35 @@ public sealed class ProviderLifecycleTests
     }
 
     [Test]
+    public void RestoreSnapshot_AllowsNullStateForReferenceProvider()
+    {
+        var manager = new SaveManager<string>(CreateOptions());
+        var provider = new NullableStringProvider("player", "before");
+        manager.RegisterProvider(provider);
+        var snapshot = new SaveSnapshot();
+        snapshot.Add("player", schemaVersion: 1, state: null);
+
+        manager.RestoreSnapshot(snapshot);
+
+        Assert.That(provider.Current, Is.Null);
+    }
+
+    [Test]
+    public void RestoreSnapshot_RejectsNullStateForNonNullableValueProvider()
+    {
+        var manager = new SaveManager<string>(CreateOptions());
+        var provider = new IntProvider("player", 7);
+        manager.RegisterProvider(provider);
+        var snapshot = new SaveSnapshot();
+        snapshot.Add("player", schemaVersion: 1, state: null);
+
+        var ex = Assert.Throws<InvalidOperationException>(() => manager.RestoreSnapshot(snapshot));
+
+        Assert.That(ex!.Message, Does.Contain("incompatible"));
+        Assert.That(provider.Current, Is.EqualTo(7));
+    }
+
+    [Test]
     public void ValidateSnapshotForRestore_AllowsMissingRegisteredProviders()
     {
         var manager = new SaveManager<string>(CreateOptions());
@@ -367,6 +396,60 @@ public sealed class ProviderLifecycleTests
         }
 
         public void RestoreState(TestState state)
+        {
+            Current = state;
+        }
+    }
+
+    private sealed class NullableStringProvider : ISaveProvider<string?>
+    {
+        public NullableStringProvider(string saveKey, string? current)
+        {
+            SaveKey = saveKey;
+            Current = current;
+        }
+
+        public string SaveKey { get; }
+
+        public int SchemaVersion => 1;
+
+        public int LoadPriority => 0;
+
+        public string? Current { get; private set; }
+
+        public string? CaptureState()
+        {
+            return Current;
+        }
+
+        public void RestoreState(string? state)
+        {
+            Current = state;
+        }
+    }
+
+    private sealed class IntProvider : ISaveProvider<int>
+    {
+        public IntProvider(string saveKey, int current)
+        {
+            SaveKey = saveKey;
+            Current = current;
+        }
+
+        public string SaveKey { get; }
+
+        public int SchemaVersion => 1;
+
+        public int LoadPriority => 0;
+
+        public int Current { get; private set; }
+
+        public int CaptureState()
+        {
+            return Current;
+        }
+
+        public void RestoreState(int state)
         {
             Current = state;
         }

@@ -43,13 +43,14 @@ public sealed class PublicApiShapeTests
     }
 
     [Test]
-    public void SaveSnapshot_Add_RejectsNullState()
+    public void SaveSnapshot_Add_AllowsNullState()
     {
         var snapshot = new SaveSnapshot();
 
-        var ex = Assert.Throws<ArgumentNullException>(() => snapshot.Add("player", 1, null!));
+        snapshot.Add("player", 1, null);
 
-        Assert.That(ex!.ParamName, Is.EqualTo("state"));
+        Assert.That(snapshot.Entries, Has.Count.EqualTo(1));
+        Assert.That(snapshot.Entries[0].State, Is.Null);
     }
 
     [Test]

@@ -54,13 +54,13 @@ namespace Workes.SaveSystem
         }
 
         /// <inheritdoc />
-        public object Deserialize(byte[] rawData, ISaveSchematic schematic)
+        public object? Deserialize(byte[] rawData, ISaveSchematic schematic)
         {
             return _transformed.Deserialize(rawData, schematic);
         }
 
         /// <inheritdoc />
-        public object Deserialize(byte[] rawData, SaveSerializerContext context)
+        public object? Deserialize(byte[] rawData, SaveSerializerContext context)
         {
             return _transformed.Deserialize(rawData, context);
         }

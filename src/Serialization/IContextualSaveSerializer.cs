@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace Workes.SaveSystem
 {
     /// <summary>
@@ -13,6 +15,7 @@ namespace Workes.SaveSystem
         /// <summary>
         /// Deserializes provider data using save/provider context.
         /// </summary>
+        [return: MaybeNull]
         object Deserialize(byte[] rawData, SaveSerializerContext context);
 
         /// <summary>

@@ -1,5 +1,7 @@
 using System;
 
+using System.Diagnostics.CodeAnalysis;
+
 namespace Workes.SaveSystem
 {
     /// <summary>
@@ -47,6 +49,7 @@ namespace Workes.SaveSystem
         /// <param name="rawData">The raw serialized bytes to deserialize.</param>
         /// <param name="schematic">The schematic that defines how to deserialize the data.</param>
         /// <returns>The deserialized data object.</returns>
+        [return: MaybeNull]
         object Deserialize(byte[] rawData, ISaveSchematic schematic);
 
         /// <summary>

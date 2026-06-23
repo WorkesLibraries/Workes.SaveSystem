@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace Workes.SaveSystem
 {
     /// <summary>
@@ -42,10 +44,12 @@ namespace Workes.SaveSystem
         /// <summary>
         /// Captures the current state of this provider.
         /// </summary>
-        /// <returns>The current non-null state of this provider.</returns>
+        /// <returns>The current state of this provider.</returns>
         /// <remarks>
-        /// Null provider state is not supported. Return an explicit empty state object when a provider has no data.
+        /// Null provider state is supported when <typeparamref name="TState"/> is a reference type or <see cref="System.Nullable{T}"/>.
+        /// Non-nullable value-type provider states must return a non-null value.
         /// </remarks>
+        [return: MaybeNull]
         TState CaptureState();
 
         /// <summary>

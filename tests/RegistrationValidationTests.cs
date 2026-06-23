@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using Workes.SaveSystem;
 
 namespace Workes.SaveSystem.Tests;
@@ -68,12 +69,12 @@ public sealed class RegistrationValidationTests
         var existingProvider = new MutableProvider("player", schemaVersion: 1);
         manager.RegisterProvider(existingProvider);
         manager.ValidateRegistrations();
-        var invalidProvider = new NullStateProvider();
+        var invalidProvider = new CountingProvider { SaveKey = "broken", ThrowOnCapture = true };
 
         var registered = manager.TryRegisterProvider(invalidProvider, out var error);
 
         Assert.That(registered, Is.False);
-        Assert.That(error, Does.Contain("returned null state"));
+        Assert.That(error, Does.Contain("failed while capturing state"));
         Assert.DoesNotThrow(() => manager.SaveToDisk("slot"));
         Assert.That(File.Exists(Path.Combine(_tempRoot, "slot", "player.json")), Is.True);
     }
@@ -106,16 +107,16 @@ public sealed class RegistrationValidationTests
     }
 
     [Test]
-    public void TryRegisterMemoryProvider_WhenCapturedStateIsNull_DoesNotKeepProvider()
+    public void TryRegisterMemoryProvider_WhenCapturedReferenceStateIsNull_RegistersProvider()
     {
         var manager = CreateManager();
         var provider = new NullStateProvider();
 
         var registered = manager.TryRegisterMemoryProvider(provider, out var error);
 
-        Assert.That(registered, Is.False);
-        Assert.That(error, Does.Contain("returned null state"));
-        Assert.That(manager.CaptureSnapshot().Entries, Is.Empty);
+        Assert.That(registered, Is.True);
+        Assert.That(error, Is.Null);
+        Assert.That(manager.CaptureSnapshot().Entries.Single().State, Is.Null);
     }
 
     [Test]
@@ -204,25 +205,21 @@ public sealed class RegistrationValidationTests
     }
 
     [Test]
-    public void ValidateRegistrations_RejectsNullProviderState()
+    public void ValidateRegistrations_AllowsNullReferenceProviderState()
     {
         var manager = CreateManager();
         manager.RegisterProvider(new NullStateProvider());
 
-        var ex = Assert.Throws<InvalidOperationException>(() => manager.ValidateRegistrations());
-
-        Assert.That(ex!.Message, Does.Contain("returned null state"));
+        Assert.DoesNotThrow(() => manager.ValidateRegistrations());
     }
 
     [Test]
-    public void ValidateRegistrations_RejectsNullMemoryProviderState()
+    public void ValidateRegistrations_AllowsNullNullableValueProviderState()
     {
         var manager = CreateManager();
-        manager.RegisterMemoryProvider(new NullStateProvider());
+        manager.RegisterProvider(new NullNullableIntProvider());
 
-        var ex = Assert.Throws<InvalidOperationException>(() => manager.ValidateRegistrations());
-
-        Assert.That(ex!.Message, Does.Contain("returned null state"));
+        Assert.DoesNotThrow(() => manager.ValidateRegistrations());
     }
 
     [Test]
@@ -365,7 +362,7 @@ public sealed class RegistrationValidationTests
 
     private sealed class CountingProvider : ISaveProvider<TestState>
     {
-        public string SaveKey => "player";
+        public string SaveKey { get; set; } = "player";
 
         public int SchemaVersion => 1;
 
@@ -441,12 +438,30 @@ public sealed class RegistrationValidationTests
 
         public int LoadPriority => 0;
 
-        public TestState CaptureState()
+        public TestState? CaptureState()
         {
-            return null!;
+            return null;
         }
 
-        public void RestoreState(TestState state)
+        public void RestoreState(TestState? state)
+        {
+        }
+    }
+
+    private sealed class NullNullableIntProvider : ISaveProvider<int?>
+    {
+        public string SaveKey => "nullable-int";
+
+        public int SchemaVersion => 1;
+
+        public int LoadPriority => 0;
+
+        public int? CaptureState()
+        {
+            return null;
+        }
+
+        public void RestoreState(int? state)
         {
         }
     }

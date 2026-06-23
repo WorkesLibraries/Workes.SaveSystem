@@ -19,8 +19,8 @@ namespace Workes.SaveSystem
             public int? ValidatedSchemaVersion;
             public ISaveSchematic? Schematic;
             public Type StateType = null!;
-            public Func<object> CaptureState = null!;
-            public Action<object> RestoreState = null!;
+            public Func<object?> CaptureState = null!;
+            public Action<object?> RestoreState = null!;
         }
 
         private sealed class ValidatedSaveFolder
@@ -153,8 +153,8 @@ namespace Workes.SaveSystem
                 RegisteredSaveKey = provider.SaveKey,
                 Schematic = schematic,
                 StateType = typeof(TState),
-                CaptureState = () => provider.CaptureState()!,
-                RestoreState = state => provider.RestoreState((TState)state)
+                CaptureState = () => provider.CaptureState(),
+                RestoreState = state => provider.RestoreState((TState)state!)
             });
             _registrationsValidated = false;
         }
@@ -184,8 +184,8 @@ namespace Workes.SaveSystem
                 RegisteredSaveKey = provider.SaveKey,
                 Schematic = null,
                 StateType = typeof(TState),
-                CaptureState = () => provider.CaptureState()!,
-                RestoreState = state => provider.RestoreState((TState)state)
+                CaptureState = () => provider.CaptureState(),
+                RestoreState = state => provider.RestoreState((TState)state!)
             });
             _registrationsValidated = false;
         }
@@ -316,7 +316,7 @@ namespace Workes.SaveSystem
         /// </summary>
         /// <remarks>
         /// Registration itself is intentionally lightweight. This method performs provider state capture,
-        /// non-null state validation, serializer compatibility checks for persisted providers, file-name checks,
+        /// captured state validation, serializer compatibility checks for persisted providers, file-name checks,
         /// and migration policy validation at the caller's chosen setup point. Call this again after registering
         /// or unregistering providers. Provider file names must not collide with the save-system metadata file.
         /// </remarks>
@@ -532,9 +532,9 @@ namespace Workes.SaveSystem
             }
         }
 
-        private object ValidateProviderCapturedState(ProviderEntry providerEntry)
+        private object? ValidateProviderCapturedState(ProviderEntry providerEntry)
         {
-            object state;
+            object? state;
             try
             {
                 state = providerEntry.CaptureState();
@@ -546,11 +546,10 @@ namespace Workes.SaveSystem
                     ex);
             }
 
-            if (state == null)
+            if (!SaveStateCompatibility.IsCompatibleState(providerEntry.StateType, state))
             {
                 throw new InvalidOperationException(
-                    $"SaveProvider with key '{providerEntry.RegisteredSaveKey}' returned null state during registration validation. " +
-                    "Provider CaptureState() must return a non-null state object.");
+                    $"SaveProvider with key '{providerEntry.RegisteredSaveKey}' returned state incompatible with its registered state type.");
             }
 
             return state;
@@ -624,7 +623,7 @@ namespace Workes.SaveSystem
             return snapshot;
         }
 
-        private object DeserializeProviderState(
+        private object? DeserializeProviderState(
             string saveKey,
             byte[] serializedData,
             int schemaVersion,
@@ -650,14 +649,14 @@ namespace Workes.SaveSystem
         private byte[] SerializeProviderState(
             string saveKey,
             int schemaVersion,
-            object state,
+            object? state,
             ProviderEntry providerEntry,
             SaveSerializerMetadata serializerMetadata)
         {
             var context = CreateSerializerContext(saveKey, schemaVersion, providerEntry, serializerMetadata);
             return _options.Serializer is IContextualSaveSerializer contextual
-                ? contextual.Serialize(state, context)
-                : _options.Serializer.Serialize(state, context.Schematic);
+                ? contextual.Serialize(state!, context)
+                : _options.Serializer.Serialize(state!, context.Schematic);
         }
 
         private SaveSerializerContext CreateSerializerContext(
@@ -759,7 +758,7 @@ namespace Workes.SaveSystem
             ProviderEntry providerEntry,
             SaveSerializerMetadata serializerMetadata)
         {
-            if (!providerEntry.StateType.IsInstanceOfType(entry.State))
+            if (!SaveStateCompatibility.IsCompatibleState(providerEntry.StateType, entry.State))
             {
                 throw new InvalidOperationException(
                     $"Snapshot entry for provider '{entry.SaveKey}' contains state incompatible with the registered provider state type.");
@@ -871,6 +870,13 @@ namespace Workes.SaveSystem
                     currentSchemaVersion,
                     providerEntry,
                     serializerMetadata);
+
+                if (!SaveStateCompatibility.IsCompatibleState(providerEntry.StateType, state))
+                {
+                    throw SaveLoadException.Create(
+                        SaveLoadStatus.CorruptData,
+                        $"Deserialized save data for provider '{kvp.Key}' is incompatible with the registered provider state type.");
+                }
 
                 snapshot.Add(
                     kvp.Key,
@@ -1384,7 +1390,7 @@ namespace Workes.SaveSystem
                     kvp.Value.SchemaVersion,
                     providerEntry,
                     serializerMetadata);
-                if (!providerEntry.StateType.IsInstanceOfType(state))
+                if (!SaveStateCompatibility.IsCompatibleState(providerEntry.StateType, state))
                 {
                     throw new InvalidOperationException(
                         $"Recovery candidate entry for provider '{kvp.Key}' contains state incompatible with the registered provider state type.");
@@ -1607,7 +1613,7 @@ namespace Workes.SaveSystem
                     serializedEntries[provider.Key].SchemaVersion,
                     provider.Value,
                     serializerMetadata);
-                if (state == null || !provider.Value.StateType.IsInstanceOfType(state))
+                if (!SaveStateCompatibility.IsCompatibleState(provider.Value.StateType, state))
                 {
                     allFilesDeserialize = false;
                     failedFiles.Add(filePath);

@@ -62,19 +62,19 @@ namespace Workes.SaveSystem
         /// </summary>
         /// <param name="state">The state object to serialize.</param>
         /// <returns>The serialized payload bytes.</returns>
-        public abstract byte[] Serialize(T state);
+        public abstract byte[] Serialize(T? state);
 
         /// <summary>
         /// Deserializes bytes back into a state object of type T.
         /// </summary>
         /// <param name="serialized">The serialized bytes to deserialize.</param>
         /// <returns>The deserialized state object.</returns>
-        public abstract T Deserialize(byte[] serialized);
+        public abstract T? Deserialize(byte[] serialized);
 
         byte[] ISaveSchematic.SerializeUntyped(object state)
-            => Serialize((T)state);
+            => Serialize((T?)state);
 
-        object ISaveSchematic.DeserializeUntyped(byte[] serialized)
-            => Deserialize(serialized)!;
+        object? ISaveSchematic.DeserializeUntyped(byte[] serialized)
+            => Deserialize(serialized);
     }
 }

@@ -17,7 +17,7 @@ namespace Workes.SaveSystem
         /// </summary>
         public sealed class Entry
         {
-            internal Entry(string saveKey, int schemaVersion, object state, int loadPriority)
+            internal Entry(string saveKey, int schemaVersion, object? state, int loadPriority)
             {
                 SaveKey = saveKey;
                 SchemaVersion = schemaVersion;
@@ -43,7 +43,7 @@ namespace Workes.SaveSystem
             /// <summary>
             /// Gets the captured provider state object.
             /// </summary>
-            public object State { get; }
+            public object? State { get; }
         }
 
         private readonly List<Entry> _entries = new List<Entry>();
@@ -65,17 +65,13 @@ namespace Workes.SaveSystem
         /// <param name="loadPriority">The load priority of the provider. Defaults to 0.</param>
         /// <exception cref="ArgumentException">Thrown when <paramref name="key"/> is null, empty, or whitespace.</exception>
         /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="schemaVersion"/> is less than 1.</exception>
-        /// <exception cref="ArgumentNullException">Thrown when <paramref name="state"/> is null.</exception>
-        public void Add(string key, int schemaVersion, object state, int loadPriority = 0)
+        public void Add(string key, int schemaVersion, object? state, int loadPriority = 0)
         {
             if (string.IsNullOrWhiteSpace(key))
                 throw new ArgumentException("Save key cannot be null, empty, or whitespace.", nameof(key));
 
             if (schemaVersion < 1)
                 throw new ArgumentOutOfRangeException(nameof(schemaVersion), "Schema version must be greater than 0.");
-
-            if (state == null)
-                throw new ArgumentNullException(nameof(state));
 
             _entries.Add(new Entry(key, schemaVersion, state, loadPriority));
         }
