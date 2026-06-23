@@ -388,6 +388,48 @@ var options = SaveSystemOptions.Create(
 
 `RestoreSnapshot(...)` validates a snapshot before mutating providers. Validation rejects duplicate provider keys, unknown provider keys, schema mismatches, and persisted-provider state that does not match the registered schematic. Registered providers that are absent from the snapshot are skipped. If validation passes but a provider throws from `RestoreState(...)`, earlier providers may already have been restored.
 
+## Default Save-State Model
+
+The default save-state model is the portable contract that built-in serializers and serializer companion packages are expected to support. It is also the shape that works best with migration, validation, and serializer swaps.
+
+Supported by default:
+
+- provider state should be a concrete, non-polymorphic type;
+- public properties are the primary serialization surface;
+- nested concrete POCO/object state is supported;
+- common scalar values are expected to work, such as strings, bools, integers, floating-point numbers, decimals, enums, and serializer-supported values such as `DateTime`, `DateTimeOffset`, `Guid`, and byte arrays;
+- collections are expected to work when they are ordinary arrays or lists of supported element types;
+- dictionaries are expected to work when they use string keys and supported value types.
+
+Example of supported nested state:
+
+```csharp
+public sealed class PlayerState
+{
+    public string Name { get; set; } = "";
+    public WeaponState Weapon { get; set; } = new();
+}
+
+public sealed class WeaponState
+{
+    public int Damage { get; set; }
+    public bool IsMagic { get; set; }
+}
+```
+
+Out of scope for the default model:
+
+- runtime polymorphism;
+- interface-typed state members, such as `IQuestState CurrentQuest`;
+- abstract or base-type members where the runtime value may be a derived type;
+- `object`-typed members intended to hold arbitrary runtime values;
+- type-name metadata or automatic concrete-type restoration;
+- private fields or private properties as the default serialization surface;
+- arbitrary object graphs with cycles;
+- serializer-specific custom converters or resolvers as part of the default contract.
+
+These are general serialization and migration constraints, not limitations of one specific serializer. A custom serializer, converter, or resolver may support broader shapes, but those shapes are outside the default save-system contract and should be documented and tested by the application or serializer package that enables them. Companion serializers, such as MessagePack, should aim to match this default model unless their README documents a specific difference.
+
 ## Backups
 
 Backups are configured through `SaveSystemOptions<TIdentity>`.
