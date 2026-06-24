@@ -29,7 +29,8 @@ public sealed class SerializerSizeComparisonTests
             new SerializerCase("pretty-json", "Pretty JSON", new JsonSaveSerializer()),
             new SerializerCase("compact-json", "Compact JSON", new JsonSaveSerializer(JsonSaveFormatting.Compact)),
             new SerializerCase("compressed-json", "Compressed compact JSON", new CompressedSaveSerializer(new JsonSaveSerializer(JsonSaveFormatting.Compact))),
-            new SerializerCase("messagepack", "MessagePack", new MessagePackSaveSerializer())
+            new SerializerCase("messagepack", "MessagePack", new MessagePackSaveSerializer()),
+            new SerializerCase("compressed-messagepack", "Compressed MessagePack", new CompressedSaveSerializer(new MessagePackSaveSerializer()))
         };
 
         var results = new List<SizeResult>();
