@@ -255,14 +255,49 @@ Metadata reads return `null` when no metadata file exists and throw when a metad
 | `SaveId` | Stable id for this save folder. It is used internally to validate recovery candidates and should not be treated as application display data. |
 | `CreatedAtUtc` | UTC timestamp for when this save identity was first written, preserved by normal saves. |
 | `LastWrittenAtUtc` | UTC timestamp for the most recent successful write. |
+| `HasApplicationMetadata` | Whether this save contains application-owned metadata. |
+| `ApplicationMetadataSchemaVersion` | The schema version of the stored application metadata, or `null` when none exists. |
 
 Serializers that need format metadata can implement `ISaveSerializerMetadataHandler`. That metadata is stored inside the save-system metadata file as serializer-owned string key/value data, with both global and per-provider buckets. This is intended for serializer implementation details such as field maps or codec settings; it is not exposed through `SaveMetadataInfo` and should not be used for game/application display metadata.
 
 Serializers whose provider payload format depends on that metadata can also implement contextual extension interfaces such as `IContextualSaveSerializer` and, for migration support, `IContextualSaveMigrationCapableSerializer`. The manager passes a `SaveSerializerContext` containing the provider save key, schema version, state type, schematic, and saved serializer metadata when serializing, extracting schema versions, deserializing, validating, and migrating provider payloads. When these interfaces are present, `SaveManager` uses the contextual path for provider payloads. Direct calls to the base `ISaveSerializer` methods may not produce the same provider payload shape as manager-managed saves. Plain JSON-style serializers can ignore these optional interfaces.
 
-Application-owned display metadata such as character name, playtime, difficulty, or screenshot references should live in a normal provider for this preview. A dedicated application metadata provider API is planned separately so application metadata can have its own ownership and migration story instead of being mixed with required save-system metadata or serializer metadata.
+Use `RegisterMetadataProvider(...)` when a save menu needs application-owned display metadata such as character name, playtime, difficulty, or screenshot references without loading provider files. Exactly one application metadata provider can be registered per manager. Application metadata is optional; when no metadata provider is registered, saves behave as before and no application metadata section is written.
 
-Advanced custom serializers must support the public `SaveMetadata` payload type because save-system metadata is serialized through the active serializer. `SaveMetadata` is a property-based serializer contract with stable names for `SaveId`, `CreatedAtUtc`, `LastWrittenAtUtc`, and `SerializerMetadata`; manager-owned creation and timestamp update helpers are intentionally not public. Application code that only wants to read menu metadata should use `SaveMetadataInfo` from `ReadSaveMetadata(...)`, `ReadBackupSlotMetadata(...)`, or successful `ValidateSave(...)` results.
+```csharp
+public sealed class SaveMenuMetadataProvider : ISaveMetadataProvider<SaveMenuMetadata>
+{
+    public int MetadataSchemaVersion => 1;
+
+    public SaveMenuMetadata CaptureMetadata() => CurrentMenuMetadata;
+
+    public void RestoreMetadata(SaveMenuMetadata metadata)
+    {
+        CurrentMenuMetadata = metadata;
+    }
+}
+
+manager.RegisterMetadataProvider(new SaveMenuMetadataProvider());
+manager.ValidateRegistrations();
+
+SaveMenuMetadata? menu = manager.ReadApplicationMetadata<SaveMenuMetadata>("slot-1");
+```
+
+Application metadata has its own schema version and can implement `ISaveMetadataMigratable` to reuse the same `SaveMigrationStep` and root-node migration model as normal providers. Missing application metadata is valid for older saves and leaves the registered metadata provider untouched during load. During recovery validation, application metadata follows provider recovery rules: current-schema data is validated, but migrations are not run.
+
+JSON stores application metadata inline in the metadata file using the serializer's normal readable data shape:
+
+```json
+"ApplicationMetadata": {
+  "SchemaVersion": 1,
+  "Data": {
+    "CharacterName": "Scout",
+    "PlaytimeSeconds": 90
+  }
+}
+```
+
+Advanced custom serializers must support the public `SaveMetadata` payload type because save-system metadata is serialized through the active serializer. `SaveMetadata` is a property-based serializer contract with stable names for `SaveId`, `CreatedAtUtc`, `LastWrittenAtUtc`, `SerializerMetadata`, and `ApplicationMetadata`; manager-owned creation and timestamp update helpers are intentionally not public. Serializers that want to support registered application metadata must also implement `ISaveApplicationMetadataSerializer`, which converts typed metadata to/from serializer-native inline `ApplicationMetadata.Data` and migration nodes. Application code that only wants to read core menu metadata should use `SaveMetadataInfo` from `ReadSaveMetadata(...)`, `ReadBackupSlotMetadata(...)`, or successful `ValidateSave(...)` results. Application code that wants typed display metadata should use `ReadApplicationMetadata(...)` or `ReadBackupApplicationMetadata(...)`.
 
 Use `ForceSaveToDisk(...)` only when intentionally repairing or replacing a save whose existing metadata or serializer format cannot be trusted. Normal `SaveToDisk(...)` preserves readable core metadata and rotates backups when enabled. `ForceSaveToDisk(...)` writes a fresh main save with a new save id and timestamps, ignores unreadable existing metadata, does not rotate the replaced main folder into backups, and leaves existing backup folders untouched.
 
@@ -746,13 +781,15 @@ If the serializer needs metadata stored with a save, implement `ISaveSerializerM
 
 If provider payload serialization depends on serializer-owned metadata or manager-owned context, implement contextual extension interfaces such as `IContextualSaveSerializer`. The manager will prefer contextual `Serialize(...)`, `Deserialize(...)`, and `ExtractSchemaVersion(...)` methods for provider files and fall back to `ISaveSerializer` methods for existing serializers. Use this when serializers need save metadata, provider keys, schema versions, or other manager-owned context, such as compact metadata-backed formats with MessagePack field maps. Direct calls to the base `ISaveSerializer` methods are best treated as low-level integration or diagnostic operations because they may not produce the same provider payload shape as manager-managed saves. JSON serializers and other self-describing formats usually do not need contextual serialization.
 
+If the serializer supports application metadata providers, implement `ISaveApplicationMetadataSerializer`. The manager passes a `SaveSerializerContext` with the reserved synthetic save key `__workes_application_metadata`, so metadata-backed serializers can build field maps for application metadata through the same serializer metadata path used by provider payloads. This optional interface is not required for normal provider save/load; `ValidateRegistrations()` fails clearly only when an application metadata provider is registered with a serializer that does not support inline application metadata.
+
 Custom serializers must also be able to create a schematic for the public `SaveMetadata` type. Existing metadata files that deserialize to `null` or to another type are treated as corrupt; use `ForceSaveToDisk(...)` when intentionally replacing a corrupt or incompatible save.
 
 Use `TransformedSaveSerializer` with `ISavePayloadTransform` when an existing serializer format should be encoded after serialization and decoded before deserialization. The decorator composes file extensions, so wrapping JSON with a transform whose suffix is `.enc` writes provider and metadata files such as `player.json.enc` and `metadata.json.enc`. Migration is routed through the decorator by decoding before `DeserializeToNode(...)` and encoding after `SerializeFromNode(...)`; those migration methods pass provider root nodes, not serializer envelopes. Contextual serializer and migration calls are forwarded to the inner serializer when supported. Serializer metadata is delegated from the inner serializer.
 
 `CompressedSaveSerializer` is the intended public compression API. Its internal compression transform should remain an implementation detail unless a concrete use case appears for exposing GZip as a standalone payload transform.
 
-MessagePack support belongs in the optional `Workes.SaveSystem.MessagePack` companion package for dependency reasons. The core package does not reference MessagePack directly and does not implement field maps itself; it provides the contextual serializer plumbing needed for the companion package to store and use those maps in `SaveMetadata.SerializerMetadata`.
+MessagePack support belongs in the optional `Workes.SaveSystem.MessagePack` companion package for dependency reasons. The core package does not reference MessagePack directly and does not implement field maps itself; it provides the contextual serializer and inline application metadata plumbing needed for the companion package to store and use those maps in `SaveMetadata.SerializerMetadata`. The companion package should treat application metadata as the synthetic contextual payload `__workes_application_metadata` and apply the same automatic field-map system it uses for provider payloads.
 
 The companion package should treat the provider root as one of several root shapes: object, array/list, string-key map, scalar, or null while editing migration nodes. Field-map metadata applies to object-root DTOs only. Root arrays/lists, string-key dictionaries, primitives, and nil/null are provider root values, not fake object field maps. A companion serializer may support non-string dictionary keys for normal save/load if it documents that generic migration exposes only string-key maps through `ISaveDataNode`.
 

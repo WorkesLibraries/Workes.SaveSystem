@@ -9,7 +9,7 @@ namespace Workes.SaveSystem
     /// <remarks>
     /// Use this for format-level concerns such as custom obfuscation or encryption.
     /// </remarks>
-    public sealed class TransformedSaveSerializer : ISaveSerializer, IContextualSaveSerializer
+    public sealed class TransformedSaveSerializer : ISaveSerializer, IContextualSaveSerializer, ISaveApplicationMetadataSerializer
     {
         private readonly ISaveMigrationCapableSerializer? _migration;
 
@@ -99,6 +99,39 @@ namespace Workes.SaveSystem
             return Inner is IContextualSaveSerializer contextual
                 ? contextual.ExtractSchemaVersion(decoded, context)
                 : Inner.ExtractSchemaVersion(decoded);
+        }
+
+        /// <inheritdoc />
+        public object? SerializeApplicationMetadata(object? metadata, SaveSerializerContext context)
+        {
+            return RequireApplicationMetadataSerializer().SerializeApplicationMetadata(metadata, context);
+        }
+
+        /// <inheritdoc />
+        public object? DeserializeApplicationMetadata(object? data, SaveSerializerContext context)
+        {
+            return RequireApplicationMetadataSerializer().DeserializeApplicationMetadata(data, context);
+        }
+
+        /// <inheritdoc />
+        public ISaveDataNode DeserializeApplicationMetadataToNode(object? data, SaveSerializerContext context)
+        {
+            return RequireApplicationMetadataSerializer().DeserializeApplicationMetadataToNode(data, context);
+        }
+
+        /// <inheritdoc />
+        public object? SerializeApplicationMetadataFromNode(ISaveDataNode node, SaveSerializerContext context)
+        {
+            return RequireApplicationMetadataSerializer().SerializeApplicationMetadataFromNode(node, context);
+        }
+
+        private ISaveApplicationMetadataSerializer RequireApplicationMetadataSerializer()
+        {
+            if (Inner is ISaveApplicationMetadataSerializer applicationMetadataSerializer)
+                return applicationMetadataSerializer;
+
+            throw new InvalidOperationException(
+                $"Inner serializer '{Inner.GetType().Name}' does not implement {nameof(ISaveApplicationMetadataSerializer)}.");
         }
 
         private static void ValidateExtension(string extension, string parameterName)

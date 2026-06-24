@@ -7,7 +7,7 @@ namespace Workes.SaveSystem
     /// <summary>
     /// Decorates another serializer with GZip compression.
     /// </summary>
-    public sealed class CompressedSaveSerializer : ISaveSerializer, IContextualSaveSerializer
+    public sealed class CompressedSaveSerializer : ISaveSerializer, IContextualSaveSerializer, ISaveApplicationMetadataSerializer
     {
         private readonly TransformedSaveSerializer _transformed;
 
@@ -75,6 +75,30 @@ namespace Workes.SaveSystem
         public int ExtractSchemaVersion(byte[] serializedData, SaveSerializerContext context)
         {
             return _transformed.ExtractSchemaVersion(serializedData, context);
+        }
+
+        /// <inheritdoc />
+        public object? SerializeApplicationMetadata(object? metadata, SaveSerializerContext context)
+        {
+            return _transformed.SerializeApplicationMetadata(metadata, context);
+        }
+
+        /// <inheritdoc />
+        public object? DeserializeApplicationMetadata(object? data, SaveSerializerContext context)
+        {
+            return _transformed.DeserializeApplicationMetadata(data, context);
+        }
+
+        /// <inheritdoc />
+        public ISaveDataNode DeserializeApplicationMetadataToNode(object? data, SaveSerializerContext context)
+        {
+            return _transformed.DeserializeApplicationMetadataToNode(data, context);
+        }
+
+        /// <inheritdoc />
+        public object? SerializeApplicationMetadataFromNode(ISaveDataNode node, SaveSerializerContext context)
+        {
+            return _transformed.SerializeApplicationMetadataFromNode(node, context);
         }
 
         private sealed class GZipPayloadTransform : ISavePayloadTransform

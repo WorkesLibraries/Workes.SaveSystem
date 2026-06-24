@@ -155,6 +155,10 @@ public sealed class PublicApiShapeTests
             .ToArray();
 
         Assert.That(exportedTypeNames, Does.Contain(nameof(SaveMetadata)));
+        Assert.That(exportedTypeNames, Does.Contain(nameof(SaveApplicationMetadata)));
+        Assert.That(exportedTypeNames, Does.Contain("ISaveMetadataProvider`1"));
+        Assert.That(exportedTypeNames, Does.Contain(nameof(ISaveMetadataMigratable)));
+        Assert.That(exportedTypeNames, Does.Contain(nameof(ISaveApplicationMetadataSerializer)));
 
         var saveMetadataProperties = typeof(SaveMetadata)
             .GetProperties(BindingFlags.Public | BindingFlags.Instance)
@@ -165,11 +169,15 @@ public sealed class PublicApiShapeTests
         Assert.That(saveMetadataProperties, Does.Contain(nameof(SaveMetadata.CreatedAtUtc)));
         Assert.That(saveMetadataProperties, Does.Contain(nameof(SaveMetadata.LastWrittenAtUtc)));
         Assert.That(saveMetadataProperties, Does.Contain(nameof(SaveMetadata.SerializerMetadata)));
+        Assert.That(saveMetadataProperties, Does.Contain(nameof(SaveMetadata.ApplicationMetadata)));
 
         var saveMetadataFields = typeof(SaveMetadata)
             .GetFields(BindingFlags.Public | BindingFlags.Instance);
 
         Assert.That(saveMetadataFields, Is.Empty);
+        Assert.That(
+            typeof(SaveApplicationMetadata).GetProperty(nameof(SaveApplicationMetadata.Data))!.PropertyType,
+            Is.EqualTo(typeof(object)));
         Assert.That(
             typeof(SaveMetadata).GetMethod("CreateNewMetadata", BindingFlags.Public | BindingFlags.Static),
             Is.Null);
@@ -183,6 +191,23 @@ public sealed class PublicApiShapeTests
             .ToArray();
 
         Assert.That(saveMetadataInfoProperties, Does.Not.Contain(nameof(SaveMetadata.SerializerMetadata)));
+        Assert.That(saveMetadataInfoProperties, Does.Contain(nameof(SaveMetadataInfo.HasApplicationMetadata)));
+        Assert.That(saveMetadataInfoProperties, Does.Contain(nameof(SaveMetadataInfo.ApplicationMetadataSchemaVersion)));
+        Assert.That(
+            typeof(SaveManager<string>).GetMethod(nameof(SaveManager<string>.RegisterMetadataProvider)),
+            Is.Not.Null);
+        Assert.That(
+            typeof(SaveManager<string>).GetMethod(nameof(SaveManager<string>.TryRegisterMetadataProvider)),
+            Is.Not.Null);
+        Assert.That(
+            typeof(SaveManager<string>).GetMethod(nameof(SaveManager<string>.UnregisterMetadataProvider)),
+            Is.Not.Null);
+        Assert.That(
+            typeof(SaveManager<string>).GetMethod(nameof(SaveManager<string>.ReadApplicationMetadata)),
+            Is.Not.Null);
+        Assert.That(
+            typeof(SaveManager<string>).GetMethod(nameof(SaveManager<string>.ReadBackupApplicationMetadata)),
+            Is.Not.Null);
     }
 
     [Test]

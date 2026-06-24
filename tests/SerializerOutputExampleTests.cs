@@ -111,7 +111,7 @@ public sealed class SerializerOutputExampleTests
     private static string GetSizeComparisonOutputRoot()
     {
         var testProjectRoot = Path.GetFullPath(Path.Combine(TestContext.CurrentContext.TestDirectory, "..", "..", ".."));
-        return Path.Combine(testProjectRoot, "obj", "SerializerSizeComparison");
+        return Path.Combine(testProjectRoot, "obj", "LargeJsonCompressionComparison");
     }
 
     private static string DecompressToText(string path)

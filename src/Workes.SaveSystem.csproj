@@ -9,7 +9,7 @@
     
     <PackageId>Workes.SaveSystem</PackageId>
     <Version>1.0.0-preview.3</Version>
-    <PackageReleaseNotes>Preview.3 adds provider-root migration nodes for object, collection, dictionary, primitive, and null payloads; ReplaceWith support for migration nodes; contextual serializer migration plumbing for metadata-backed serializers such as MessagePack; and nullable provider state support for reference types and Nullable&lt;T&gt;.</PackageReleaseNotes>
+    <PackageReleaseNotes>Preview.3 adds provider-root migration nodes for object, collection, dictionary, primitive, and null payloads; ReplaceWith support for migration nodes; contextual serializer migration plumbing for metadata-backed serializers such as MessagePack; nullable provider state support for reference types and Nullable&lt;T&gt;; and optional typed application metadata providers with inline serializer-native metadata data, independent schema versions, and migrations.</PackageReleaseNotes>
     <PackageReadmeFile>README.md</PackageReadmeFile>
 
     <Authors>Workes</Authors>

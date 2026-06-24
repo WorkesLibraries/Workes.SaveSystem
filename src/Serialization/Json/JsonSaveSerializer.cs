@@ -12,7 +12,11 @@ namespace Workes.SaveSystem
     /// A serializer implementation that uses JSON format for save files.
     /// Creates <see cref="JsonSaveSchematic{T}"/> instances for each state type at registration.
     /// </summary>
-    public sealed class JsonSaveSerializer : ISaveSerializer, ISaveMigrationCapableSerializer, IContextualSaveMigrationCapableSerializer
+    public sealed class JsonSaveSerializer :
+        ISaveSerializer,
+        ISaveMigrationCapableSerializer,
+        IContextualSaveMigrationCapableSerializer,
+        ISaveApplicationMetadataSerializer
     {
         private const int DefaultMigrationSchemaVersion = 1;
         private readonly SaveDataNodeFactory _nodeFactory;
@@ -178,6 +182,50 @@ namespace Workes.SaveSystem
             return SerializeEnvelopeFromNode(node, context.SchemaVersion);
         }
 
+        /// <inheritdoc />
+        public object? SerializeApplicationMetadata(object? metadata, SaveSerializerContext context)
+        {
+            if (context == null)
+                throw new ArgumentNullException(nameof(context));
+
+            var serialized = context.Schematic.SerializeUntyped(metadata!);
+            return ReadEnvelope(serialized).Data.DeepClone();
+        }
+
+        /// <inheritdoc />
+        public object? DeserializeApplicationMetadata(object? data, SaveSerializerContext context)
+        {
+            if (context == null)
+                throw new ArgumentNullException(nameof(context));
+
+            var envelope = new JObject
+            {
+                ["SchemaVersion"] = context.SchemaVersion,
+                ["Data"] = ToJToken(data)
+            };
+            var json = envelope.ToString(ToNewtonsoftFormatting(Formatting));
+            return context.Schematic.DeserializeUntyped(Encoding.UTF8.GetBytes(json));
+        }
+
+        /// <inheritdoc />
+        public ISaveDataNode DeserializeApplicationMetadataToNode(object? data, SaveSerializerContext context)
+        {
+            if (context == null)
+                throw new ArgumentNullException(nameof(context));
+
+            return ConvertFromJson(ToJToken(data), _nodeFactory.Owner);
+        }
+
+        /// <inheritdoc />
+        public object? SerializeApplicationMetadataFromNode(ISaveDataNode node, SaveSerializerContext context)
+        {
+            if (context == null)
+                throw new ArgumentNullException(nameof(context));
+
+            var saveDataNode = SaveDataNode.RequireSaveDataNode(node, _nodeFactory.Owner);
+            return ConvertToJson(saveDataNode);
+        }
+
         private byte[] SerializeEnvelopeFromNode(ISaveDataNode node, int schemaVersion)
         {
             var saveDataNode = SaveDataNode.RequireSaveDataNode(node, _nodeFactory.Owner);
@@ -332,6 +380,17 @@ namespace Workes.SaveSystem
                 default:
                     throw new ArgumentOutOfRangeException(nameof(node));
             }
+        }
+
+        private static JToken ToJToken(object? data)
+        {
+            if (data == null)
+                return JValue.CreateNull();
+
+            if (data is JToken token)
+                return token.DeepClone();
+
+            return JToken.FromObject(data);
         }
 
         internal static Newtonsoft.Json.Formatting ToNewtonsoftFormatting(JsonSaveFormatting formatting)

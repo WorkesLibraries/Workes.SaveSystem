@@ -8,7 +8,7 @@ namespace Workes.SaveSystem
     /// </summary>
     /// <remarks>
     /// This metadata is intended for serializer format details such as field maps or codec settings.
-    /// Application-owned display metadata should be stored in normal save providers.
+    /// Application-owned display metadata should be stored through an application metadata provider.
     /// </remarks>
     public sealed class SaveSerializerMetadata
     {

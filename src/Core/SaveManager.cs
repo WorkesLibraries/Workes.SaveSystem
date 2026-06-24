@@ -23,21 +23,43 @@ namespace Workes.SaveSystem
             public Action<object?> RestoreState = null!;
         }
 
+        private sealed class MetadataProviderEntry
+        {
+            public object Provider = null!;
+            public int? ValidatedSchemaVersion;
+            public ISaveSchematic Schematic = null!;
+            public Type MetadataType = null!;
+            public Func<int> GetSchemaVersion = null!;
+            public Func<object?> CaptureMetadata = null!;
+            public Action<object?> RestoreMetadata = null!;
+        }
+
         private sealed class ValidatedSaveFolder
         {
-            public ValidatedSaveFolder(SaveMetadata metadata, SaveSnapshot snapshot)
+            public ValidatedSaveFolder(
+                SaveMetadata metadata,
+                SaveSnapshot snapshot,
+                bool hasApplicationMetadata,
+                object? applicationMetadata)
             {
                 Metadata = ToMetadataInfo(metadata);
                 Snapshot = snapshot;
+                HasApplicationMetadata = hasApplicationMetadata;
+                ApplicationMetadata = applicationMetadata;
             }
 
             public SaveMetadataInfo Metadata { get; }
 
             public SaveSnapshot Snapshot { get; }
+
+            public bool HasApplicationMetadata { get; }
+
+            public object? ApplicationMetadata { get; }
         }
 
         private const string SaveMetadataBaseName = "metadata";
         private const int SaveMetadataSchemaVersion = 1;
+        private const string ApplicationMetadataSaveKey = "__workes_application_metadata";
         private const string BackupFolderName = "_backup";
         private const string ToDeleteFolderName = "_toDelete";
 
@@ -63,6 +85,7 @@ namespace Workes.SaveSystem
             Path.Combine(folderPath, _options.FileNameResolver(context) + _options.Serializer.FileExtension);
 
         private readonly Dictionary<string, ProviderEntry> _providers = new Dictionary<string, ProviderEntry>();
+        private MetadataProviderEntry? _metadataProvider;
 
         private readonly SaveSystemOptions<TIdentity> _options;
         private readonly BackupManager _backupManager;
@@ -225,6 +248,84 @@ namespace Workes.SaveSystem
         }
 
         /// <summary>
+        /// Registers a typed application metadata provider for save-menu or display metadata.
+        /// </summary>
+        /// <remarks>
+        /// Application metadata is optional and stored inside save-system metadata as a serializer-produced
+        /// payload. Only one application metadata provider can be registered per manager.
+        /// Call <see cref="ValidateRegistrations"/> after registration is complete and before disk operations.
+        /// </remarks>
+        /// <typeparam name="TMetadata">The application metadata type captured and restored by this provider.</typeparam>
+        /// <param name="provider">The application metadata provider to register.</param>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="provider"/> is null.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when an application metadata provider is already registered.</exception>
+        public void RegisterMetadataProvider<TMetadata>(ISaveMetadataProvider<TMetadata> provider)
+        {
+            if (provider == null)
+                throw new ArgumentNullException(nameof(provider));
+
+            if (_metadataProvider != null)
+                throw new InvalidOperationException("An application metadata provider is already registered.");
+
+            var schematic = _options.Serializer.CreateSchematic(typeof(TMetadata));
+            if (provider.MetadataSchemaVersion > 0)
+                schematic.SchemaVersion = provider.MetadataSchemaVersion;
+
+            _metadataProvider = new MetadataProviderEntry
+            {
+                Provider = provider,
+                Schematic = schematic,
+                MetadataType = typeof(TMetadata),
+                GetSchemaVersion = () => provider.MetadataSchemaVersion,
+                CaptureMetadata = () => provider.CaptureMetadata(),
+                RestoreMetadata = metadata => provider.RestoreMetadata((TMetadata)metadata!)
+            };
+            _registrationsValidated = false;
+        }
+
+        /// <summary>
+        /// Attempts to register a typed application metadata provider and immediately validates all registrations.
+        /// </summary>
+        /// <typeparam name="TMetadata">The application metadata type captured and restored by this provider.</typeparam>
+        /// <param name="provider">The application metadata provider to register.</param>
+        /// <param name="error">The validation or registration error when registration fails; otherwise, null.</param>
+        /// <returns>True when the provider was registered and all registrations validated successfully; otherwise, false.</returns>
+        public bool TryRegisterMetadataProvider<TMetadata>(ISaveMetadataProvider<TMetadata> provider, out string? error)
+        {
+            var existingMetadataProvider = _metadataProvider;
+            var wasValidated = _registrationsValidated;
+
+            try
+            {
+                RegisterMetadataProvider(provider);
+                ValidateRegistrations();
+                error = null;
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _metadataProvider = existingMetadataProvider;
+                _registrationsValidated = wasValidated;
+                error = ex.Message;
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Unregisters the current application metadata provider, if one is registered.
+        /// </summary>
+        /// <returns>True when a metadata provider was removed; otherwise, false.</returns>
+        public bool UnregisterMetadataProvider()
+        {
+            if (_metadataProvider == null)
+                return false;
+
+            _metadataProvider = null;
+            _registrationsValidated = false;
+            return true;
+        }
+
+        /// <summary>
         /// Unregisters a save provider by instance. The provider will no longer be included in save/load operations.
         /// </summary>
         /// <remarks>
@@ -278,6 +379,11 @@ namespace Workes.SaveSystem
 
             if (string.IsNullOrWhiteSpace(provider.SaveKey))
                 throw new ArgumentException("SaveProvider SaveKey cannot be null, empty, or whitespace.", nameof(provider));
+
+            if (string.Equals(provider.SaveKey, ApplicationMetadataSaveKey, StringComparison.Ordinal))
+                throw new ArgumentException(
+                    $"SaveProvider SaveKey '{ApplicationMetadataSaveKey}' is reserved for application metadata.",
+                    nameof(provider));
         }
 
         private bool TryRegister(Action register, out string? error)
@@ -362,6 +468,7 @@ namespace Workes.SaveSystem
                 ValidateProviderMigration(providerEntry);
             }
 
+            ValidateMetadataProviderRegistration();
             _registrationsValidated = true;
         }
 
@@ -509,6 +616,41 @@ namespace Workes.SaveSystem
             return ReadSaveMetadataInfo(_backupManager.GetBackupFolderPath(saveName, backupSuffix));
         }
 
+        /// <summary>
+        /// Reads typed application metadata for the main save identified by <paramref name="identity"/>.
+        /// </summary>
+        /// <remarks>
+        /// A matching application metadata provider must be registered so the manager knows the current metadata
+        /// type, schema version, and migrations. This method returns the default value for
+        /// <typeparamref name="TMetadata"/> when the save has no application metadata section.
+        /// </remarks>
+        /// <typeparam name="TMetadata">The registered application metadata type.</typeparam>
+        /// <param name="identity">The identity that identifies which save slot metadata to read.</param>
+        /// <returns>The typed application metadata, or the default value when none exists.</returns>
+        public TMetadata? ReadApplicationMetadata<TMetadata>(TIdentity identity)
+        {
+            var saveName = ResolveSavePath(identity);
+            return ReadApplicationMetadataFromFolder<TMetadata>(GetMainFolderPath(saveName));
+        }
+
+        /// <summary>
+        /// Reads typed application metadata for a numbered backup slot.
+        /// </summary>
+        /// <typeparam name="TMetadata">The registered application metadata type.</typeparam>
+        /// <param name="identity">The identity that identifies which save's backup metadata to read.</param>
+        /// <param name="slotNumber">The backup slot number (1-based, e.g., 1 = _0001, 2 = _0002).</param>
+        /// <returns>The typed application metadata, or the default value when none exists.</returns>
+        public TMetadata? ReadBackupApplicationMetadata<TMetadata>(TIdentity identity, int slotNumber)
+        {
+            var saveName = ResolveSavePath(identity);
+
+            if (slotNumber < 1)
+                throw new ArgumentException("Backup slot number must be at least 1.", nameof(slotNumber));
+
+            var backupSuffix = $"_{slotNumber:D4}";
+            return ReadApplicationMetadataFromFolder<TMetadata>(_backupManager.GetBackupFolderPath(saveName, backupSuffix));
+        }
+
         private void ValidateProviderSerialization(
             ProviderEntry providerEntry,
             SaveSerializerMetadata serializerMetadata)
@@ -571,6 +713,100 @@ namespace Workes.SaveSystem
             _migrationEngine.ValidateMigrationPolicy(providerEntry.Provider.SaveKey, migrationSource, providerEntry.Provider.SchemaVersion);
         }
 
+        private void ValidateMetadataProviderRegistration()
+        {
+            var metadataProvider = _metadataProvider;
+            if (metadataProvider == null)
+                return;
+
+            EnsureApplicationMetadataSerializer();
+            ValidateMetadataProviderSchemaVersion(metadataProvider);
+            metadataProvider.Schematic.SchemaVersion = GetMetadataProviderSchemaVersion(metadataProvider);
+            metadataProvider.ValidatedSchemaVersion = GetMetadataProviderSchemaVersion(metadataProvider);
+
+            var metadata = ValidateMetadataProviderCapturedState(metadataProvider);
+            ValidateMetadataProviderSerialization(metadataProvider, metadata, CreateTransientSerializerMetadata());
+            ValidateMetadataProviderMigration(metadataProvider);
+        }
+
+        private static int GetMetadataProviderSchemaVersion(MetadataProviderEntry metadataProvider)
+        {
+            return metadataProvider.GetSchemaVersion();
+        }
+
+        private static void ValidateMetadataProviderSchemaVersion(MetadataProviderEntry metadataProvider)
+        {
+            var schemaVersion = GetMetadataProviderSchemaVersion(metadataProvider);
+            if (schemaVersion < 1)
+            {
+                throw new InvalidOperationException(
+                    "Application metadata provider MetadataSchemaVersion must be greater than 0.");
+            }
+        }
+
+        private object? ValidateMetadataProviderCapturedState(MetadataProviderEntry metadataProvider)
+        {
+            object? metadata;
+            try
+            {
+                metadata = metadataProvider.CaptureMetadata();
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException(
+                    "Application metadata provider failed while capturing metadata during registration validation.",
+                    ex);
+            }
+
+            if (!SaveStateCompatibility.IsCompatibleState(metadataProvider.MetadataType, metadata))
+            {
+                throw new InvalidOperationException(
+                    "Application metadata provider returned metadata incompatible with its registered metadata type.");
+            }
+
+            return metadata;
+        }
+
+        private void ValidateMetadataProviderSerialization(
+            MetadataProviderEntry metadataProvider,
+            object? metadata,
+            SaveSerializerMetadata serializerMetadata)
+        {
+            try
+            {
+                SerializeApplicationMetadataState(
+                    metadata,
+                    GetMetadataProviderSchemaVersion(metadataProvider),
+                    metadataProvider,
+                    serializerMetadata);
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException(
+                    "Application metadata provider produces incompatible metadata for its registered schematic.",
+                    ex);
+            }
+        }
+
+        private void ValidateMetadataProviderMigration(MetadataProviderEntry metadataProvider)
+        {
+            if (!(metadataProvider.Provider is ISaveMetadataMigratable migratable))
+                return;
+
+            if (_options.Serializer.Migration == null)
+            {
+                throw new InvalidOperationException(
+                    $"Application metadata provider implements {nameof(ISaveMetadataMigratable)} but the serializer ({_options.Serializer.GetType().Name}) does not provide migration support. " +
+                    "Migration-capable application metadata requires serializers with migration support.");
+            }
+
+            var migrationSource = migratable.CreateMetadataMigrationSource();
+            _migrationEngine.ValidateMigrationPolicy(
+                ApplicationMetadataSaveKey,
+                migrationSource,
+                GetMetadataProviderSchemaVersion(metadataProvider));
+        }
+
         private void EnsureRegistrationsValidated()
         {
             if (!_registrationsValidated)
@@ -594,6 +830,16 @@ namespace Workes.SaveSystem
                         $"SaveProvider with key '{providerEntry.RegisteredSaveKey}' changed its SchemaVersion from {providerEntry.ValidatedSchemaVersion.Value} to {providerEntry.Provider.SchemaVersion} after registration validation. " +
                         "Provider SchemaVersion values are part of the persisted save contract; call ValidateRegistrations() again after intentional provider setup changes.");
                 }
+            }
+
+            var metadataProvider = _metadataProvider;
+            if (metadataProvider != null &&
+                metadataProvider.ValidatedSchemaVersion.HasValue &&
+                GetMetadataProviderSchemaVersion(metadataProvider) != metadataProvider.ValidatedSchemaVersion.Value)
+            {
+                throw new InvalidOperationException(
+                    $"Application metadata provider changed its MetadataSchemaVersion from {metadataProvider.ValidatedSchemaVersion.Value} to {GetMetadataProviderSchemaVersion(metadataProvider)} after registration validation. " +
+                    "MetadataSchemaVersion values are part of the persisted save contract; call ValidateRegistrations() again after intentional metadata setup changes.");
             }
         }
 
@@ -659,6 +905,85 @@ namespace Workes.SaveSystem
                 : _options.Serializer.Serialize(state!, context.Schematic);
         }
 
+        private object? CaptureApplicationMetadataState()
+        {
+            var metadataProvider = _metadataProvider;
+            if (metadataProvider == null)
+                return null;
+
+            object? metadata;
+            try
+            {
+                metadata = metadataProvider.CaptureMetadata();
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException(
+                    "Application metadata provider failed while capturing metadata.",
+                    ex);
+            }
+
+            if (!SaveStateCompatibility.IsCompatibleState(metadataProvider.MetadataType, metadata))
+            {
+                throw new InvalidOperationException(
+                    "Application metadata provider returned metadata incompatible with its registered metadata type.");
+            }
+
+            return metadata;
+        }
+
+        private SaveApplicationMetadata? SerializeApplicationMetadata(
+            object? metadata,
+            SaveSerializerMetadata serializerMetadata)
+        {
+            var metadataProvider = _metadataProvider;
+            if (metadataProvider == null)
+                return null;
+
+            var schemaVersion = metadataProvider.ValidatedSchemaVersion ?? GetMetadataProviderSchemaVersion(metadataProvider);
+            var data = SerializeApplicationMetadataState(
+                metadata,
+                schemaVersion,
+                metadataProvider,
+                serializerMetadata);
+
+            return new SaveApplicationMetadata
+            {
+                SchemaVersion = schemaVersion,
+                Data = data
+            };
+        }
+
+        private object? SerializeApplicationMetadataState(
+            object? metadata,
+            int schemaVersion,
+            MetadataProviderEntry metadataProvider,
+            SaveSerializerMetadata serializerMetadata)
+        {
+            var context = CreateApplicationMetadataSerializerContext(schemaVersion, metadataProvider, serializerMetadata);
+            return EnsureApplicationMetadataSerializer().SerializeApplicationMetadata(metadata, context);
+        }
+
+        private object? DeserializeApplicationMetadataState(
+            object? data,
+            int schemaVersion,
+            MetadataProviderEntry metadataProvider,
+            SaveSerializerMetadata serializerMetadata)
+        {
+            try
+            {
+                var context = CreateApplicationMetadataSerializerContext(schemaVersion, metadataProvider, serializerMetadata);
+                return EnsureApplicationMetadataSerializer().DeserializeApplicationMetadata(data, context);
+            }
+            catch (Exception ex)
+            {
+                throw SaveLoadException.Create(
+                    SaveLoadStatus.CorruptData,
+                    "Failed to deserialize application metadata.",
+                    ex);
+            }
+        }
+
         private SaveSerializerContext CreateSerializerContext(
             string saveKey,
             int schemaVersion,
@@ -677,6 +1002,30 @@ namespace Workes.SaveSystem
                 providerEntry.StateType,
                 schematic,
                 serializerMetadata);
+        }
+
+        private SaveSerializerContext CreateApplicationMetadataSerializerContext(
+            int schemaVersion,
+            MetadataProviderEntry metadataProvider,
+            SaveSerializerMetadata serializerMetadata)
+        {
+            metadataProvider.Schematic.SchemaVersion = schemaVersion;
+            serializerMetadata.Normalize();
+            return new SaveSerializerContext(
+                ApplicationMetadataSaveKey,
+                schemaVersion,
+                metadataProvider.MetadataType,
+                metadataProvider.Schematic,
+                serializerMetadata);
+        }
+
+        private ISaveApplicationMetadataSerializer EnsureApplicationMetadataSerializer()
+        {
+            if (_options.Serializer is ISaveApplicationMetadataSerializer applicationMetadataSerializer)
+                return applicationMetadataSerializer;
+
+            throw new InvalidOperationException(
+                $"Application metadata requires serializer '{_options.Serializer.GetType().Name}' to implement {nameof(ISaveApplicationMetadataSerializer)}.");
         }
 
         /// <summary>
@@ -709,6 +1058,18 @@ namespace Workes.SaveSystem
                 if (provider.Provider is ISaveLifecycle lifecycle)
                     lifecycle.OnAfterLoad();
             }
+        }
+
+        private void RestoreApplicationMetadata(ValidatedSaveFolder validated)
+        {
+            if (!validated.HasApplicationMetadata)
+                return;
+
+            var metadataProvider = _metadataProvider;
+            if (metadataProvider == null)
+                return;
+
+            metadataProvider.RestoreMetadata(validated.ApplicationMetadata);
         }
 
         /// <summary>
@@ -889,6 +1250,170 @@ namespace Workes.SaveSystem
             return snapshot;
         }
 
+        private bool TryDeserializeApplicationMetadataForLoad(
+            SaveMetadata saveMetadata,
+            out object? applicationMetadata)
+        {
+            applicationMetadata = null;
+
+            var metadataProvider = _metadataProvider;
+            var storedMetadata = saveMetadata.ApplicationMetadata;
+            if (metadataProvider == null || storedMetadata == null)
+                return false;
+
+            var savedSchemaVersion = storedMetadata.SchemaVersion;
+            var currentSchemaVersion = metadataProvider.ValidatedSchemaVersion ?? GetMetadataProviderSchemaVersion(metadataProvider);
+            var inlineData = storedMetadata.Data;
+
+            ValidateApplicationMetadataStoredSchema(storedMetadata);
+
+            if (savedSchemaVersion != currentSchemaVersion)
+            {
+                if (!(metadataProvider.Provider is ISaveMetadataMigratable migratable))
+                {
+                    throw SaveLoadException.Create(
+                        SaveLoadStatus.MigrationFailed,
+                        $"Failed to migrate application metadata from schema version {savedSchemaVersion} to {currentSchemaVersion}.");
+                }
+
+                var migrationSource = migratable.CreateMetadataMigrationSource();
+                if (!TryApplyApplicationMetadataMigrations(
+                    ref inlineData,
+                    savedSchemaVersion,
+                    currentSchemaVersion,
+                    migrationSource,
+                    metadataProvider,
+                    saveMetadata.SerializerMetadata))
+                {
+                    throw SaveLoadException.Create(
+                        SaveLoadStatus.MigrationFailed,
+                        $"Failed to migrate application metadata from schema version {savedSchemaVersion} to {currentSchemaVersion}.");
+                }
+            }
+
+            applicationMetadata = DeserializeApplicationMetadataState(
+                inlineData,
+                currentSchemaVersion,
+                metadataProvider,
+                saveMetadata.SerializerMetadata);
+
+            if (!SaveStateCompatibility.IsCompatibleState(metadataProvider.MetadataType, applicationMetadata))
+            {
+                throw SaveLoadException.Create(
+                    SaveLoadStatus.CorruptData,
+                    "Deserialized application metadata is incompatible with the registered metadata type.");
+            }
+
+            return true;
+        }
+
+        private bool TryApplyApplicationMetadataMigrations(
+            ref object? inlineData,
+            int savedSchemaVersion,
+            int currentSchemaVersion,
+            ISaveMigrationSource migrationSource,
+            MetadataProviderEntry metadataProvider,
+            SaveSerializerMetadata serializerMetadata)
+        {
+            if (savedSchemaVersion == currentSchemaVersion)
+                return true;
+
+            if (savedSchemaVersion > currentSchemaVersion)
+            {
+                _diagnostics.LogWarning(
+                    $"Cannot migrate application metadata: saved version (v{savedSchemaVersion}) is newer than current version (v{currentSchemaVersion}). " +
+                    "Downgrades are not supported. Deserialization will fail.");
+                return false;
+            }
+
+            var migrations = migrationSource.Migrations;
+            if (migrations == null || migrations.Count == 0)
+            {
+                _diagnostics.LogWarning(
+                    $"Cannot migrate application metadata: no migration steps available to migrate from v{savedSchemaVersion} to v{currentSchemaVersion}. " +
+                    "Deserialization will fail.");
+                return false;
+            }
+
+            var migrationMap = migrations.ToDictionary(migration => migration.FromVersion, migration => migration);
+            for (var version = savedSchemaVersion; version < currentSchemaVersion; version++)
+            {
+                if (!migrationMap.ContainsKey(version))
+                {
+                    _diagnostics.LogWarning(
+                        $"Cannot migrate application metadata: missing migration step from v{version} to v{version + 1}. " +
+                        $"Cannot migrate from v{savedSchemaVersion} to v{currentSchemaVersion}. Deserialization will fail.");
+                    return false;
+                }
+            }
+
+            var applicationMetadataSerializer = EnsureApplicationMetadataSerializer();
+            ISaveDataNode dataNode;
+            try
+            {
+                dataNode = applicationMetadataSerializer.DeserializeApplicationMetadataToNode(
+                    inlineData,
+                    CreateApplicationMetadataSerializerContext(savedSchemaVersion, metadataProvider, serializerMetadata));
+            }
+            catch (Exception ex)
+            {
+                _diagnostics.LogWarning(
+                    $"Failed to parse application metadata for migration: {ex.Message}. Deserialization will proceed without migration.");
+                return false;
+            }
+
+            var factory = applicationMetadataSerializer is ISaveMigrationCapableSerializer migrationSerializer
+                ? migrationSerializer.NodeFactory
+                : _options.Serializer.Migration?.NodeFactory;
+            if (factory == null)
+            {
+                _diagnostics.LogWarning(
+                    $"Cannot migrate application metadata: serializer ({_options.Serializer.GetType().Name}) does not expose a migration node factory. " +
+                    "Deserialization will fail.");
+                return false;
+            }
+
+            for (var version = savedSchemaVersion; version < currentSchemaVersion; version++)
+            {
+                try
+                {
+                    migrationMap[version].Migrate(dataNode, factory);
+                }
+                catch (Exception ex)
+                {
+                    _diagnostics.LogWarning(
+                        $"Application metadata migration step failed when migrating from v{version} to v{version + 1}: {ex.Message}. " +
+                        "Deserialization will proceed without migration.");
+                    return false;
+                }
+            }
+
+            try
+            {
+                inlineData = applicationMetadataSerializer.SerializeApplicationMetadataFromNode(
+                    dataNode,
+                    CreateApplicationMetadataSerializerContext(currentSchemaVersion, metadataProvider, serializerMetadata));
+            }
+            catch (Exception ex)
+            {
+                _diagnostics.LogWarning(
+                    $"Failed to serialize migrated application metadata: {ex.Message}. Deserialization will proceed without migration.");
+                return false;
+            }
+
+            return true;
+        }
+
+        private void ValidateApplicationMetadataStoredSchema(SaveApplicationMetadata applicationMetadata)
+        {
+            if (applicationMetadata.SchemaVersion < 1)
+            {
+                throw SaveLoadException.Create(
+                    SaveLoadStatus.CorruptData,
+                    "Application metadata schema version must be greater than 0.");
+            }
+        }
+
         /// <summary>
         /// Saves the current state of all registered providers to disk for the specified identity.
         /// Uses atomic file operations to ensure data integrity. If backups are enabled, creates a backup
@@ -942,9 +1467,11 @@ namespace Workes.SaveSystem
             try
             {
                 var snapshot = CaptureSnapshot();
+                var applicationMetadata = CaptureApplicationMetadataState();
                 var metadata = createMetadata();
                 metadata.PrepareForWrite(DateTimeOffset.UtcNow);
                 WriteSerializerMetadata(metadata);
+                metadata.ApplicationMetadata = SerializeApplicationMetadata(applicationMetadata, metadata.SerializerMetadata);
 
                 var serialized = SerializeSnapshot(snapshot, metadata.SerializerMetadata);
 
@@ -998,6 +1525,7 @@ namespace Workes.SaveSystem
 
             var validated = ValidateSaveFolderForLoad(folderPath);
             RestoreSnapshot(validated.Snapshot);
+            RestoreApplicationMetadata(validated);
 
             return true;
         }
@@ -1096,6 +1624,7 @@ namespace Workes.SaveSystem
 
             var validated = ValidateSaveFolderForLoad(backupFolderPath);
             RestoreSnapshot(validated.Snapshot);
+            RestoreApplicationMetadata(validated);
 
             return true;
         }
@@ -1356,6 +1885,7 @@ namespace Workes.SaveSystem
                     metadata,
                     allowMissingProviderFileSkip: false);
                 ValidateSerializedSnapshotForRecovery(serialized, metadata.SerializerMetadata);
+                ValidateApplicationMetadataForRecovery(metadata);
                 return new RecoveryCandidateValidation(isValid: true, errorMessage: null);
             }
             catch (Exception ex)
@@ -1395,6 +1925,35 @@ namespace Workes.SaveSystem
                     throw new InvalidOperationException(
                         $"Recovery candidate entry for provider '{kvp.Key}' contains state incompatible with the registered provider state type.");
                 }
+            }
+        }
+
+        private void ValidateApplicationMetadataForRecovery(SaveMetadata saveMetadata)
+        {
+            var metadataProvider = _metadataProvider;
+            var applicationMetadata = saveMetadata.ApplicationMetadata;
+            if (metadataProvider == null || applicationMetadata == null)
+                return;
+
+            ValidateApplicationMetadataStoredSchema(applicationMetadata);
+
+            var expectedSchemaVersion = metadataProvider.ValidatedSchemaVersion ?? GetMetadataProviderSchemaVersion(metadataProvider);
+            if (applicationMetadata.SchemaVersion != expectedSchemaVersion)
+            {
+                throw new InvalidOperationException(
+                    $"Recovery candidate application metadata has schema version {applicationMetadata.SchemaVersion}, but the registered metadata provider expects {expectedSchemaVersion}. Recovery validation does not run migrations.");
+            }
+
+            var metadata = DeserializeApplicationMetadataState(
+                applicationMetadata.Data,
+                applicationMetadata.SchemaVersion,
+                metadataProvider,
+                saveMetadata.SerializerMetadata);
+
+            if (!SaveStateCompatibility.IsCompatibleState(metadataProvider.MetadataType, metadata))
+            {
+                throw new InvalidOperationException(
+                    "Recovery candidate application metadata contains state incompatible with the registered metadata type.");
             }
         }
 
@@ -1559,7 +2118,8 @@ namespace Workes.SaveSystem
                     $"Expected all {expectedFileCount} files to deserialize correctly, but some did not. Failed files: {string.Join(", ", failedFiles)}"
                 );
 
-            ValidateMetadataFile(folderPath);
+            var readMetadata = ValidateMetadataFile(folderPath);
+            ValidateApplicationMetadataForRecovery(readMetadata);
         }
 
         private (bool allFilesExist, List<string> missingFiles) CheckFilesExist(
@@ -1705,7 +2265,45 @@ namespace Workes.SaveSystem
             return new SaveMetadataInfo(
                 metadata.SaveId,
                 metadata.CreatedAtUtc,
-                metadata.LastWrittenAtUtc);
+                metadata.LastWrittenAtUtc,
+                metadata.ApplicationMetadata != null,
+                metadata.ApplicationMetadata?.SchemaVersion);
+        }
+
+        private TMetadata? ReadApplicationMetadataFromFolder<TMetadata>(string folderPath)
+        {
+            var metadataProvider = _metadataProvider;
+            if (metadataProvider == null)
+                throw new InvalidOperationException("No application metadata provider is registered.");
+
+            if (metadataProvider.MetadataType != typeof(TMetadata))
+            {
+                throw new InvalidOperationException(
+                    $"Registered application metadata type is '{metadataProvider.MetadataType.FullName}', not '{typeof(TMetadata).FullName}'.");
+            }
+
+            var metaPath = GetMetadataFilePath(folderPath);
+            if (!File.Exists(metaPath))
+                return default;
+
+            SaveMetadata metadata;
+            var metadataFileName = GetMetadataFileName();
+            try
+            {
+                metadata = ReadSaveMetadataFromFile(metaPath)!;
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException(
+                    $"Failed to deserialize {metadataFileName} at '{metaPath}'.",
+                    ex);
+            }
+
+            if (metadata.ApplicationMetadata == null)
+                return default;
+
+            TryDeserializeApplicationMetadataForLoad(metadata, out var applicationMetadata);
+            return (TMetadata?)applicationMetadata;
         }
 
         private SaveMetadata ReadRequiredSaveMetadata(string folderPath)
@@ -1768,7 +2366,21 @@ namespace Workes.SaveSystem
             }
 
             saveMetadata.SerializerMetadata.Normalize();
+            NormalizeApplicationMetadata(saveMetadata);
             return saveMetadata;
+        }
+
+        private static void NormalizeApplicationMetadata(SaveMetadata saveMetadata)
+        {
+            var applicationMetadata = saveMetadata.ApplicationMetadata;
+            if (applicationMetadata == null)
+                return;
+
+            if (applicationMetadata.SchemaVersion < 1)
+            {
+                throw new InvalidOperationException(
+                    "Application metadata schema version must be greater than 0.");
+            }
         }
 
         private static SaveMetadataInfo ToMetadataInfo(SaveMetadata metadata)
@@ -1776,7 +2388,9 @@ namespace Workes.SaveSystem
             return new SaveMetadataInfo(
                 metadata.SaveId,
                 metadata.CreatedAtUtc,
-                metadata.LastWrittenAtUtc);
+                metadata.LastWrittenAtUtc,
+                metadata.ApplicationMetadata != null,
+                metadata.ApplicationMetadata?.SchemaVersion);
         }
 
         private SaveMetadata ReadExistingMetadataOrCreateNew(string folderPath)
@@ -1819,6 +2433,8 @@ namespace Workes.SaveSystem
         private void WriteSerializerMetadata(SaveMetadata metadata)
         {
             metadata.SerializerMetadata ??= new SaveSerializerMetadata();
+            if (_metadataProvider == null)
+                metadata.SerializerMetadata.Providers.Remove(ApplicationMetadataSaveKey);
             WriteSerializerMetadata(metadata.SerializerMetadata);
         }
 
@@ -1855,6 +2471,16 @@ namespace Workes.SaveSystem
                     schematic));
             }
 
+            var metadataProvider = _metadataProvider;
+            if (metadataProvider != null)
+            {
+                providers.Add(new SaveSerializerProviderInfo(
+                    ApplicationMetadataSaveKey,
+                    metadataProvider.ValidatedSchemaVersion ?? GetMetadataProviderSchemaVersion(metadataProvider),
+                    metadataProvider.MetadataType,
+                    metadataProvider.Schematic));
+            }
+
             return providers;
         }
 
@@ -1863,8 +2489,11 @@ namespace Workes.SaveSystem
             var metadata = ReadRequiredSaveMetadata(folderPath);
             var serialized = LoadSerializedSnapshotFromFolder(folderPath, metadata);
             var snapshot = DeserializeSnapshot(serialized, metadata.SerializerMetadata);
+            var hasApplicationMetadata = TryDeserializeApplicationMetadataForLoad(
+                metadata,
+                out var applicationMetadata);
             ValidateSnapshotForRestore(snapshot);
-            return new ValidatedSaveFolder(metadata, snapshot);
+            return new ValidatedSaveFolder(metadata, snapshot, hasApplicationMetadata, applicationMetadata);
         }
 
         private bool IsSaveSlotFolder(string folderPath)

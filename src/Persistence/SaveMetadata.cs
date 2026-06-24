@@ -8,8 +8,9 @@ namespace Workes.SaveSystem
     /// <remarks>
     /// Serializers must be able to serialize and deserialize this type because save metadata is written
     /// through the active <see cref="ISaveSerializer"/>. Application display metadata such as character
-    /// name, playtime, difficulty, or screenshots should live in normal save providers, not in this type.
-    /// Use <see cref="SaveMetadataInfo"/> for menu/read APIs that only need core save metadata.
+    /// name, playtime, difficulty, or screenshots is stored in <see cref="ApplicationMetadata"/> when an
+    /// application metadata provider is registered. Use <see cref="SaveMetadataInfo"/> for menu/read APIs
+    /// that only need core save metadata.
     /// </remarks>
     [Serializable]
     public sealed class SaveMetadata
@@ -33,6 +34,11 @@ namespace Workes.SaveSystem
         /// Gets or sets serializer-owned metadata for advanced serializer format details.
         /// </summary>
         public SaveSerializerMetadata SerializerMetadata { get; set; } = new SaveSerializerMetadata();
+
+        /// <summary>
+        /// Gets or sets optional application-owned metadata stored with this save.
+        /// </summary>
+        public SaveApplicationMetadata? ApplicationMetadata { get; set; }
 
         /// <summary>
         /// Creates a new metadata payload with a new save id and initialized timestamps.
