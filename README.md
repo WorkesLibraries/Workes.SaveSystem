@@ -10,7 +10,7 @@ Install the preview package from NuGet:
 
 ```xml
 <ItemGroup>
-  <PackageReference Include="Workes.SaveSystem" Version="1.0.0-preview.1" />
+  <PackageReference Include="Workes.SaveSystem" Version="1.0.0-preview.3" />
 </ItemGroup>
 ```
 
@@ -37,21 +37,21 @@ That dependency is intentional for the current package shape:
 
 `System.Text.Json` is not part of the core package for the first reusable version. Under the current `netstandard2.1` target, using it requires an additional package reference, so adding a parallel `System.Text.Json` serializer would not make the package dependency-free. Replacing Newtonsoft would still require replacing the built-in JSON serializer and metadata persistence behavior together. For now, consumers should treat Newtonsoft as part of the package contract.
 
-GZip compression is available through the .NET platform libraries and does not require another NuGet dependency. MessagePack support is intended for the optional companion package, `Workes.SaveSystem.MessagePack`, because it brings its own serializer dependency. The intended package shape is:
+GZip compression is available through the .NET platform libraries and does not require another NuGet dependency. MessagePack support belongs in the optional companion package, `Workes.SaveSystem.MessagePack`, because it brings its own serializer dependency. The package shape is:
 
 ```text
 Workes.SaveSystem
 Workes.SaveSystem.MessagePack
 ```
 
-The core `Workes.SaveSystem` preview does not reference MessagePack and does not ship a MessagePack serializer. It provides contextual serializer APIs so metadata-backed companion serializers can use field maps during payload reads, writes, validation, and migration. Until the companion package is published, use JSON or compressed JSON:
+The core `Workes.SaveSystem` preview does not reference MessagePack and does not ship a MessagePack serializer. It provides contextual serializer APIs so metadata-backed companion serializers can use field maps during payload reads, writes, validation, and migration. If the companion package is not installed, use JSON or compressed JSON:
 
 ```csharp
 var serializer = new CompressedSaveSerializer(
     new JsonSaveSerializer(JsonSaveFormatting.Compact));
 ```
 
-MessagePack is intended for compact production saves once the companion package is ready. JSON remains the built-in readable serializer and the recommended default for this preview.
+MessagePack is intended for compact production saves through the companion package. JSON remains the built-in readable serializer and the recommended default for this preview.
 
 ## Quick Start
 

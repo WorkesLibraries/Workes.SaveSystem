@@ -9,7 +9,7 @@
     
     <PackageId>Workes.SaveSystem</PackageId>
     <Version>1.0.0-preview.3</Version>
-    <PackageReleaseNotes>First preview release of Workes.SaveSystem.</PackageReleaseNotes>
+    <PackageReleaseNotes>Preview.3 adds provider-root migration nodes for object, collection, dictionary, primitive, and null payloads; ReplaceWith support for migration nodes; contextual serializer migration plumbing for metadata-backed serializers such as MessagePack; and nullable provider state support for reference types and Nullable&lt;T&gt;.</PackageReleaseNotes>
     <PackageReadmeFile>README.md</PackageReadmeFile>
 
     <Authors>Workes</Authors>
