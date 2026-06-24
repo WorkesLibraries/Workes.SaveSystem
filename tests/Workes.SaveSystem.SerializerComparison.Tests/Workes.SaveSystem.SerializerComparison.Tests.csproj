@@ -15,7 +15,7 @@
     <PackageReference Include="NUnit.Analyzers" Version="4.4.0" />
     <PackageReference Include="NUnit3TestAdapter" Version="4.6.0" />
     <PackageReference Include="Workes.SaveSystem" Version="1.0.0-preview.3" />
-    <PackageReference Include="Workes.SaveSystem.MessagePack" Version="1.0.0-preview.1" />
+    <PackageReference Include="Workes.SaveSystem.MessagePack" Version="1.0.0-preview.2" />
   </ItemGroup>
 
   <ItemGroup>
