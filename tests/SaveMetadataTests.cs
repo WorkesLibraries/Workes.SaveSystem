@@ -240,6 +240,7 @@ public sealed class SaveMetadataTests
         Assert.That(metadata["CreatedAtUtc"], Is.Not.Null);
         Assert.That(metadata["LastWrittenAtUtc"], Is.Not.Null);
         Assert.That(metadata["SerializerMetadata"], Is.Not.Null);
+        Assert.That(metadata["ProviderManifest"], Is.Not.Null);
     }
 
     [Test]

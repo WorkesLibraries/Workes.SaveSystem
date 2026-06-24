@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using Newtonsoft.Json.Linq;
 using Workes.SaveSystem;
 
 namespace Workes.SaveSystem.Tests;
@@ -130,6 +131,7 @@ public sealed class SaveValidationTests
         manager.RegisterProvider(inventory);
         manager.ValidateRegistrations();
         manager.SaveToDisk("slot");
+        RemoveProviderManifest("slot");
         File.Delete(Path.Combine(_tempRoot, "slot", "inventory.json"));
         player.Current = new TestState { Value = 99 };
         inventory.Current = new TestState { Value = 88 };
@@ -140,6 +142,14 @@ public sealed class SaveValidationTests
         Assert.That(result.Metadata, Is.Not.Null);
         Assert.That(player.Current.Value, Is.EqualTo(99));
         Assert.That(inventory.Current.Value, Is.EqualTo(88));
+    }
+
+    private void RemoveProviderManifest(string slot)
+    {
+        var metadataPath = Path.Combine(_tempRoot, slot, "metadata.json");
+        var metadata = JObject.Parse(File.ReadAllText(metadataPath));
+        ((JObject)metadata["Data"]!).Remove("ProviderManifest");
+        File.WriteAllText(metadataPath, metadata.ToString());
     }
 
     [Test]

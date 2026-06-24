@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace Workes.SaveSystem
 {
@@ -34,6 +35,14 @@ namespace Workes.SaveSystem
         /// Gets or sets serializer-owned metadata for advanced serializer format details.
         /// </summary>
         public SaveSerializerMetadata SerializerMetadata { get; set; } = new SaveSerializerMetadata();
+
+        /// <summary>
+        /// Gets or sets the persisted provider files written with this save.
+        /// </summary>
+        /// <remarks>
+        /// A null value represents legacy metadata written before provider manifests existed.
+        /// </remarks>
+        public List<SaveProviderManifestEntry>? ProviderManifest { get; set; }
 
         /// <summary>
         /// Gets or sets optional application-owned metadata stored with this save.

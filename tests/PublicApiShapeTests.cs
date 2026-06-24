@@ -156,9 +156,11 @@ public sealed class PublicApiShapeTests
 
         Assert.That(exportedTypeNames, Does.Contain(nameof(SaveMetadata)));
         Assert.That(exportedTypeNames, Does.Contain(nameof(SaveApplicationMetadata)));
+        Assert.That(exportedTypeNames, Does.Contain(nameof(SaveProviderManifestEntry)));
         Assert.That(exportedTypeNames, Does.Contain("ISaveMetadataProvider`1"));
         Assert.That(exportedTypeNames, Does.Contain(nameof(ISaveMetadataMigratable)));
         Assert.That(exportedTypeNames, Does.Contain(nameof(ISaveApplicationMetadataSerializer)));
+        Assert.That(exportedTypeNames, Does.Contain("ISaveDefaultStateProvider`1"));
 
         var saveMetadataProperties = typeof(SaveMetadata)
             .GetProperties(BindingFlags.Public | BindingFlags.Instance)
@@ -169,6 +171,7 @@ public sealed class PublicApiShapeTests
         Assert.That(saveMetadataProperties, Does.Contain(nameof(SaveMetadata.CreatedAtUtc)));
         Assert.That(saveMetadataProperties, Does.Contain(nameof(SaveMetadata.LastWrittenAtUtc)));
         Assert.That(saveMetadataProperties, Does.Contain(nameof(SaveMetadata.SerializerMetadata)));
+        Assert.That(saveMetadataProperties, Does.Contain(nameof(SaveMetadata.ProviderManifest)));
         Assert.That(saveMetadataProperties, Does.Contain(nameof(SaveMetadata.ApplicationMetadata)));
 
         var saveMetadataFields = typeof(SaveMetadata)

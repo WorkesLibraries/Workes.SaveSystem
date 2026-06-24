@@ -6,13 +6,15 @@ The package is not tied to Unity, Godot, or any game engine. Engine projects cho
 
 ## Installation
 
-Install the preview package from NuGet:
+Install the package from NuGet:
 
 ```xml
 <ItemGroup>
-  <PackageReference Include="Workes.SaveSystem" Version="1.0.0-preview.3" />
+  <PackageReference Include="Workes.SaveSystem" Version="1.0.0" />
 </ItemGroup>
 ```
+
+For compact MessagePack saves, see the optional companion package repository: [WorkesLibraries/Workes.SaveSystem.MessagePack](https://github.com/WorkesLibraries/Workes.SaveSystem.MessagePack).
 
 When working from source, reference the project directly:
 
@@ -35,23 +37,31 @@ That dependency is intentional for the current package shape:
 - JSON migration support parses and writes JSON through Newtonsoft while exposing package-owned migration data nodes.
 - save metadata is serialized through the active serializer.
 
-`System.Text.Json` is not part of the core package for the first reusable version. Under the current `netstandard2.1` target, using it requires an additional package reference, so adding a parallel `System.Text.Json` serializer would not make the package dependency-free. Replacing Newtonsoft would still require replacing the built-in JSON serializer and metadata persistence behavior together. For now, consumers should treat Newtonsoft as part of the package contract.
+`System.Text.Json` is not part of the core package. Under the current `netstandard2.1` target, using it requires an additional package reference, so adding a parallel `System.Text.Json` serializer would not make the package dependency-free. Replacing Newtonsoft would still require replacing the built-in JSON serializer and metadata persistence behavior together. For now, consumers should treat Newtonsoft as part of the package contract.
 
-GZip compression is available through the .NET platform libraries and does not require another NuGet dependency. MessagePack support belongs in the optional companion package, `Workes.SaveSystem.MessagePack`, because it brings its own serializer dependency. The package shape is:
+GZip compression is available through the .NET platform libraries and does not require another NuGet dependency. MessagePack support is available through the optional companion package, `Workes.SaveSystem.MessagePack`, because it brings its own serializer dependency. The package shape is:
 
 ```text
 Workes.SaveSystem
 Workes.SaveSystem.MessagePack
 ```
 
-The core `Workes.SaveSystem` preview does not reference MessagePack and does not ship a MessagePack serializer. It provides contextual serializer APIs so metadata-backed companion serializers can use field maps during payload reads, writes, validation, and migration. If the companion package is not installed, use JSON or compressed JSON:
+The core `Workes.SaveSystem` package does not reference MessagePack and does not ship a MessagePack serializer. It provides contextual serializer APIs so metadata-backed companion serializers can use field maps during payload reads, writes, validation, and migration. If the companion package is not installed, use JSON or compressed JSON:
 
 ```csharp
 var serializer = new CompressedSaveSerializer(
     new JsonSaveSerializer(JsonSaveFormatting.Compact));
 ```
 
-MessagePack is intended for compact production saves through the companion package. JSON remains the built-in readable serializer and the recommended default for this preview.
+MessagePack is intended for compact production saves through the companion package. JSON remains the built-in readable serializer and the recommended default.
+
+```csharp
+using Workes.SaveSystem;
+using Workes.SaveSystem.MessagePack;
+
+var serializer = new MessagePackSaveSerializer();
+var compressedSerializer = new CompressedSaveSerializer(new MessagePackSaveSerializer());
+```
 
 ## Quick Start
 
@@ -297,7 +307,30 @@ JSON stores application metadata inline in the metadata file using the serialize
 }
 ```
 
-Advanced custom serializers must support the public `SaveMetadata` payload type because save-system metadata is serialized through the active serializer. `SaveMetadata` is a property-based serializer contract with stable names for `SaveId`, `CreatedAtUtc`, `LastWrittenAtUtc`, `SerializerMetadata`, and `ApplicationMetadata`; manager-owned creation and timestamp update helpers are intentionally not public. Serializers that want to support registered application metadata must also implement `ISaveApplicationMetadataSerializer`, which converts typed metadata to/from serializer-native inline `ApplicationMetadata.Data` and migration nodes. Application code that only wants to read core menu metadata should use `SaveMetadataInfo` from `ReadSaveMetadata(...)`, `ReadBackupSlotMetadata(...)`, or successful `ValidateSave(...)` results. Application code that wants typed display metadata should use `ReadApplicationMetadata(...)` or `ReadBackupApplicationMetadata(...)`.
+Saves also include a core-owned provider manifest. The manifest records which persisted provider files were written with the save, including each provider save key, schema version, and resolved file name. This lets the loader distinguish old saves written before a provider existed from current saves whose provider file was deleted or corrupted.
+
+When a provider is present in the manifest but its file is missing, load and validation fail with `SaveLoadStatus.MissingProviderFile` even when `MissingProviderFileBehavior.Skip` is enabled. `Skip` is preserved only for legacy saves that have no provider manifest. When a registered provider is absent from a non-empty manifest, it is treated as newly added after the save was written. By default that provider is left unchanged during load. If the provider implements `ISaveDefaultStateProvider<TState>`, the manager restores `CreateDefaultStateForMissingSave()` instead.
+
+```csharp
+public sealed class QuestProvider :
+    ISaveProvider<QuestState>,
+    ISaveDefaultStateProvider<QuestState>
+{
+    public string SaveKey => "quests";
+    public int SchemaVersion => 1;
+    public int LoadPriority => 0;
+
+    public QuestState CaptureState() => Current;
+    public void RestoreState(QuestState state) => Current = state;
+
+    public QuestState CreateDefaultStateForMissingSave()
+    {
+        return QuestState.CreateEmpty();
+    }
+}
+```
+
+Advanced custom serializers must support the public `SaveMetadata` payload type because save-system metadata is serialized through the active serializer. `SaveMetadata` is a property-based serializer contract with stable names for `SaveId`, `CreatedAtUtc`, `LastWrittenAtUtc`, `SerializerMetadata`, `ProviderManifest`, and `ApplicationMetadata`; manager-owned creation and timestamp update helpers are intentionally not public. Serializers that want to support registered application metadata must also implement `ISaveApplicationMetadataSerializer`, which converts typed metadata to/from serializer-native inline `ApplicationMetadata.Data` and migration nodes. Application code that only wants to read core menu metadata should use `SaveMetadataInfo` from `ReadSaveMetadata(...)`, `ReadBackupSlotMetadata(...)`, or successful `ValidateSave(...)` results. Application code that wants typed display metadata should use `ReadApplicationMetadata(...)` or `ReadBackupApplicationMetadata(...)`.
 
 Use `ForceSaveToDisk(...)` only when intentionally repairing or replacing a save whose existing metadata or serializer format cannot be trusted. Normal `SaveToDisk(...)` preserves readable core metadata and rotates backups when enabled. `ForceSaveToDisk(...)` writes a fresh main save with a new save id and timestamps, ignores unreadable existing metadata, does not rotate the replaced main folder into backups, and leaves existing backup folders untouched.
 
@@ -325,7 +358,7 @@ For `TryLoadBackupSlotFromDisk(...)`, disabled backups are reported as `SaveLoad
 
 ## Scopes And Provider Sets
 
-The core package does not have a provider-group API. In the first reusable version, scope is modeled through save identities, save roots, and manager composition.
+The core package does not have a provider-group API. Scope is modeled through save identities, save roots, and manager composition.
 
 Use a scoped identity when the same registered providers are saved per profile, character, world, or slot.
 
@@ -410,7 +443,7 @@ Providers can optionally implement `ISaveLifecycle` to receive `OnBeforeSave()` 
 
 Providers can be removed with `UnregisterProvider(provider)` when you still own the registered instance, or with `UnregisterProvider("player")` when removal by key is intentional. The instance overload removes only the same object that was registered, using the original registration key even if the provider key has since drifted. Another provider instance with the same key will not remove it. If a provider is removed, call `ValidateRegistrations()` again before the next disk save or load.
 
-When loading from disk, registered persisted providers are strict by default: if a provider is registered and its save file is missing from the save folder or backup folder, load throws and providers are not restored. Unknown extra files are ignored. For deliberate partial-load scenarios, configure `missingProviderFileBehavior: MissingProviderFileBehavior.Skip`; missing providers are skipped and keep their current runtime state.
+When loading from disk, registered persisted providers are strict by default: if a provider is registered and its save file is missing from the save folder or backup folder, load throws and providers are not restored. Unknown extra files are ignored. For deliberate partial-load scenarios with legacy saves that do not have a provider manifest, configure `missingProviderFileBehavior: MissingProviderFileBehavior.Skip`; missing providers are skipped and keep their current runtime state. Manifest-backed saves remain strict for providers recorded in the manifest.
 
 Diagnostics are silent by default. To receive warning messages for recoverable issues such as disabled backup loads, backup normalization conflicts, or migration paths that cannot be applied, pass a warning sink through options:
 
@@ -768,34 +801,275 @@ Implement `ISaveSerializer` only when the built-in JSON serializer does not fit 
 
 Serializer methods are primarily extension points for the save-system pipeline. Application code should usually interact with `SaveManager` instead of calling serializers directly. Use manager APIs such as `SaveToDisk(...)`, `LoadFromDisk(...)`, `TryLoadFromDisk(...)`, and `ValidateSave(...)` for normal save/load flows. `ISaveSerializer.Serialize(...)`, `Deserialize(...)`, and `CreateSchematic(...)` are intended for `SaveManager`, serializer wrappers, and advanced integration code.
 
+Choose the smallest serializer surface that fits the format:
+
+| Need | Implement |
+|---|---|
+| Basic provider save/load for a self-describing format | `ISaveSerializer` and `ISaveSchematic` |
+| Type-safe schematic implementation | Derive from `SaveSchematic<T>` |
+| Provider payloads need save key, state type, schema version, or serializer metadata | `IContextualSaveSerializer` |
+| Serializer-owned save metadata such as field maps or codec settings | `ISaveSerializerMetadataHandler` |
+| Provider migrations | `ISaveMigrationCapableSerializer` from `ISaveSerializer.Migration` |
+| Context-dependent provider migrations | `IContextualSaveMigrationCapableSerializer` |
+| Typed application metadata providers | `ISaveApplicationMetadataSerializer` |
+| Encoding, encryption, compression, or another byte wrapper around an existing serializer | `ISavePayloadTransform` with `TransformedSaveSerializer` |
+
 A custom serializer must provide these pieces as one coherent format:
 
 - a file extension, including the leading dot;
-- schematic creation for provider state types;
+- schematic creation for provider state types and for the public `SaveMetadata` type;
 - byte-based serialization and deserialization through those schematics;
-- schema-version extraction without fully restoring provider state.
+- a provider payload shape with an extractable schema version;
+- clear failures when payload bytes, schema versions, metadata, or state shapes are invalid.
 
-Schematic creation should be lightweight where possible. Provider state write compatibility is validated through real provider state during `ValidateRegistrations()`. Read compatibility is validated when real save data is deserialized during load, so custom serializers should still fail clearly for deserialize-only problems.
+The manager sets `ISaveSchematic.SchemaVersion` from the registered provider before writing provider files. Do not require applications to set schema versions on schematics manually. Schematic creation should be lightweight where possible. Provider state write compatibility is validated through real provider state during `ValidateRegistrations()`. Read compatibility is validated when real save data is deserialized during load, so custom serializers should still fail clearly for deserialize-only problems.
 
-If the serializer needs metadata stored with a save, implement `ISaveSerializerMetadataHandler` and return it from `ISaveSerializer.Metadata`. The manager calls `WriteMetadata(...)` before provider payloads and the metadata file are written, and calls `ValidateMetadata(...)` when temp-save, load, validation, and recovery-candidate metadata is validated. Missing serializer metadata is treated as empty metadata for compatibility with older saves.
+The save metadata file is serialized through the active serializer. Custom serializers must support `SaveMetadata` as normal serializer-facing data:
 
-If provider payload serialization depends on serializer-owned metadata or manager-owned context, implement contextual extension interfaces such as `IContextualSaveSerializer`. The manager will prefer contextual `Serialize(...)`, `Deserialize(...)`, and `ExtractSchemaVersion(...)` methods for provider files and fall back to `ISaveSerializer` methods for existing serializers. Use this when serializers need save metadata, provider keys, schema versions, or other manager-owned context, such as compact metadata-backed formats with MessagePack field maps. Direct calls to the base `ISaveSerializer` methods are best treated as low-level integration or diagnostic operations because they may not produce the same provider payload shape as manager-managed saves. JSON serializers and other self-describing formats usually do not need contextual serialization.
+- `SaveId`, `CreatedAtUtc`, and `LastWrittenAtUtc` are core save metadata.
+- `SerializerMetadata` is serializer-owned string key/value metadata.
+- `ProviderManifest` is core-owned compatibility metadata and should be serialized normally.
+- `ApplicationMetadata` is present only when an application metadata provider is registered.
+- `SaveApplicationMetadata.Data` is serializer-native inline data when `ISaveApplicationMetadataSerializer` is implemented.
 
-If the serializer supports application metadata providers, implement `ISaveApplicationMetadataSerializer`. The manager passes a `SaveSerializerContext` with the reserved synthetic save key `__workes_application_metadata`, so metadata-backed serializers can build field maps for application metadata through the same serializer metadata path used by provider payloads. This optional interface is not required for normal provider save/load; `ValidateRegistrations()` fails clearly only when an application metadata provider is registered with a serializer that does not support inline application metadata.
+Existing metadata files that deserialize to `null` or to another type are treated as corrupt; use `ForceSaveToDisk(...)` when intentionally replacing a corrupt or incompatible save.
 
-Custom serializers must also be able to create a schematic for the public `SaveMetadata` type. Existing metadata files that deserialize to `null` or to another type are treated as corrupt; use `ForceSaveToDisk(...)` when intentionally replacing a corrupt or incompatible save.
+The manager call flow is:
 
-Use `TransformedSaveSerializer` with `ISavePayloadTransform` when an existing serializer format should be encoded after serialization and decoded before deserialization. The decorator composes file extensions, so wrapping JSON with a transform whose suffix is `.enc` writes provider and metadata files such as `player.json.enc` and `metadata.json.enc`. Migration is routed through the decorator by decoding before `DeserializeToNode(...)` and encoding after `SerializeFromNode(...)`; those migration methods pass provider root nodes, not serializer envelopes. Contextual serializer and migration calls are forwarded to the inner serializer when supported. Serializer metadata is delegated from the inner serializer.
+1. `ValidateRegistrations()` creates provider schematics, sets schema versions, validates provider state serialization, writes transient serializer metadata, and validates migration policy.
+2. `SaveToDisk()` captures providers, writes serializer metadata, serializes application metadata when present, serializes provider files, writes `ProviderManifest`, and writes the save metadata file.
+3. `LoadFromDisk()` reads save metadata, validates serializer metadata, reads manifest-listed provider files, extracts saved provider schema versions, migrates when needed, deserializes provider states, validates snapshot compatibility, and restores providers.
+4. `ValidateSave()` follows the loadability path without restoring providers or mutating disk.
 
-`CompressedSaveSerializer` is the intended public compression API. Its internal compression transform should remain an implementation detail unless a concrete use case appears for exposing GZip as a standalone payload transform.
+Direct calls to base serializer methods are low-level integration or diagnostic operations. When a serializer implements contextual interfaces, manager-managed provider payloads may contain metadata-backed shapes that direct `ISaveSerializer` calls do not reproduce.
 
-MessagePack support belongs in the optional `Workes.SaveSystem.MessagePack` companion package for dependency reasons. The core package does not reference MessagePack directly and does not implement field maps itself; it provides the contextual serializer and inline application metadata plumbing needed for the companion package to store and use those maps in `SaveMetadata.SerializerMetadata`. The companion package should treat application metadata as the synthetic contextual payload `__workes_application_metadata` and apply the same automatic field-map system it uses for provider payloads.
+#### Minimal Serializer Skeleton
 
-The companion package should treat the provider root as one of several root shapes: object, array/list, string-key map, scalar, or null while editing migration nodes. Field-map metadata applies to object-root DTOs only. Root arrays/lists, string-key dictionaries, primitives, and nil/null are provider root values, not fake object field maps. A companion serializer may support non-string dictionary keys for normal save/load if it documents that generic migration exposes only string-key maps through `ISaveDataNode`.
+This skeleton shows the shape of a simple self-describing serializer. It is intentionally small; production serializers should add robust parsing, type handling, and error messages.
 
-If providers using the serializer implement `ISaveMigratable`, the serializer must return an `ISaveMigrationCapableSerializer` from `ISaveSerializer.Migration`. That adapter must parse serialized payloads into editable provider-root `ISaveDataNode` trees, serialize edited root node trees back to the payload format, and expose a matching `NodeFactory` that creates new object, array, and primitive nodes for migration steps. Metadata-backed migration adapters can additionally implement `IContextualSaveMigrationCapableSerializer` to receive the same `SaveSerializerContext` used by contextual provider serialization and to write the current schema version after migration.
+```csharp
+public sealed class SimpleTextSaveSerializer : ISaveSerializer
+{
+    public string FileExtension => ".txtsave";
+
+    public ISaveMigrationCapableSerializer? Migration => null;
+    public ISaveSerializerMetadataHandler? Metadata => null;
+
+    public ISaveSchematic CreateSchematic(Type stateType)
+    {
+        var schematicType = typeof(SimpleTextSaveSchematic<>).MakeGenericType(stateType);
+        return (ISaveSchematic)Activator.CreateInstance(schematicType)!;
+    }
+
+    public byte[] Serialize(object data, ISaveSchematic schematic)
+    {
+        return schematic.SerializeUntyped(data);
+    }
+
+    public object? Deserialize(byte[] rawData, ISaveSchematic schematic)
+    {
+        return schematic.DeserializeUntyped(rawData);
+    }
+
+    public int ExtractSchemaVersion(byte[] serializedData)
+    {
+        // Read the version from the payload envelope without fully restoring Data.
+        return SimpleTextEnvelope.ReadSchemaVersion(serializedData);
+    }
+}
+
+public sealed class SimpleTextSaveSchematic<T> : SaveSchematic<T>
+{
+    public SimpleTextSaveSchematic() : base(schemaVersion: 1)
+    {
+    }
+
+    public override byte[] Serialize(T? state)
+    {
+        return SimpleTextEnvelope.Write(new SimpleTextEnvelope<T>
+        {
+            SchemaVersion = SchemaVersion,
+            Data = state
+        });
+    }
+
+    public override T? Deserialize(byte[] serialized)
+    {
+        var envelope = SimpleTextEnvelope.Read<T>(serialized);
+        if (envelope.SchemaVersion != SchemaVersion)
+            throw new InvalidOperationException("Schema version mismatch.");
+
+        return envelope.Data;
+    }
+}
+```
+
+The important part is the envelope contract: provider payload bytes must contain the provider schema version and the provider data root. The root may be an object, array/list, string-key map, primitive, or null when the registered state type can accept null.
+
+#### Contextual Serialization
+
+Implement `IContextualSaveSerializer` when provider payload serialization depends on save metadata, provider key, state type, or another manager-owned value.
+
+```csharp
+public byte[] Serialize(object data, SaveSerializerContext context)
+{
+    var providerMetadata = context.SerializerMetadata.GetOrCreateProvider(context.SaveKey);
+    var fieldMap = providerMetadata["field-map"];
+
+    return WriteProviderPayload(
+        data,
+        context.StateType,
+        context.SchemaVersion,
+        context.Schematic,
+        fieldMap);
+}
+
+public object? Deserialize(byte[] rawData, SaveSerializerContext context)
+{
+    var providerMetadata = context.SerializerMetadata.Providers[context.SaveKey];
+    return ReadProviderPayload(rawData, context.StateType, context.Schematic, providerMetadata);
+}
+```
+
+When `IContextualSaveSerializer` is implemented, `SaveManager` prefers it for provider serialization, deserialization, and schema-version extraction. Plain JSON-style serializers that are self-describing usually do not need it.
+
+#### Serializer Metadata
+
+Implement `ISaveSerializerMetadataHandler` when the serializer needs metadata stored once per save, such as field maps or codec settings.
+
+```csharp
+public sealed class FieldMapSerializer :
+    ISaveSerializer,
+    ISaveSerializerMetadataHandler
+{
+    public ISaveSerializerMetadataHandler Metadata => this;
+
+    public void WriteMetadata(SaveSerializerMetadataWriteContext context)
+    {
+        foreach (var provider in context.Providers)
+        {
+            var metadata = context.Metadata.GetOrCreateProvider(provider.SaveKey);
+            metadata["state-type"] = provider.StateType.AssemblyQualifiedName!;
+            metadata["schema-version"] = provider.SchemaVersion.ToString();
+        }
+    }
+
+    public void ValidateMetadata(SaveSerializerMetadataValidationContext context)
+    {
+        foreach (var provider in context.Providers)
+        {
+            if (!context.Metadata.Providers.ContainsKey(provider.SaveKey))
+                throw new InvalidOperationException($"Missing serializer metadata for '{provider.SaveKey}'.");
+        }
+    }
+}
+```
+
+`WriteMetadata(...)` runs before provider files and the metadata file are written. `ValidateMetadata(...)` runs when metadata is read for temp-save validation, load, validation, and recovery candidates. Missing serializer metadata is normalized as empty metadata for compatibility with older saves, so serializers that require metadata should validate it explicitly.
+
+#### Migration-Capable Serializers
+
+If providers using the serializer implement `ISaveMigratable`, the serializer must return an `ISaveMigrationCapableSerializer` from `ISaveSerializer.Migration`. That adapter parses serialized payload bytes into editable provider-root `ISaveDataNode` trees, then serializes the edited root back to the payload format.
+
+```csharp
+public sealed class SimpleMigrationAdapter :
+    ISaveMigrationCapableSerializer,
+    IContextualSaveMigrationCapableSerializer
+{
+    public ISaveDataNodeFactory NodeFactory { get; } = new SimpleNodeFactory();
+
+    public ISaveDataNode DeserializeToNode(byte[] data)
+    {
+        var envelope = SimpleTextEnvelope.ReadUntyped(data);
+        return SimpleNodeConverter.ToNode(envelope.Data, NodeFactory);
+    }
+
+    public byte[] SerializeFromNode(ISaveDataNode node)
+    {
+        var data = SimpleNodeConverter.FromNode(node);
+        return SimpleTextEnvelope.Write(schemaVersion: 1, data);
+    }
+
+    public ISaveDataNode DeserializeToNode(byte[] data, SaveSerializerContext context)
+    {
+        var envelope = SimpleTextEnvelope.ReadUntyped(data);
+        return SimpleNodeConverter.ToNode(envelope.Data, NodeFactory);
+    }
+
+    public byte[] SerializeFromNode(ISaveDataNode node, SaveSerializerContext context)
+    {
+        var data = SimpleNodeConverter.FromNode(node);
+        return SimpleTextEnvelope.Write(context.SchemaVersion, data);
+    }
+}
+```
+
+Migration nodes represent the provider data root, not the full serializer envelope. Object-root providers receive an object node. List-root providers receive an array node. String-key dictionary providers receive an object/map node. Primitive and null roots are valid migration nodes. `ReplaceWith(...)` lets a migration replace the root shape entirely, as long as the replacement node came from the same factory.
 
 The migration-capable serializer, its `NodeFactory`, and its data-node trees are coupled. Do not mix data nodes from different serializer or factory instances.
+
+#### Application Metadata Support
+
+Application metadata is optional. Normal provider save/load works without `ISaveApplicationMetadataSerializer`. Implement it only when the serializer should support `RegisterMetadataProvider(...)`.
+
+The manager passes a `SaveSerializerContext` with the reserved synthetic save key `__workes_application_metadata`. Metadata-backed serializers can treat this like a provider-like payload for field-map or codec metadata.
+
+```csharp
+public object? SerializeApplicationMetadata(object? metadata, SaveSerializerContext context)
+{
+    return ToInlineSerializerData(metadata, context.StateType, context.SerializerMetadata);
+}
+
+public object? DeserializeApplicationMetadata(object? data, SaveSerializerContext context)
+{
+    return FromInlineSerializerData(data, context.StateType, context.SerializerMetadata);
+}
+
+public ISaveDataNode DeserializeApplicationMetadataToNode(object? data, SaveSerializerContext context)
+{
+    return SimpleNodeConverter.ToNode(data, Migration!.NodeFactory);
+}
+
+public object? SerializeApplicationMetadataFromNode(ISaveDataNode node, SaveSerializerContext context)
+{
+    return SimpleNodeConverter.FromNode(node);
+}
+```
+
+`SaveApplicationMetadata.SchemaVersion` is owned by core. `SaveApplicationMetadata.Data` is owned by the serializer and should use the serializer's native inline data model. For JSON that means readable JSON values. For compact serializers it may be a compact object model that the serializer can later read from `SaveMetadata`.
+
+#### Payload Transforms
+
+Use `TransformedSaveSerializer` with `ISavePayloadTransform` when you only need to encode bytes produced by an existing serializer.
+
+```csharp
+public sealed class ToyEncryptionTransform : ISavePayloadTransform
+{
+    public string FileExtensionSuffix => ".enc";
+
+    public byte[] Encode(byte[] data)
+    {
+        return ToyCipher.Encrypt(data);
+    }
+
+    public byte[] Decode(byte[] data)
+    {
+        return ToyCipher.Decrypt(data);
+    }
+}
+
+var serializer = new TransformedSaveSerializer(
+    new JsonSaveSerializer(JsonSaveFormatting.Compact),
+    new ToyEncryptionTransform());
+```
+
+The transform suffix must be a file-extension suffix such as `.enc`. `TransformedSaveSerializer` forwards contextual serialization, migration, serializer metadata, and application metadata support to the inner serializer when available. `CompressedSaveSerializer` is the built-in GZip wrapper and is the intended public compression API.
+
+#### Companion Serializer Packages
+
+MessagePack support lives in the optional `Workes.SaveSystem.MessagePack` companion package for dependency reasons. The core package does not reference MessagePack directly and does not implement field maps itself; it provides the contextual serializer, provider manifest metadata, and inline application metadata plumbing the companion uses with `SaveMetadata.SerializerMetadata`.
+
+The companion package supports the same default migratable root model as JSON: object roots, array/list roots, string-key dictionary/map roots, primitive roots, and null roots. Provider migrations use provider-root `ISaveDataNode` trees, not serializer envelopes. Field-map metadata applies to object-root DTOs only; root arrays/lists, string-key dictionaries, primitives, and nil/null are provider root values, not fake object field maps. The companion also supports nullable provider state, inline application metadata through the reserved synthetic payload key `__workes_application_metadata`, and core-owned provider manifests serialized as normal save metadata.
 
 ### Data Node Contracts
 
@@ -884,31 +1158,6 @@ Usually safe without a schema bump:
 
 When in doubt, write a load test with an old payload. If the current provider cannot load the old payload without special handling, bump the provider schema and add migration steps.
 
-### Package Versions
-
-Package versioning should communicate API and behavior compatibility for consumers of `Workes.SaveSystem`.
-
-Recommended package-version expectations:
-
-- patch version: bug fixes and documentation that do not intentionally change public behavior;
-- minor version: additive APIs or compatible behavior improvements;
-- major version: breaking public API changes or persistence behavior changes that may require application action.
-
-Package version changes do not migrate saves by themselves. Save compatibility stays owned by provider `SchemaVersion`, migration steps, stable keys, and stable serializer behavior.
-
-### Serializer Swaps
-
-Changing serializers is a save-format change. Even if two serializers both write JSON, their envelope shape, type handling, formatting, and migration node model may differ.
-
-Before swapping serializers for existing saves, decide on one of these strategies:
-
-- keep the old serializer for existing saves and use the new serializer only for new save roots;
-- write an external conversion tool that reads old files and writes the new format;
-- create a serializer that can read the old format during a transition;
-- intentionally break old saves and document the break.
-
-The current built-in migration system migrates provider payload schema inside one serializer format. It is not a general cross-serializer conversion tool.
-
 ### Long-Lived Save Checklist
 
 For saves expected to survive package and application updates:
@@ -921,9 +1170,3 @@ For saves expected to survive package and application updates:
 - add tests that load representative old payloads;
 - avoid using current time, random values, engine state, or other providers during migrations;
 - document intentionally breaking save-format changes in application release notes.
-
-## Suggested Next Steps
-
-1. Choose the package license and final release version before publishing.
-2. Consider a `System.Text.Json` adapter only if a clear consumer need appears and its compatibility limits are acceptable.
-3. Add engine-specific adapter packages only if repeated Unity or Godot setup code becomes noisy enough to justify them.

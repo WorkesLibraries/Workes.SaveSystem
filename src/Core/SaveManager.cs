@@ -21,6 +21,7 @@ namespace Workes.SaveSystem
             public Type StateType = null!;
             public Func<object?> CaptureState = null!;
             public Action<object?> RestoreState = null!;
+            public Func<object?>? CreateDefaultStateForMissingSave;
         }
 
         private sealed class MetadataProviderEntry
@@ -177,7 +178,10 @@ namespace Workes.SaveSystem
                 Schematic = schematic,
                 StateType = typeof(TState),
                 CaptureState = () => provider.CaptureState(),
-                RestoreState = state => provider.RestoreState((TState)state!)
+                RestoreState = state => provider.RestoreState((TState)state!),
+                CreateDefaultStateForMissingSave = provider is ISaveDefaultStateProvider<TState> defaultStateProvider
+                    ? () => defaultStateProvider.CreateDefaultStateForMissingSave()
+                    : null
             });
             _registrationsValidated = false;
         }
@@ -208,7 +212,10 @@ namespace Workes.SaveSystem
                 Schematic = null,
                 StateType = typeof(TState),
                 CaptureState = () => provider.CaptureState(),
-                RestoreState = state => provider.RestoreState((TState)state!)
+                RestoreState = state => provider.RestoreState((TState)state!),
+                CreateDefaultStateForMissingSave = provider is ISaveDefaultStateProvider<TState> defaultStateProvider
+                    ? () => defaultStateProvider.CreateDefaultStateForMissingSave()
+                    : null
             });
             _registrationsValidated = false;
         }
@@ -465,6 +472,7 @@ namespace Workes.SaveSystem
                 ValidateProviderSerialization(
                     providerEntry,
                     CreateTransientSerializerMetadata());
+                ValidateProviderDefaultState(providerEntry);
                 ValidateProviderMigration(providerEntry);
             }
 
@@ -670,6 +678,50 @@ namespace Workes.SaveSystem
             {
                 throw new InvalidOperationException(
                     $"SaveProvider with key '{providerEntry.Provider.SaveKey}' produces incompatible state for its registered schematic.",
+                    ex);
+            }
+        }
+
+        private void ValidateProviderDefaultState(ProviderEntry providerEntry)
+        {
+            if (providerEntry.CreateDefaultStateForMissingSave == null)
+                return;
+
+            object? state;
+            try
+            {
+                state = providerEntry.CreateDefaultStateForMissingSave();
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException(
+                    $"SaveProvider with key '{providerEntry.Provider.SaveKey}' failed while creating default state for old saves during registration validation.",
+                    ex);
+            }
+
+            if (!SaveStateCompatibility.IsCompatibleState(providerEntry.StateType, state))
+            {
+                throw new InvalidOperationException(
+                    $"SaveProvider with key '{providerEntry.RegisteredSaveKey}' returned default state incompatible with its registered state type.");
+            }
+
+            var schematic = providerEntry.Schematic;
+            if (schematic == null)
+                return;
+
+            try
+            {
+                SerializeProviderState(
+                    providerEntry.RegisteredSaveKey,
+                    providerEntry.Provider.SchemaVersion,
+                    state,
+                    providerEntry,
+                    CreateTransientSerializerMetadata());
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException(
+                    $"SaveProvider with key '{providerEntry.Provider.SaveKey}' produces incompatible default state for old saves.",
                     ex);
             }
         }
@@ -1474,6 +1526,7 @@ namespace Workes.SaveSystem
                 metadata.ApplicationMetadata = SerializeApplicationMetadata(applicationMetadata, metadata.SerializerMetadata);
 
                 var serialized = SerializeSnapshot(snapshot, metadata.SerializerMetadata);
+                metadata.ProviderManifest = CreateProviderManifest(serialized.Data);
 
                 foreach (var serializedEntry in serialized.Data)
                 {
@@ -1959,6 +2012,31 @@ namespace Workes.SaveSystem
 
         private void SaveSerializedEntryToDiskTMP(string saveKey, int schemaVersion, byte[] serializedData, ProviderEntry providerEntry, string tempPath)
         {
+            var fileName = ResolveProviderFileName(saveKey, schemaVersion);
+            var filePath = GetProviderFilePath(tempPath, fileName);
+
+            File.WriteAllBytes(filePath, serializedData);
+        }
+
+        private List<SaveProviderManifestEntry> CreateProviderManifest(
+            Dictionary<string, SerializedSnapshot.SerializedEntry> serializedEntries)
+        {
+            var manifest = new List<SaveProviderManifestEntry>();
+            foreach (var serializedEntry in serializedEntries)
+            {
+                manifest.Add(new SaveProviderManifestEntry
+                {
+                    SaveKey = serializedEntry.Key,
+                    SchemaVersion = serializedEntry.Value.SchemaVersion,
+                    FileName = ResolveProviderFileName(serializedEntry.Key, serializedEntry.Value.SchemaVersion)
+                });
+            }
+
+            return manifest;
+        }
+
+        private string ResolveProviderFileName(string saveKey, int schemaVersion)
+        {
             var context = new SaveFileContext(
                 saveKey,
                 schemaVersion,
@@ -1967,34 +2045,25 @@ namespace Workes.SaveSystem
 
             var baseName = _options.FileNameResolver(context);
             ValidateFileName(baseName);
-            var fileExtension = _options.Serializer.FileExtension;
-            ValidateFileExtension(fileExtension);
-            var fileName = baseName + fileExtension;
-            var filePath = GetProviderFilePath(tempPath, fileName);
-
-            File.WriteAllBytes(filePath, serializedData);
+            ValidateFileExtension(_options.Serializer.FileExtension);
+            return baseName + _options.Serializer.FileExtension;
         }
 
         private byte[]? LoadSerializedEntryFromDisk(
             ProviderEntry providerEntry,
             string folderPath,
+            string? manifestFileName,
             bool allowMissingProviderFileSkip)
         {
             var schematic = providerEntry.Schematic;
             if (schematic == null)
                 return null;
 
-            var context = new SaveFileContext(
-                providerEntry.RegisteredSaveKey,
-                providerEntry.ValidatedSchemaVersion ?? providerEntry.Provider.SchemaVersion,
-                _options.Serializer.GetType()
-            );
-
-            var baseName = _options.FileNameResolver(context);
-            ValidateFileName(baseName);
-            var fileExtension = _options.Serializer.FileExtension;
-            ValidateFileExtension(fileExtension);
-            var fileName = baseName + fileExtension;
+            var fileName = manifestFileName ??
+                ResolveProviderFileName(
+                    providerEntry.RegisteredSaveKey,
+                    providerEntry.ValidatedSchemaVersion ?? providerEntry.Provider.SchemaVersion);
+            ValidateManifestFileName(fileName);
             var filePath = GetProviderFilePath(folderPath, fileName);
 
             if (!File.Exists(filePath))
@@ -2010,6 +2079,20 @@ namespace Workes.SaveSystem
             }
 
             return File.ReadAllBytes(filePath);
+        }
+
+        private static void ValidateManifestFileName(string fileName)
+        {
+            if (string.IsNullOrWhiteSpace(fileName) ||
+                Path.IsPathRooted(fileName) ||
+                fileName != Path.GetFileName(fileName) ||
+                fileName.IndexOf(Path.DirectorySeparatorChar) >= 0 ||
+                fileName.IndexOf(Path.AltDirectorySeparatorChar) >= 0)
+            {
+                throw SaveLoadException.Create(
+                    SaveLoadStatus.CorruptData,
+                    $"Provider manifest contains invalid file name '{fileName}'.");
+            }
         }
 
         private IEnumerable<KeyValuePair<string, ProviderEntry>> PersistedProviders()
@@ -2367,6 +2450,7 @@ namespace Workes.SaveSystem
 
             saveMetadata.SerializerMetadata.Normalize();
             NormalizeApplicationMetadata(saveMetadata);
+            NormalizeProviderManifest(saveMetadata);
             return saveMetadata;
         }
 
@@ -2380,6 +2464,43 @@ namespace Workes.SaveSystem
             {
                 throw new InvalidOperationException(
                     "Application metadata schema version must be greater than 0.");
+            }
+        }
+
+        private static void NormalizeProviderManifest(SaveMetadata saveMetadata)
+        {
+            var manifest = saveMetadata.ProviderManifest;
+            if (manifest == null)
+                return;
+
+            var seenKeys = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var entry in manifest)
+            {
+                if (entry == null)
+                {
+                    throw new InvalidOperationException(
+                        "Provider manifest cannot contain null entries.");
+                }
+
+                if (string.IsNullOrWhiteSpace(entry.SaveKey))
+                {
+                    throw new InvalidOperationException(
+                        "Provider manifest entries must have a non-empty SaveKey.");
+                }
+
+                if (!seenKeys.Add(entry.SaveKey))
+                {
+                    throw new InvalidOperationException(
+                        $"Provider manifest contains duplicate entry for save key '{entry.SaveKey}'.");
+                }
+
+                if (entry.SchemaVersion < 1)
+                {
+                    throw new InvalidOperationException(
+                        $"Provider manifest entry for '{entry.SaveKey}' must have a schema version greater than 0.");
+                }
+
+                ValidateManifestFileName(entry.FileName);
             }
         }
 
@@ -2489,6 +2610,7 @@ namespace Workes.SaveSystem
             var metadata = ReadRequiredSaveMetadata(folderPath);
             var serialized = LoadSerializedSnapshotFromFolder(folderPath, metadata);
             var snapshot = DeserializeSnapshot(serialized, metadata.SerializerMetadata);
+            AddDefaultStatesForProvidersMissingFromManifest(metadata, snapshot);
             var hasApplicationMetadata = TryDeserializeApplicationMetadataForLoad(
                 metadata,
                 out var applicationMetadata);
@@ -2652,13 +2774,20 @@ namespace Workes.SaveSystem
             bool allowMissingProviderFileSkip = true)
         {
             var serialized = new SerializedSnapshot();
+            var manifestBySaveKey = CreateManifestLookup(metadata);
+            var hasManifest = manifestBySaveKey != null;
 
             foreach (var kvp in PersistedProviders())
             {
+                SaveProviderManifestEntry? manifestEntry = null;
+                if (hasManifest && !manifestBySaveKey!.TryGetValue(kvp.Key, out manifestEntry))
+                    continue;
+
                 var serializedEntry = LoadSerializedEntryFromDisk(
                     kvp.Value,
                     folderPath,
-                    allowMissingProviderFileSkip);
+                    manifestEntry?.FileName,
+                    allowMissingProviderFileSkip && !hasManifest);
                 if (serializedEntry == null)
                     continue;
 
@@ -2669,6 +2798,13 @@ namespace Workes.SaveSystem
                     metadata.SerializerMetadata,
                     kvp.Value.Provider.SchemaVersion);
 
+                if (manifestEntry != null && savedSchemaVersion != manifestEntry.SchemaVersion)
+                {
+                    throw SaveLoadException.Create(
+                        SaveLoadStatus.CorruptData,
+                        $"Provider manifest entry for '{kvp.Key}' records schema version {manifestEntry.SchemaVersion}, but the provider file contains schema version {savedSchemaVersion}.");
+                }
+
                 serialized.Data[kvp.Key] = new SerializedSnapshot.SerializedEntry
                 {
                     SchemaVersion = savedSchemaVersion,
@@ -2677,6 +2813,59 @@ namespace Workes.SaveSystem
             }
 
             return serialized;
+        }
+
+        private static Dictionary<string, SaveProviderManifestEntry>? CreateManifestLookup(SaveMetadata metadata)
+        {
+            if (metadata.ProviderManifest == null || metadata.ProviderManifest.Count == 0)
+                return null;
+
+            return metadata.ProviderManifest.ToDictionary(entry => entry.SaveKey, entry => entry, StringComparer.Ordinal);
+        }
+
+        private void AddDefaultStatesForProvidersMissingFromManifest(SaveMetadata metadata, SaveSnapshot snapshot)
+        {
+            var manifestBySaveKey = CreateManifestLookup(metadata);
+            if (manifestBySaveKey == null)
+                return;
+
+            var snapshotKeys = new HashSet<string>(snapshot.Entries.Select(entry => entry.SaveKey), StringComparer.Ordinal);
+
+            foreach (var kvp in PersistedProviders())
+            {
+                if (manifestBySaveKey.ContainsKey(kvp.Key) || snapshotKeys.Contains(kvp.Key))
+                    continue;
+
+                var createDefaultState = kvp.Value.CreateDefaultStateForMissingSave;
+                if (createDefaultState == null)
+                    continue;
+
+                object? defaultState;
+                try
+                {
+                    defaultState = createDefaultState();
+                }
+                catch (Exception ex)
+                {
+                    throw SaveLoadException.Create(
+                        SaveLoadStatus.LoadFailed,
+                        $"SaveProvider with key '{kvp.Key}' failed while creating default state for a save written before the provider existed.",
+                        ex);
+                }
+
+                if (!SaveStateCompatibility.IsCompatibleState(kvp.Value.StateType, defaultState))
+                {
+                    throw SaveLoadException.Create(
+                        SaveLoadStatus.CorruptData,
+                        $"SaveProvider with key '{kvp.Key}' returned default state incompatible with its registered state type.");
+                }
+
+                snapshot.Add(
+                    kvp.Key,
+                    kvp.Value.ValidatedSchemaVersion ?? kvp.Value.Provider.SchemaVersion,
+                    defaultState,
+                    kvp.Value.Provider.LoadPriority);
+            }
         }
 
         /// <summary>

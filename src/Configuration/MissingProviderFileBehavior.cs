@@ -11,7 +11,9 @@ namespace Workes.SaveSystem
         Throw = 0,
 
         /// <summary>
-        /// Skip registered persisted providers whose files are missing and leave their current state unchanged.
+        /// Skip registered persisted providers whose files are missing in legacy saves without a provider manifest
+        /// and leave their current state unchanged. Manifest-backed saves still fail when a manifest-present provider
+        /// file is missing.
         /// </summary>
         Skip = 1
     }

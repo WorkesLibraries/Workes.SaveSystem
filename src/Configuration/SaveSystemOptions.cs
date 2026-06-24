@@ -183,7 +183,8 @@ namespace Workes.SaveSystem
         public int BackupSystemMaxBackupCount { get; }
 
         /// <summary>
-        /// Gets how loads behave when a registered persisted provider file is missing from a save folder.
+        /// Gets how loads behave when a registered persisted provider file is missing from a legacy save folder
+        /// without a provider manifest. Manifest-backed saves still fail when a manifest-present provider file is missing.
         /// </summary>
         public MissingProviderFileBehavior MissingProviderFileBehavior { get; }
 
@@ -202,7 +203,7 @@ namespace Workes.SaveSystem
         /// <param name="fileNameResolver">The function that resolves a file context to a file name. If null, uses <see cref="DefaultFileNameResolver"/>.</param>
         /// <param name="enableBackupSystem">Whether to enable the backup system. Defaults to false.</param>
         /// <param name="backupSystemMaxBackupCount">The maximum number of backups to keep. Must be greater than 0 if backups are enabled. Defaults to 0.</param>
-        /// <param name="missingProviderFileBehavior">How loads behave when a registered persisted provider file is missing. Defaults to <see cref="MissingProviderFileBehavior.Throw"/>.</param>
+        /// <param name="missingProviderFileBehavior">How loads behave when a registered persisted provider file is missing from a legacy save without a provider manifest. Defaults to <see cref="MissingProviderFileBehavior.Throw"/>.</param>
         /// <param name="warningSink">Optional callback that receives save-system warning messages. Defaults to null.</param>
         /// <exception cref="ArgumentException">Thrown when path values are invalid, or when backups are enabled but max backup count is 0 or less.</exception>
         /// <exception cref="ArgumentNullException">Thrown when serializer or resolver delegates are null.</exception>
