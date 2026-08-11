@@ -1,5 +1,5 @@
 {
-    "dotnet.defaultSolution": "Workes.ConsoleSystem.sln",
+    "dotnet.defaultSolution": "Workes.SaveSystem.sln",
     "dotnet.backgroundAnalysis.compilerDiagnosticsScope": "fullSolution",
     "dotnet.backgroundAnalysis.analyzerDiagnosticsScope": "fullSolution"
 }
