@@ -45,6 +45,13 @@ CodeCoverage/
 /WORK_TRACKER.md
 /MESSAGE_PACK.md
 
+# Local project-control workflow
+[Dd]ocs/PROJECT/PROJECT_CONTEXT.md
+[Dd]ocs/PROJECT/DOCUMENTATION_RULES.md
+[Dd]ocs/PROJECT/TRELLO_WORKFLOW.md
+[Dd]ocs/PROJECT/AI_CONTEXT.md
+[Dd]ocs/DESIGN/
+
 # MSBuild Binary and Structured Log
 *.binlog
 
